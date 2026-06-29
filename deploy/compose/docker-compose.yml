@@ -1,0 +1,89 @@
+# soc — unified compose. Everything is gated behind PROFILES so you bring up only
+# what a given host needs. One .env (see ../.env.example) drives all of it.
+#
+#   Central collector  : docker compose --profile loki --profile soc --profile blocklist up -d
+#   nginx edge VM       : docker compose --profile promtail up -d
+#   Loki only           : docker compose --profile loki up -d
+#   Whole stack (1 box) : COMPOSE_PROFILES=loki,promtail,soc,blocklist docker compose up -d
+#
+# Profiles: loki, promtail, soc, blocklist, agent.
+
+name: soc
+
+services:
+  loki:
+    profiles: [loki]
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/loki-config.yml", "-config.expand-env=true"]
+    restart: unless-stopped
+    env_file: ../.env
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ../loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/var/lib/loki
+
+  promtail:
+    profiles: [promtail]
+    image: grafana/promtail:3.1.1
+    command: ["-config.file=/etc/promtail/promtail.yml", "-config.expand-env=true"]
+    restart: unless-stopped
+    env_file: ../.env
+    volumes:
+      # PROMTAIL_CONFIG selects the format: promtail.yml (soc_json, default) or
+      # promtail-combined.yml (parse the stock nginx `combined` log, no nginx change).
+      - ../promtail/${PROMTAIL_CONFIG:-promtail.yml}:/etc/promtail/promtail.yml:ro
+      - promtail-positions:/var/lib/promtail
+      # nginx logs from the host (read-only). Adjust the host path if needed.
+      - ${NGINX_LOG_DIR:-/var/log/nginx}:/var/log/nginx:ro
+
+  soc:
+    profiles: [soc]
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    image: soc-backend:latest
+    restart: unless-stopped
+    env_file: ../.env
+    ports:
+      - "${SOC_PORT:-8077}:8077"
+    volumes:
+      - soc-data:/data
+
+  # nginx-file pull-agent. Mainly a systemd component on each nginx VM (see
+  # deploy/agent/). This profile is for when nginx ALSO runs in compose — it needs
+  # to write nginx's conf dir and reload it, so mount the same dirs nginx uses and
+  # set RELOAD_CMD appropriately (e.g. nginx -s reload in a shared container).
+  agent:
+    profiles: [agent]
+    image: python:3.12-slim
+    restart: unless-stopped
+    env_file: ../.env
+    command: ["python3", "/app/soc-nginx-agent.py"]
+    volumes:
+      - ../agent/soc-nginx-agent.py:/app/soc-nginx-agent.py:ro
+      # persist the per-node token (STATE_FILE) so the agent doesn't re-enroll —
+      # and churn the «Ноды» registry — on every container restart.
+      - soc-agent-state:/var/lib/soc-agent
+      - ${NGINX_CONF_DIR:-/etc/nginx/conf.d}:/etc/nginx/conf.d
+      - ${NGINX_DIR:-/etc/nginx}:/etc/nginx
+
+  blocklist:
+    profiles: [blocklist]
+    build:
+      context: ../..
+      dockerfile: blocklist-api/Dockerfile
+    image: soc-blocklist-api:latest
+    restart: unless-stopped
+    env_file: ../.env
+    ports:
+      - "${BLOCKLIST_PORT:-8080}:8080"
+    volumes:
+      - blocklist-data:/data
+
+volumes:
+  loki-data:
+  promtail-positions:
+  soc-data:
+  blocklist-data:
+  soc-agent-state:

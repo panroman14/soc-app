@@ -1,0 +1,1518 @@
+"""soc backend (Phase 1).
+
+FastAPI service that:
+  - polls Loki on a background loop and aggregates a traffic/attack summary,
+  - persists snapshots to SQLite,
+  - exposes /metrics (Prometheus, compatible with the old exporter),
+  - exposes /api/summary and /api/history for the dashboard.
+
+Phase 2 adds the LLM insight worker; Phase 3 adds the web UI; Phase 4 auth.
+"""
+import base64
+import ipaddress
+import json
+import os
+import secrets
+import threading
+import time
+
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+
+from . import analyze, config, db, llm, loki, metrics
+
+app = FastAPI(title="soc", version="0.4.0")
+
+
+@app.middleware("http")
+async def no_cache_html(request: Request, call_next):
+    """Always revalidate the SPA shell so browsers pick up new deploys (no stale UI)."""
+    resp = await call_next(request)
+    p = request.url.path
+    if p == "/" or p.endswith(".html"):
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    """HTTP Basic auth on everything except AUTH_EXEMPT. No-op if creds unset."""
+    if config.BASIC_AUTH_USER and config.BASIC_AUTH_PASS \
+            and request.url.path not in config.AUTH_EXEMPT:
+        ok = False
+        hdr = request.headers.get("authorization", "")
+        if hdr.startswith("Basic "):
+            try:
+                user, _, pw = base64.b64decode(hdr[6:]).decode().partition(":")
+                ok = (secrets.compare_digest(user, config.BASIC_AUTH_USER)
+                      and secrets.compare_digest(pw, config.BASIC_AUTH_PASS))
+            except Exception:
+                ok = False
+        if not ok:
+            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="soc"'})
+    return await call_next(request)
+
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
+
+_state = {
+    "summary": None, "loki_up": False, "updated": 0, "insight": None,
+    "loki_error": None, "llm_up": None, "llm_error": None, "last_insight": 0,
+    "analytics": None, "analytics_updated": 0,
+    "digest": None, "digest_ts": 0,
+    "path403": None, "path403_ts": 0,
+}
+_state_lock = threading.Lock()
+
+
+def poll_loop():
+    db.init()
+    while True:
+        try:
+            summary = loki.collect_summary()
+            ts = int(time.time())
+            # mark not-yet-seen attacker subnets as "new" (first sighting)
+            subs = [x["subnet"] for x in summary.get("top_subnets", [])]
+            fresh = db.new_subnets(subs, ts)
+            for x in summary.get("top_subnets", []):
+                x["new"] = x["subnet"] in fresh
+            with _state_lock:
+                _state.update(summary=summary, loki_up=True, updated=ts, loki_error=None)
+            db.save_snapshot(ts, summary)
+            if ts % 3600 < config.POLL_INTERVAL:
+                db.prune()
+        except Exception as e:
+            with _state_lock:
+                _state.update(loki_up=False, loki_error=str(e))
+            print("[poll] error:", e, flush=True)
+        time.sleep(config.POLL_INTERVAL)
+
+
+def _refresh_path403():
+    """Poll blocklist-api for 403-path render health → cached for /metrics + /api/status.
+    Off the Loki poll path (a blocklist-api stall must not delay data freshness)."""
+    if not config.BLOCKLIST_API_URL:
+        return
+    try:
+        _, ps = _blocklist_call("GET", "/path_status")
+        if ps and "rendered_ok" in ps:
+            with _state_lock:
+                _state["path403"] = ps
+                _state["path403_ts"] = int(time.time())
+    except Exception as e:
+        print("[path403] status error:", e, flush=True)
+
+
+def analytics_loop():
+    while True:
+        try:
+            data = loki.collect_analytics()
+            with _state_lock:
+                _state["analytics"] = data
+                _state["analytics_updated"] = int(time.time())
+        except Exception as e:
+            print("[analytics] error:", e, flush=True)
+        time.sleep(config.ANALYTICS_INTERVAL)
+
+
+def insight_loop():
+    while True:
+        try:
+            history = db.recent_snapshots(config.HISTORY_BASELINE)
+            with _state_lock:
+                latest = _state["summary"]
+            if not (latest and history):
+                time.sleep(15)   # not warmed up yet — retry soon, don't idle 10 min
+                continue
+            if not llm.enabled():
+                # LLM turned off by the operator — don't poll the model or churn the
+                # insight history; just reflect the disabled state and re-check soon.
+                with _state_lock:
+                    _state["llm_up"] = None
+                    _state["llm_error"] = None
+                time.sleep(30)
+                continue
+            severity, signals = analyze.detect(latest, history)
+            insight = llm.analyze(latest, severity, signals)
+            ts = int(time.time())
+            db.save_insight(ts, insight["severity"], insight.get("headline", ""), insight)
+            with _state_lock:
+                _state["insight"] = {"ts": ts, **insight}
+                _state["llm_up"] = insight.get("llm_ok", True)
+                _state["llm_error"] = insight.get("llm_error")
+                _state["last_insight"] = ts
+            print("[insight] %s: %s (llm_ok=%s)" % (
+                insight["severity"], insight.get("headline"), insight.get("llm_ok")), flush=True)
+        except Exception as e:
+            with _state_lock:
+                _state["llm_up"] = False
+                _state["llm_error"] = str(e)
+            print("[insight] error:", e, flush=True)
+        time.sleep(config.LLM_INTERVAL)
+
+
+@app.on_event("startup")
+def _startup():
+    threading.Thread(target=poll_loop, daemon=True).start()
+    threading.Thread(target=analytics_loop, daemon=True).start()
+    threading.Thread(target=insight_loop, daemon=True).start()
+    threading.Thread(target=autoban_loop, daemon=True).start()   # acts only when armed
+    # Tor enrichment is opt-in (TOR_ENABLED=1). When on, keep the exit-list warm in
+    # the background so no IP-profile click blocks on the ~700 KB download.
+    if config.TOR_ENABLED:
+        threading.Thread(target=tor_loop, daemon=True).start()
+
+
+def tor_loop():
+    while True:
+        try:
+            loki._tor_set(block=True)   # blocking refresh — off the request path
+        except Exception as e:
+            print("[tor] loop error:", e, flush=True)
+        time.sleep(6 * 3600)
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def prometheus_metrics():
+    with _state_lock:
+        return metrics.render(_state["summary"], _state["loki_up"], _state.get("path403"))
+
+
+@app.get("/api/summary")
+def api_summary():
+    with _state_lock:
+        return JSONResponse({
+            "updated": _state["updated"],
+            "loki_up": _state["loki_up"],
+            "summary": _state["summary"],
+        })
+
+
+@app.get("/api/history")
+def api_history(limit: int = 240):
+    snaps = db.recent_snapshots(limit)
+    # downsample to ~240 points max so charts stay light (24h = 2880 snapshots)
+    cap = 240
+    if len(snaps) > cap:
+        step = len(snaps) // cap + 1
+        snaps = snaps[::step]
+    return JSONResponse({"snapshots": snaps})
+
+
+@app.get("/api/insights")
+def api_insights(limit: int = 50):
+    with _state_lock:
+        current = _state.get("insight")
+    return JSONResponse({"current": current, "history": db.recent_insights(limit)})
+
+
+_WINDOWS = {"5m", "15m", "1h", "6h", "8h"}
+
+
+def _win(w):
+    return w if w in _WINDOWS else config.WINDOW
+
+
+_an_cache = {}  # (window, host) -> (ts, data)
+_AN_TTL = 45
+
+
+@app.get("/api/analytics")
+def api_analytics(window: str = "", host: str = ""):
+    # default (no params) → cached background snapshot; custom window/host → live (TTL-cached)
+    if not window and not host:
+        with _state_lock:
+            return JSONResponse({"updated": _state["analytics_updated"], "analytics": _state["analytics"]})
+    key = (_win(window), host)
+    now = int(time.time())
+    hit = _an_cache.get(key)
+    if hit and now - hit[0] < _AN_TTL:
+        return JSONResponse({"updated": hit[0], "analytics": hit[1], "cached": True})
+    data = loki.collect_analytics(key[0], host)
+    _an_cache[key] = (now, data)
+    if len(_an_cache) > 50:
+        _an_cache.clear()
+    return JSONResponse({"updated": now, "analytics": data})
+
+
+@app.get("/api/nl")
+def api_nl(q: str = ""):
+    if not q:
+        return JSONResponse({"filters": {}, "requests": []})
+    f = llm.nl_to_filters(q)
+    mins = f.pop("minutes", 60)
+    err = f.pop("error", None)
+    try:
+        reqs = loki.recent_requests(f.get("host", ""), f.get("path", ""), f.get("status", ""),
+                                    f.get("ip", ""), "", 80, mins)
+    except Exception as e:
+        return JSONResponse({"filters": f, "requests": [], "error": str(e)})
+    return JSONResponse({"filters": {**f, "minutes": mins}, "requests": reqs, "llm_error": err})
+
+
+@app.get("/api/webcheck")
+def api_webcheck(job: str = "", url: str = ""):
+    """Proxy to the local web-check container (keeps it behind dashboard auth)."""
+    import urllib.parse as _up
+    import urllib.request as _ur
+    if not job or not url:
+        return JSONResponse({"error": "job and url required"})
+    safe_job = "".join(c for c in job if c.isalnum() or c in "-_")
+    q = config.WEBCHECK_URL + "/api/" + safe_job + "?url=" + _up.quote(url, safe="")
+    try:
+        with _ur.urlopen(q, timeout=30) as r:
+            return JSONResponse(json.loads(r.read().decode()))
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
+
+
+@app.get("/api/trusted")
+def api_trusted():
+    return JSONResponse({"trusted": config.TRUSTED_IPS})
+
+
+# --- blocklist (proxy to in-cluster blocklist-api) ---
+def _blocklist_call(method, path, payload=None):
+    """Call blocklist-api with the bearer token. Returns (status, body)."""
+    import urllib.request as _ur
+    import urllib.error as _ue
+    if not config.BLOCKLIST_API_URL:
+        return None, {"error": "blocklist-api не настроен (BLOCKLIST_API_URL пуст)"}
+    url = config.BLOCKLIST_API_URL.rstrip("/") + path
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = _ur.Request(url, data=data, method=method,
+                      headers={"Content-Type": "application/json",
+                               "Authorization": "Bearer " + config.BLOCKLIST_API_TOKEN})
+    try:
+        with _ur.urlopen(req, timeout=15) as r:
+            return r.status, json.loads(r.read().decode())
+    except _ue.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode())
+        except Exception:
+            return e.code, {"error": "HTTP %s" % e.code}
+    except Exception as e:
+        return None, {"error": str(e)}
+
+
+@app.get("/api/ban_targets")
+def api_ban_targets():
+    """Configured enforcement targets + groups (Cloudflare / nginx / ingress)."""
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"targets": [], "groups": {}, "enabled": False})
+    _, body = _blocklist_call("GET", "/targets")
+    return JSONResponse({"enabled": True, **(body or {})})
+
+
+@app.get("/api/ban_targets/check")
+def api_ban_targets_check(id: str = ""):
+    """«Проверить» — live probe of targets (CF token/list/rule, last errors)."""
+    import urllib.parse as _up
+    path = "/targets/check" + ("?id=" + _up.quote(id, safe="") if id else "")
+    status, body = _blocklist_call("GET", path)
+    return JSONResponse(body or {"checks": [], "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.get("/api/settings")
+def api_settings():
+    """Unified config view: LLM (backend-local, in app_settings) + Cloudflare / bans /
+    ingress (proxied from blocklist-api). Secrets are redacted to a boolean."""
+    llm_view = {
+        "LLM_URL":   {"group": "llm", "type": "str", "label": "LLM endpoint (Ollama/OpenAI-совм.)",
+                      "locked": False, "source": "override" if db.setting_get("llm_url") else "env",
+                      "value": llm.base_url()},
+        "LLM_MODEL": {"group": "llm", "type": "str", "label": "LLM модель",
+                      "locked": False, "source": "override" if db.setting_get("llm_model") else "env",
+                      "value": llm.model()},
+    }
+    bl = {}
+    locked = False
+    if config.BLOCKLIST_API_URL:
+        _, body = _blocklist_call("GET", "/settings")
+        bl = (body or {}).get("settings", {})
+        locked = bool((body or {}).get("locked"))
+    return JSONResponse({"settings": {**llm_view, **bl}, "locked": locked,
+                         "blocklist_enabled": bool(config.BLOCKLIST_API_URL)})
+
+
+@app.post("/api/settings")
+async def api_settings_save(request: Request):
+    body = await request.json()
+    updates = body.get("updates") or body
+    # LLM keys are backend-local; the rest go to blocklist-api.
+    local_map = {"LLM_URL": "llm_url", "LLM_MODEL": "llm_model"}
+    applied, remote = [], {}
+    for k, v in updates.items():
+        if k in local_map:
+            if v is None or v == "":
+                db.setting_set(local_map[k], "")     # revert to env
+            else:
+                db.setting_set(local_map[k], v)
+            applied.append(k)
+        else:
+            remote[k] = v
+    err = None
+    if remote and config.BLOCKLIST_API_URL:
+        status, resp = _blocklist_call("POST", "/settings", {"updates": remote})
+        if status and status >= 400:
+            err = (resp or {}).get("error", "ошибка blocklist-api")
+        else:
+            applied += (resp or {}).get("applied", [])
+    return JSONResponse({"ok": err is None, "applied": applied, "error": err},
+                        status_code=409 if err else 200)
+
+
+@app.get("/api/nodes")
+def api_nodes():
+    """Enrolled nginx-VM agents + liveness/host metrics (the «Ноды» tab)."""
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"enabled": False, "nodes": []})
+    _, body = _blocklist_call("GET", "/nodes")
+    return JSONResponse({"enabled": True, **(body or {})})
+
+
+@app.post("/api/nodes/delete")
+async def api_nodes_delete(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/node_delete", {"id": body.get("id", "")})
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
+
+
+@app.get("/api/nodes/install")
+def api_nodes_install():
+    """Build the «Добавить ноду» install one-liner from blocklist-api's enroll info.
+    The enroll secret stays server-side until an authed operator opens this."""
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"enabled": False})
+    _, info = _blocklist_call("GET", "/enroll_info")
+    info = info or {}
+    url = (info.get("public_url") or "").rstrip("/")
+    secret = info.get("enroll_secret") or ""
+    configured = bool(info.get("enroll_configured"))
+    cmd = ""
+    if configured and url and secret:
+        # the installer refuses plaintext HTTP unless INSECURE=1 — the operator already
+        # chose this PUBLIC_URL, so pre-acknowledge it for the one-click flow.
+        insecure = "" if url.startswith("https://") else "INSECURE=1 "
+        cmd = ("curl -fsSL %s/install/soc-nginx-agent.sh | "
+               "sudo %sBLOCKLIST_API_URL=%s ENROLL_SECRET=%s bash") % (url, insecure, url, secret)
+    return JSONResponse({"enabled": True, "configured": configured,
+                         "public_url": url, "install_cmd": cmd,
+                         "needs_public_url": configured and not url})
+
+
+@app.get("/api/blocklist")
+def api_blocklist():
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"enabled": False, "blocks": []})
+    _, body = _blocklist_call("GET", "/list")
+    return JSONResponse({"enabled": True, **(body or {})})
+
+
+@app.get("/api/blocklist_audit")
+def api_blocklist_audit(limit: int = 100):
+    _, body = _blocklist_call("GET", "/audit?limit=%d" % limit)
+    return JSONResponse(body or {"audit": []})
+
+
+@app.get("/api/reviewed")
+def api_reviewed():
+    """IPs the operator marked reviewed (last 24h) — frontend dims/marks these rows."""
+    return JSONResponse({"ips": db.reviewed_ips()})
+
+
+@app.post("/api/review")
+async def api_review(request: Request):
+    body = await request.json()
+    ip = (body.get("ip") or "").strip()
+    if not ip:
+        return JSONResponse({"ok": False, "error": "no ip"}, status_code=400)
+    db.mark_reviewed(ip, bool(body.get("reviewed", True)))
+    return JSONResponse({"ok": True, "ip": ip, "reviewed": bool(body.get("reviewed", True))})
+
+
+# --- Auto-ban rules (Cloudflare-style). UI + dry-run ONLY: the executor is not
+#     wired, so creating/enabling a rule never bans anyone yet. The global "armed"
+#     kill-switch is stored but defaults OFF and is purely informational for now. ---
+_AB_WINDOWS = {"1m", "5m", "10m", "15m", "30m", "1h", "8h"}
+_AB_WIN_ORDER = ["1m", "5m", "10m", "15m", "30m", "1h", "8h"]
+_AB_MATCH = {"substring", "regex", "family"}
+
+
+def _autoban_ignore():
+    """Защищённые пути — общий список «нельзя трогать»: авто-бан их не считает И в 403
+    их нельзя добавить. From app_settings, else default."""
+    v = db.setting_get("autoban_ignore_paths", None)
+    if isinstance(v, list):
+        return [str(p).strip() for p in v if str(p).strip()]
+    return list(config.AUTOBAN_IGNORE_PATHS_DEFAULT)
+
+
+def _path_protected(path):
+    """Защищён ли путь? Возвращает совпавшую защищённую запись (подстрока) или None."""
+    pl = (path or "").lower()
+    for p in _autoban_ignore():
+        if p and p.lower() in pl:
+            return p
+    return None
+
+
+def _pattern_hits_protected(pattern):
+    """Задевает ли 403-regex защищённый путь? Возвращает запись или None.
+    Две стороны: (1) защищённая запись — подстрока паттерна (узкий литерал
+    `/api/admin` сидит ПОД `/api/`); (2) паттерн матчит защищённый путь (широкий
+    `/api/.*`). Достаточно любой."""
+    sub = _path_protected(pattern)          # (1) узкий литерал под защитой
+    if sub:
+        return sub
+    import re as _re
+    try:
+        rx = _re.compile(pattern or "", _re.I)
+    except _re.error:
+        return None  # битый regex — пусть blocklist-api сам отрапортует
+    for p in _autoban_ignore():             # (2) широкий паттерн задевает защиту
+        if not p:
+            continue
+        base = p.rstrip("/")
+        for sample in (p, base, base + "/", base + "/x", p + "x"):
+            if rx.search(sample):
+                return p
+    return None
+
+
+def _autoban_eval(rule, host="", with_paths=True):
+    """Single entry point for rule evaluation — always injects the ignore whitelist
+    so executor and preview behave identically. The executor passes with_paths=False
+    to skip the (display-only) per-path query and halve Loki load."""
+    return loki.autoban_eval(rule, host=host, ignore_paths=_autoban_ignore(),
+                             with_paths=with_paths)
+
+
+def _clean_rule(body):
+    """Validate/normalize a rule payload from the UI. Raises ValueError on bad input."""
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise ValueError("нужно имя правила")
+    mt = body.get("match_type") or "substring"
+    if mt not in _AB_MATCH:
+        raise ValueError("неизвестный тип условия")
+    path = (body.get("path") or "").strip()
+    if mt != "family" and not path:
+        raise ValueError("укажите путь/паттерн")
+    win = body.get("window") or "10m"
+    if win not in _AB_WINDOWS:
+        raise ValueError("окно: одно из %s" % ", ".join(sorted(_AB_WINDOWS)))
+    try:
+        thr = max(1, int(body.get("threshold") or 1))
+        ttl = max(0, int(body.get("ttl") or 0))
+    except (TypeError, ValueError):
+        raise ValueError("порог/TTL должны быть числами")
+    # normalize multi-path: drop blank OR-lines, cap total length
+    if mt != "family":
+        path = "\n".join(p.strip() for p in path.split("\n") if p.strip())[:1000]
+    # combine: 1 = sum requests across all paths (default), 0 = each path counted alone
+    combine = 0 if body.get("combine") in (0, "0", False, "false") else 1
+    # ban group → enforcement targets ('' = blocklist-api default group)
+    grp = (body.get("group") or "").strip()[:64]
+    return {"name": name[:80], "match_type": mt, "path": path,
+            "status": (body.get("status") or "").strip()[:20], "threshold": thr,
+            "window": win, "ttl": ttl, "enabled": 1 if body.get("enabled") else 0,
+            "combine": combine, "grp": grp}
+
+
+def _ban_groups():
+    """Available ban groups + default, from blocklist-api (for the rule form)."""
+    if not config.BLOCKLIST_API_URL:
+        return {"groups": [], "default_group": ""}
+    try:
+        _, body = _blocklist_call("GET", "/targets")
+        return {"groups": sorted((body or {}).get("groups", {}).keys()),
+                "default_group": (body or {}).get("default_group", "")}
+    except Exception:
+        return {"groups": [], "default_group": ""}
+
+
+@app.get("/api/autoban/rules")
+def api_autoban_rules():
+    return JSONResponse({
+        "rules": db.autoban_rules(),
+        "armed": bool(db.setting_get("autoban_armed", False)),
+        "families": loki.AUTOBAN_FAMILIES,
+        "windows": _AB_WIN_ORDER,
+        "executor": True,        # executor is wired; it bans only when armed
+        "interval": config.AUTOBAN_INTERVAL,
+        "max_per_tick": config.AUTOBAN_MAX_PER_TICK,
+        "last_run": db.setting_get("autoban_last_run", None),
+        "ignore_paths": _autoban_ignore(),
+        **_ban_groups(),
+    })
+
+
+@app.get("/api/autoban/why")
+def api_autoban_why(ip: str = ""):
+    """Why is this IP banned? Finds the covering denylist entry (rule/reason/who/when)
+    + its audit trail. Clearly says when the IP is NOT in our denylist (e.g. a 403 that
+    comes from the static nginx rule or the app, not from a ban)."""
+    ip = (ip or "").strip()
+    if not ip:
+        return JSONResponse({"ip": ip, "error": "нет ip"}, status_code=400)
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return JSONResponse({"ip": ip, "error": "невалидный IP"}, status_code=400)
+    _, bl = _blocklist_call("GET", "/list")
+    entry = None
+    best_prefix = -1
+    for b in (bl or {}).get("blocks", []):
+        try:
+            net = ipaddress.ip_network(b["cidr"], strict=False)
+            # pick the MOST specific covering block (largest prefixlen) so a /32
+            # auto-ban with the real reason wins over a broad manual range
+            if addr in net and net.prefixlen > best_prefix:
+                entry, best_prefix = b, net.prefixlen
+        except Exception:
+            pass
+    _, au = _blocklist_call("GET", "/audit?limit=500")
+    audit = []
+    for e in (au or {}).get("audit", []):
+        c = e.get("cidr") or ""
+        if c == ip or (entry and c == entry["cidr"]) or ("/" not in c and c == ip):
+            audit.append(e)
+    rule = None
+    rule_obj = None
+    if entry:
+        m = entry.get("reason", "")
+        if m.startswith("автобан"):
+            parts = [p.strip() for p in m.split("·")]
+            rule = parts[1] if len(parts) > 1 else None
+        if rule:
+            for r in db.autoban_rules():
+                if r.get("name") == rule:
+                    rule_obj = r
+                    break
+    # example paths that triggered the ban. Prefer paths captured at ban time
+    # (reliable, no live query); fall back to a live 6h lookup for older bans.
+    paths = []
+    if entry:
+        stored = db.setting_get("autoban_ban_paths", {}) or {}
+        paths = stored.get(entry.get("cidr")) or []
+        if not paths:
+            try:
+                paths = loki.ip_rule_paths(ip, rule_obj, "6h")
+            except Exception:
+                paths = []
+    return JSONResponse({"ip": ip, "banned": bool(entry), "entry": entry,
+                         "rule": rule, "by": entry.get("added_by") if entry else None,
+                         "audit": audit[:20], "paths": paths,
+                         "static_deny": loki._skip_ip(ip)})
+
+
+@app.get("/api/autoban/log")
+def api_autoban_log(limit: int = 200):
+    """Auto-ban audit (by=autoban) enriched with: the example paths captured at ban
+    time, and whether the ban is STILL active (so the UI shows 'разбан' only for live
+    bans and marks unbanned/expired ones — the audit itself is append-only history)."""
+    _, au = _blocklist_call("GET", "/audit?limit=500")
+    _, bl = _blocklist_call("GET", "/list")
+    active = {b.get("cidr") for b in (bl or {}).get("blocks", [])}
+    paths_map = db.setting_get("autoban_ban_paths", {}) or {}
+    out = []
+    for e in (au or {}).get("audit", []):
+        if (e.get("by") or "").lower() != "autoban":
+            continue
+        cidr = e.get("cidr") or ""
+        out.append({**e, "paths": paths_map.get(cidr, []), "active": cidr in active})
+    return JSONResponse({"log": out[:limit]})
+
+
+@app.post("/api/autoban/ignore")
+async def api_autoban_ignore(request: Request):
+    """Replace the safety-whitelist of paths the auto-ban never counts."""
+    body = await request.json()
+    paths = body.get("paths")
+    if not isinstance(paths, list):
+        return JSONResponse({"ok": False, "error": "ожидается paths: []"}, status_code=400)
+    clean = []
+    for p in paths:
+        p = str(p).strip()[:200]
+        if p and p not in clean:
+            clean.append(p)
+    db.setting_set("autoban_ignore_paths", clean[:100])
+    return JSONResponse({"ok": True, "ignore_paths": clean[:100]})
+
+
+@app.post("/api/autoban/rule")
+async def api_autoban_rule(request: Request):
+    body = await request.json()
+    try:
+        fields = _clean_rule(body)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    rid = body.get("id")
+    if rid:
+        db.autoban_update(int(rid), fields)
+        return JSONResponse({"ok": True, "id": int(rid), "rule": db.autoban_rule(int(rid))})
+    rid = db.autoban_create(fields)
+    return JSONResponse({"ok": True, "id": rid, "rule": db.autoban_rule(rid)})
+
+
+@app.post("/api/autoban/toggle")
+async def api_autoban_toggle(request: Request):
+    body = await request.json()
+    rid = body.get("id")
+    if not rid:
+        return JSONResponse({"ok": False, "error": "no id"}, status_code=400)
+    db.autoban_update(int(rid), {"enabled": 1 if body.get("enabled") else 0})
+    return JSONResponse({"ok": True, "id": int(rid), "rule": db.autoban_rule(int(rid))})
+
+
+@app.post("/api/autoban/add_path")
+async def api_autoban_add_path(request: Request):
+    """Append a path (from an IP profile / requests view) to an existing rule's
+    OR-list. Family rules can't take explicit paths."""
+    body = await request.json()
+    rid = body.get("id")
+    path = (body.get("path") or "").strip()
+    if not rid or not path:
+        return JSONResponse({"ok": False, "error": "нужны id и path"}, status_code=400)
+    rule = db.autoban_rule(int(rid))
+    if not rule:
+        return JSONResponse({"ok": False, "error": "правило не найдено"}, status_code=404)
+    if rule.get("match_type") == "family":
+        return JSONResponse({"ok": False, "error": "нельзя добавить путь в правило-семейство"}, status_code=400)
+    parts = [p for p in (rule.get("path") or "").split("\n") if p.strip()]
+    if path in parts:
+        return JSONResponse({"ok": True, "id": int(rid), "rule": rule, "already": True})
+    parts.append(path)
+    db.autoban_update(int(rid), {"path": "\n".join(parts)[:1000]})
+    return JSONResponse({"ok": True, "id": int(rid), "rule": db.autoban_rule(int(rid))})
+
+
+@app.post("/api/autoban/delete")
+async def api_autoban_delete(request: Request):
+    body = await request.json()
+    rid = body.get("id")
+    if not rid:
+        return JSONResponse({"ok": False, "error": "no id"}, status_code=400)
+    db.autoban_delete(int(rid))
+    return JSONResponse({"ok": True, "id": int(rid)})
+
+
+@app.post("/api/autoban/arm")
+async def api_autoban_arm(request: Request):
+    """Global kill-switch. Stored only — no executor consumes it yet, so flipping
+    this on does NOT start banning. Wired here so the UI is complete."""
+    body = await request.json()
+    armed = bool(body.get("armed"))
+    db.setting_set("autoban_armed", armed)
+    return JSONResponse({"ok": True, "armed": armed, "executor": True})
+
+
+# --- Auto-ban EXECUTOR ---------------------------------------------------------
+# Runs every AUTOBAN_INTERVAL but ACTS only when the kill-switch (autoban_armed)
+# is ON. Each pass: evaluate every ENABLED rule (dry-run logic, reused), collect
+# fresh offenders, and ban them via blocklist-api with added_by="autoban". All the
+# guardrails from autoban_eval apply (trusted/private/CF/already-denied excluded);
+# already-banned IPs are skipped; at most AUTOBAN_MAX_PER_TICK new bans per pass.
+def _autoban_host_cidr(ip):
+    a = ipaddress.ip_address(ip)
+    return "%s/32" % ip if a.version == 4 else "%s/128" % ip
+
+
+def autoban_run_once():
+    rules = [r for r in db.autoban_rules() if r.get("enabled")]
+    if not rules:
+        db.setting_set("autoban_last_run", {"ts": int(time.time()), "checked_rules": 0,
+                                            "candidates": 0, "banned": 0, "deferred": 0, "already": 0})
+        return
+    nets = _blocked_nets()
+
+    def _already(ip):
+        try:
+            a = ipaddress.ip_address(ip)
+            return any(a in n for n in nets)
+        except Exception:
+            return True   # unparseable → treat as "skip", never ban
+
+    seen = {}
+    already = set()
+    for r in rules:
+        try:
+            data = _autoban_eval(r, with_paths=False)   # executor needs only IP+count
+        except Exception as e:
+            print("[autoban] rule #%s eval error: %s" % (r.get("id"), e), flush=True)
+            continue
+        for m in data.get("matches", []):
+            ip = m.get("ip")
+            if not ip or ip in seen:
+                continue
+            if _already(ip):
+                already.add(ip)   # matched a rule but already in the denylist
+                continue
+            # defense-in-depth: autoban_eval already drops these, re-check anyway
+            if ip in config.TRUSTED_IPS or loki._skip_ip(ip) or loki._is_cf_ip(ip):
+                continue
+            seen[ip] = {"cidr": _autoban_host_cidr(ip),
+                        "reason": "автобан · %s · ≥%s/%s" % (
+                            r.get("name", "?"), r.get("threshold"), r.get("window")),
+                        "ttl": int(r.get("ttl") or 0), "grp": (r.get("group") or ""),
+                        "_rule": r}
+    items = list(seen.values())
+    cap = config.AUTOBAN_MAX_PER_TICK
+    deferred = max(0, len(items) - cap)
+    todo = items[:cap]
+    # BATCH: /block_bulk does ONE reload per call. Group by (ttl, group) — block_bulk
+    # takes a single shared ttl + group → one bulk call per distinct (ttl, group)
+    # combo, so each enforcement target reloads at most once per tick.
+    by_key = {}
+    for it in todo:
+        by_key.setdefault((int(it.get("ttl") or 0), it.get("grp") or ""), []).append(it)
+    banned_cidrs = []
+    for (ttl, grp), grp_items in by_key.items():
+        payload = {"items": [{"cidr": it["cidr"], "reason": it["reason"]} for it in grp_items],
+                   "ttl": ttl, "added_by": "autoban", "force": False}
+        if grp:
+            payload["group"] = grp
+        try:
+            _, resp = _blocklist_call("POST", "/block_bulk", payload)
+            if resp and resp.get("ok"):
+                banned_cidrs.extend(resp.get("blocked") or [])
+            else:
+                print("[autoban] block_bulk failed (ttl=%s grp=%s): %s" % (ttl, grp, resp), flush=True)
+        except Exception as e:
+            print("[autoban] block_bulk error (ttl=%s grp=%s): %s" % (ttl, grp, e), flush=True)
+    banned = len(banned_cidrs)
+    # capture matched paths for the IPs we actually banned (cheap Loki queries — NOT
+    # ingress reloads, so they don't add churn) for the "why banned" view
+    if banned_cidrs:
+        ban_paths = db.setting_get("autoban_ban_paths", {}) or {}
+        bset = set(banned_cidrs)
+        for it in todo:
+            if it["cidr"] not in bset:
+                continue
+            try:
+                pp = loki.ip_rule_paths(it["cidr"].split("/")[0], it.get("_rule"), "1h", 5)
+                if pp:
+                    ban_paths[it["cidr"]] = pp
+            except Exception:
+                pass
+        if len(ban_paths) > 500:   # keep the map bounded
+            ban_paths = dict(list(ban_paths.items())[-500:])
+        db.setting_set("autoban_ban_paths", ban_paths)
+    if deferred:
+        print("[autoban] cap hit: banned %d, deferred %d (cap=%d)" % (banned, deferred, cap), flush=True)
+    if banned:
+        print("[autoban] banned %d IP across %d rules (bulk, %d reload(s))" % (
+            banned, len(rules), len(by_key)), flush=True)
+    db.setting_set("autoban_last_run", {"ts": int(time.time()), "checked_rules": len(rules),
+                                        "candidates": len(items), "banned": banned,
+                                        "deferred": deferred, "already": len(already)})
+
+
+def autoban_loop():
+    # daemon thread always runs; it only BANS when the kill-switch is armed, so the
+    # UI toggle takes effect with no restart. Disarmed = pure no-op (no Loki load).
+    while True:
+        try:
+            if db.setting_get("autoban_armed", False):
+                autoban_run_once()
+        except Exception as e:
+            print("[autoban] loop error:", e, flush=True)
+        _refresh_path403()   # render-health for the 403-path section (runs every tick)
+        time.sleep(config.AUTOBAN_INTERVAL)
+
+
+@app.get("/api/autoban/preview")
+def api_autoban_preview(id: int = 0, match_type: str = "substring", path: str = "",
+                        status: str = "", threshold: int = 5, window: str = "10m",
+                        combine: int = 1, host: str = ""):
+    """Dry-run: who WOULD be banned. Either an existing rule (id) or ad-hoc params
+    (for the create form / generator live-preview)."""
+    if id:
+        rule = db.autoban_rule(id)
+        if not rule:
+            return JSONResponse({"matches": [], "error": "правило не найдено"})
+    else:
+        rule = {"match_type": match_type if match_type in _AB_MATCH else "substring",
+                "path": path, "status": status, "combine": 1 if combine else 0,
+                "threshold": max(1, threshold), "window": window if window in _AB_WINDOWS else "10m"}
+    try:
+        data = _autoban_eval(rule, host=host)
+        # drop IPs already covered by the active denylist (no point re-banning) +
+        # report how many were skipped so the operator sees the dedup happened
+        nets = _blocked_nets()
+        if nets:
+            def _blocked(ip):
+                try:
+                    a = ipaddress.ip_address(ip)
+                    return any(a in n for n in nets)
+                except Exception:
+                    return False
+            kept = [m for m in data.get("matches", []) if not _blocked(m["ip"])]
+            data["already_banned"] = data.get("total_ips", 0) - len(kept)
+            data["matches"] = kept
+            data["total_ips"] = len(kept)
+            data["total_hits"] = sum(m["count"] for m in kept)
+        return JSONResponse(data)
+    except Exception as e:
+        return JSONResponse({"matches": [], "error": str(e)})
+
+
+@app.post("/api/block")
+async def api_block(request: Request):
+    body = await request.json()
+    payload = {"cidr": body.get("cidr", ""), "reason": body.get("reason", ""),
+               "ttl": body.get("ttl", 0), "force": bool(body.get("force", False)),
+               "added_by": "dashboard"}
+    if body.get("group"):
+        payload["group"] = body["group"]
+    status, resp = _blocklist_call("POST", "/block", payload)
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/unblock")
+async def api_unblock(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/unblock", {"cidr": body.get("cidr", "")})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/block_bulk")
+async def api_block_bulk(request: Request):
+    body = await request.json()
+    payload = {"reason": body.get("reason", "сканер (просятся в бан)"),
+               "ttl": body.get("ttl", 0), "added_by": "dashboard"}
+    if body.get("group"):
+        payload["group"] = body["group"]
+    if body.get("items"):
+        payload["items"] = body["items"]
+    else:
+        payload["cidrs"] = body.get("cidrs") or []
+    status, resp = _blocklist_call("POST", "/block_bulk", payload)
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/unblock_all")
+async def api_unblock_all(request: Request):
+    status, resp = _blocklist_call("POST", "/unblock_all", {})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/resync")
+async def api_resync(request: Request):
+    status, resp = _blocklist_call("POST", "/resync", {})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+# ── path-403 rules (proxied to blocklist-api) ─────────────────────────────────
+@app.get("/api/path_rules")
+def api_path_rules():
+    status, resp = _blocklist_call("GET", "/path_rules")
+    return JSONResponse(resp or {"enabled": True, "rules": []}, status_code=status or 502)
+
+
+@app.get("/api/path_status")
+def api_path_status():
+    status, resp = _blocklist_call("GET", "/path_status")
+    return JSONResponse(resp or {"rendered_ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.get("/api/protected_paths")
+def api_protected_paths():
+    """Общий список защищённых путей (тот же, что у автобана) — для показа в 403."""
+    return JSONResponse({"paths": _autoban_ignore()})
+
+
+@app.post("/api/path_rule")
+async def api_path_rule(request: Request):
+    body = await request.json()
+    # защищённые пути нельзя резать через 403 — жёсткий отказ (без force). Проверяем
+    # ТОЛЬКО новые куски: при правке существующего правила старые пути не перепроверяем
+    # (иначе ранее добавленный путь под /api/ блокировал бы любую правку).
+    new_parts = _re_top_split(_re_unwrap(body.get("pattern", "")))
+    rid = body.get("id")
+    if rid:
+        _, d = _blocklist_call("GET", "/path_rules")
+        ex = next((x for x in (d or {}).get("rules", []) if str(x.get("id")) == str(rid)), None)
+        if ex:
+            old = set(_re_top_split(_re_unwrap(ex.get("pattern") or "")))
+            new_parts = [p for p in new_parts if p not in old]
+    for part in new_parts:
+        hit = _pattern_hits_protected(part)
+        if hit:
+            return JSONResponse({"ok": False, "error":
+                "«%s» задевает защищённый путь «%s» — в 403 нельзя." % (part[:50], hit)},
+                status_code=400)
+    payload = {"id": body.get("id"), "name": body.get("name", ""),
+               "pattern": body.get("pattern", ""),
+               "enabled": bool(body.get("enabled", True)),
+               "force": bool(body.get("force", False))}
+    status, resp = _blocklist_call("POST", "/path_rule", payload)
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/path_rule/delete")
+async def api_path_rule_delete(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/path_rule_delete", {"id": body.get("id", "")})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/path_rule/toggle")
+async def api_path_rule_toggle(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/path_rule_toggle",
+                                   {"id": body.get("id", ""), "enabled": bool(body.get("enabled", True))})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/path_master")
+async def api_path_master(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/path_master", {"enabled": bool(body.get("enabled", True))})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+def _path_ids_by_name():
+    """name -> id of existing 403 rules, so seeding is idempotent (update, not duplicate)."""
+    _, body = _blocklist_call("GET", "/path_rules")
+    return {r.get("name"): r.get("id") for r in ((body or {}).get("rules") or []) if r.get("name")}
+
+
+def _path_upsert_by_name(name, pattern, existing, force=False):
+    payload = {"name": name, "pattern": pattern, "force": bool(force)}
+    if name in existing:
+        payload["id"] = existing[name]          # update in place, no duplicate
+    _, resp = _blocklist_call("POST", "/path_rule", payload)
+    return resp or {"ok": False, "error": "нет ответа"}
+
+
+def _autoban_rule_to_pattern(rule):
+    """Convert an auto-ban rule's path(s) into a 403 regex fragment, mirroring how
+    the executor matches: substring → escaped literals, regex → raw, family → skip."""
+    import re as _re
+    mt = rule.get("match_type") or "substring"
+    if mt == "family":
+        return None                              # signature preset, not an enumerable path set
+    parts = [p.strip() for p in (rule.get("path") or "").split("\n") if p.strip()]
+    if not parts:
+        return None
+    alt = "|".join(parts) if mt == "regex" else "|".join(_re.escape(p) for p in parts)
+    return "(" + alt + ")"
+
+
+@app.post("/api/path_seed")
+async def api_path_seed(request: Request):
+    """Seed the canonical scanner-path set as one '403' rule (the regex that used
+    to live in the ingress by hand). Idempotent: re-seeding updates 'base-scanners'."""
+    existing = _path_ids_by_name()
+    resp = _path_upsert_by_name("base-scanners", config.BASE_403_PATTERN, existing)
+    return JSONResponse(resp, status_code=200 if resp.get("ok") else 502)
+
+
+@app.post("/api/path_seed_autoban")
+async def api_path_seed_autoban(request: Request):
+    """Seed 403 rules FROM auto-ban rules: one 403 rule per auto-ban rule
+    ('из автобана: <name>'), built from its paths. Family rules are skipped.
+    Body may carry `ids: [...]` to seed only selected rules (else all).
+    Idempotent: re-running updates the same-named rules instead of duplicating."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    rules = db.autoban_rules()
+    sel = body.get("ids")
+    if sel:
+        want = {str(x) for x in sel}
+        rules = [r for r in rules if str(r.get("id")) in want]
+    existing = _path_ids_by_name()
+    created, skipped = [], []
+    for r in rules:
+        pat = _autoban_rule_to_pattern(r)
+        nm = (r.get("name") or "").strip()
+        if not pat:
+            skipped.append({"name": nm, "reason": "семейство/без путей — нечего конвертировать"})
+            continue
+        name = ("из автобана: " + nm)[:80]
+        res = _path_upsert_by_name(name, pat, existing)
+        if res.get("ok"):
+            created.append(name)
+        else:
+            skipped.append({"name": nm, "reason": res.get("error", "ошибка")})
+    return JSONResponse({"ok": True, "created": created, "skipped": skipped})
+
+
+# ── обратное направление: наполнить автобан-правила из 403-правил ──────────────
+def _re_unwrap(s):
+    """Снять один внешний слой (...) если он обрамляет всю строку (escape-aware)."""
+    s = (s or "").strip()
+    if len(s) < 2 or s[0] != "(" or s[-1] != ")":
+        return s
+    depth, i = 0, 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\":
+            i += 2; continue
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return s[1:-1] if i == len(s) - 1 else s
+        i += 1
+    return s
+
+
+def _re_top_split(s):
+    """Разбить по '|' только на глубине 0 (не внутри (...) / [...]), escape-aware."""
+    out, cur, depth, incls, i = [], "", 0, False, 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\":
+            cur += s[i:i + 2]; i += 2; continue
+        if incls:
+            cur += c
+            if c == "]":
+                incls = False
+            i += 1; continue
+        if c == "[":
+            incls = True; cur += c; i += 1; continue
+        if c == "(":
+            depth += 1; cur += c; i += 1; continue
+        if c == ")":
+            depth -= 1; cur += c; i += 1; continue
+        if c == "|" and depth == 0:
+            out.append(cur); cur = ""; i += 1; continue
+        cur += c; i += 1
+    out.append(cur)
+    return [p for p in out if p]
+
+
+# ── «основная пара»: одно 403-правило + одно автобан-правило, добавление в оба ─
+def _re_lit(s):
+    """Экранировать путь в литеральный regex-фрагмент (как фронтовый _reEsc)."""
+    import re as _re
+    return _re.sub(r'([.*+?^${}()|\[\]\\])', r'\\\1', s or "")
+
+
+@app.get("/api/main_rules")
+def api_main_rules():
+    return JSONResponse({"path_id": db.setting_get("main_path_rule", None),
+                         "autoban_id": db.setting_get("main_autoban_rule", None)})
+
+
+@app.post("/api/main_rules")
+async def api_set_main_rules(request: Request):
+    body = await request.json()
+    if "path_id" in body:
+        db.setting_set("main_path_rule", body.get("path_id"))
+    if "autoban_id" in body:
+        db.setting_set("main_autoban_rule", body.get("autoban_id"))
+    return JSONResponse({"ok": True, "path_id": db.setting_get("main_path_rule", None),
+                         "autoban_id": db.setting_get("main_autoban_rule", None)})
+
+
+@app.post("/api/add_to_main")
+async def api_add_to_main(request: Request):
+    """Добавить путь СРАЗУ в основное 403-правило И основное автобан-правило (дедуп).
+    403 получает экранированный литерал, автобан — сырой путь (движок сам экранирует)."""
+    body = await request.json()
+    path = (body.get("path") or "").strip()
+    if not path:
+        return JSONResponse({"ok": False, "error": "нужен path"}, status_code=400)
+    prot = _path_protected(path)
+    if prot:
+        err = {"ok": False, "error": "путь под защитой «%s» — нельзя ни в 403, ни в автобан" % prot}
+        return JSONResponse({"ok": True, "protected": prot, "path403": err, "autoban": err})
+    res = {"path403": None, "autoban": None}
+
+    # --- 403: основное правило в blocklist-api ---
+    pid = db.setting_get("main_path_rule", None)
+    if not pid:
+        res["path403"] = {"ok": False, "error": "не выбрано основное 403-правило (отметь ★)"}
+    else:
+        _, d = _blocklist_call("GET", "/path_rules")
+        r = next((x for x in (d or {}).get("rules", []) if str(x.get("id")) == str(pid)), None)
+        if not r:
+            res["path403"] = {"ok": False, "error": "основное 403-правило не найдено"}
+        else:
+            parts = _re_top_split(_re_unwrap(r.get("pattern") or ""))
+            lit = _re_lit(path)
+            if lit in parts:
+                res["path403"] = {"ok": True, "already": True, "name": r.get("name")}
+            else:
+                parts.append(lit)
+                _, resp = _blocklist_call("POST", "/path_rule", {
+                    "id": r["id"], "name": r.get("name"),
+                    "pattern": "(" + "|".join(parts) + ")", "enabled": r.get("enabled", True)})
+                ok = bool(resp and resp.get("ok"))
+                res["path403"] = {"ok": ok, "name": r.get("name"),
+                                  "error": None if ok else (resp or {}).get("error", "ошибка")}
+
+    # --- автобан: основное правило в SQLite ---
+    aid = db.setting_get("main_autoban_rule", None)
+    if not aid:
+        res["autoban"] = {"ok": False, "error": "не выбрано основное автобан-правило (отметь ★)"}
+    else:
+        rule = db.autoban_rule(int(aid))
+        if not rule:
+            res["autoban"] = {"ok": False, "error": "основное автобан-правило не найдено"}
+        elif rule.get("match_type") == "family":
+            res["autoban"] = {"ok": False, "error": "основное автобан-правило — семейство, путь не добавить"}
+        else:
+            parts = [p for p in (rule.get("path") or "").split("\n") if p.strip()]
+            if path in parts:
+                res["autoban"] = {"ok": True, "already": True, "name": rule.get("name")}
+            else:
+                parts.append(path)
+                db.autoban_update(int(aid), {"path": "\n".join(parts)[:1000]})
+                res["autoban"] = {"ok": True, "name": rule.get("name")}
+    return JSONResponse({"ok": True, **res})
+
+
+_BC_WINDOWS = {"1h", "6h", "8h"}
+_bc_cache = {}   # (window, host) -> (ts, data)
+_BC_TTL = 120    # heavy multi-query → cache hard to spare Loki
+_bc_lock = threading.Lock()  # avoid overlapping heavy computes (pile-up → 429)
+
+
+def _blocked_nets():
+    """Active blocklist CIDRs (from blocklist-api) as ip_network objects."""
+    _, bl = _blocklist_call("GET", "/list")
+    nets = []
+    for b in (bl or {}).get("blocks", []):
+        try:
+            nets.append(ipaddress.ip_network(b["cidr"], strict=False))
+        except Exception:
+            pass
+    return nets
+
+
+def _drop_already_blocked(data):
+    """Remove candidates whose IP is already covered by the active denylist."""
+    nets = _blocked_nets()
+    if not nets:
+        return data
+    def blocked(ip):
+        try:
+            a = ipaddress.ip_address(ip)
+            return any(a in n for n in nets)
+        except Exception:
+            return False
+    cands = [c for c in data.get("candidates", []) if not blocked(c["ip"])]
+    return {**data, "candidates": cands, "total_ips": len(cands),
+            "total_hits": sum(c.get("count", 0) for c in cands)}
+
+
+@app.get("/api/ban_candidates")
+def api_ban_candidates(window: str = "1h", host: str = ""):
+    w = window if window in _BC_WINDOWS else "1h"
+    key = (w, host)
+    now = int(time.time())
+    hit = _bc_cache.get(key)
+    if hit and now - hit[0] < _BC_TTL:
+        return JSONResponse({**_drop_already_blocked(hit[1]), "cached": True})
+    # never run two heavy computes at once; if busy, serve stale (or "loading")
+    if not _bc_lock.acquire(blocking=False):
+        base = hit[1] if hit else {"candidates": [], "top_paths": []}
+        return JSONResponse({**_drop_already_blocked(base), "stale": True})
+    try:
+        data = loki.ban_candidates(w, host, ignore_paths=_autoban_ignore())
+        _bc_cache[key] = (now, data)
+        if len(_bc_cache) > 20:
+            _bc_cache.clear()
+        return JSONResponse(_drop_already_blocked(data))
+    except Exception as e:
+        return JSONResponse({"candidates": [], "top_paths": [], "error": str(e)})
+    finally:
+        _bc_lock.release()
+
+
+_sc_cache = {}
+
+
+@app.get("/api/suspect_ips")
+def api_suspect_ips(window: str = "1h", host: str = ""):
+    w = window if window in _BC_WINDOWS else "1h"
+    key = (w, host)
+    now = int(time.time())
+    hit = _sc_cache.get(key)
+    if hit and now - hit[0] < _BC_TTL:
+        return JSONResponse({**_drop_already_blocked(hit[1]), "cached": True})
+    if not _bc_lock.acquire(blocking=False):
+        base = hit[1] if hit else {"candidates": [], "top_paths": []}
+        return JSONResponse({**_drop_already_blocked(base), "stale": True})
+    try:
+        data = loki.suspect_ips(w, host, ignore_paths=_autoban_ignore())
+        _sc_cache[key] = (now, data)
+        if len(_sc_cache) > 20:
+            _sc_cache.clear()
+        return JSONResponse(_drop_already_blocked(data))
+    except Exception as e:
+        return JSONResponse({"candidates": [], "top_paths": [], "error": str(e)})
+    finally:
+        _bc_lock.release()
+
+
+_judge_cache = {}  # window -> (ts, verdicts)
+
+
+@app.get("/api/judge_suspects")
+def api_judge_suspects(window: str = "1h"):
+    w = window if window in _BC_WINDOWS else "1h"
+    now = int(time.time())
+    hit = _judge_cache.get(w)
+    if hit and now - hit[0] < 300:
+        return JSONResponse({"verdicts": hit[1], "cached": True})
+    # reuse cached suspect computation if fresh, else compute
+    sc = _sc_cache.get((w, ""))
+    data = sc[1] if (sc and now - sc[0] < _BC_TTL) else loki.suspect_ips(w, ignore_paths=_autoban_ignore())
+    cands = [c for c in data.get("candidates", []) if not c.get("cf")][:12]
+    items = []
+    for c in cands:
+        a = loki.asn_lookup(c["ip"])
+        items.append({"ip": c["ip"], "count": c.get("count"), "country": c.get("country"),
+                      "paths": c.get("paths"), "isp": a.get("isp") or a.get("org"),
+                      "asn": a.get("as"), "hosting": a.get("hosting"), "proxy": a.get("proxy"),
+                      "reputation": loki.reputation(c["ip"], a).get("verdict")})
+    if not items:
+        return JSONResponse({"verdicts": []})
+    verdicts = llm.judge_suspects(items)
+    _judge_cache[w] = (now, verdicts)
+    return JSONResponse({"verdicts": verdicts})
+
+
+@app.get("/api/verdicts")
+def api_verdicts(ips: str = ""):
+    """Already-computed AI verdicts (from cache, no LLM) — to restore UI after reload.
+    Applies the deterministic scanner override so a stale/weak LLM "user"/"подозрит."
+    verdict can't survive once the IP is seen hitting scanner paths (.php/phpmyadmin/…).
+    """
+    out = {}
+    for ip in [x.strip() for x in ips.split(",") if x.strip()][:60]:
+        v = db.cache_get("verdict:" + ip, 12 * 3600)
+        if not v:
+            continue
+        if v.get("kind") in ("user", "подозрит."):
+            try:
+                sh = loki.ip_scanner_hits(ip, "8h", use_cache=True)
+            except Exception:
+                sh = 0
+            if sh > 0:
+                v = {"ip": ip, "kind": "scanner", "ban": True, "confidence": "high",
+                     "reason": "сканирует уязвимые пути (.php/.env/wp): %d обращений" % sh}
+                db.cache_put("verdict:" + ip, v)   # heal the cache
+        out[ip] = v
+    return JSONResponse({"verdicts": out})
+
+
+@app.get("/api/judge_ip")
+def api_judge_ip(ip: str = "", window: str = "1h", force: int = 0):
+    if not ip:
+        return JSONResponse({"verdict": None})
+    w = window if window in _BC_WINDOWS else "1h"
+    # --- deterministic checks FIRST (override LLM + any stale cache) ---
+    # 1) reverse-DNS verified good bot → legit, never ban
+    vb = loki.verify_bot(ip)
+    if vb.get("bot"):
+        verdict = {"ip": ip, "kind": "legit-bot", "ban": False, "confidence": "high",
+                   "reason": "rDNS подтверждён: %s (%s)" % (vb["bot"], vb.get("ptr") or "")}
+        db.cache_put("verdict:" + ip, verdict)
+        return JSONResponse({"verdict": verdict, "verified": True})
+    # 2) hits scanner paths (.php/.env/wp-…) → it's a scanner, not a legit bot
+    sh = loki.ip_scanner_hits(ip, "8h")
+    if sh > 0:
+        verdict = {"ip": ip, "kind": "scanner", "ban": True, "confidence": "high",
+                   "reason": "сканирует уязвимые пути (.php/.env/wp): %d обращений" % sh}
+        db.cache_put("verdict:" + ip, verdict)
+        return JSONResponse({"verdict": verdict, "deterministic": True})
+    # 3) cached LLM verdict — but never trust a cached "legit-bot" (only rDNS may say that);
+    #    force=1 bypasses the cache and re-asks the LLM
+    if not force:
+        cached = db.cache_get("verdict:" + ip, 12 * 3600)
+        if cached is not None and cached.get("kind") != "legit-bot":
+            return JSONResponse({"verdict": cached, "cached": True})
+    cand = None
+    sc = _sc_cache.get((w, ""))
+    if sc:
+        for c in sc[1].get("candidates", []):
+            if c.get("ip") == ip:
+                cand = c
+                break
+    a = loki.asn_lookup(ip)
+    item = {"ip": ip, "count": (cand or {}).get("count"), "country": (cand or {}).get("country"),
+            "paths": (cand or {}).get("paths"), "isp": a.get("isp") or a.get("org"),
+            "asn": a.get("as"), "hosting": a.get("hosting"), "proxy": a.get("proxy"),
+            "ptr": vb.get("ptr"), "reputation": loki.reputation(ip, a).get("verdict")}
+    try:
+        v = llm.judge_suspects([item], num_predict=180, timeout=60)
+        verdict = v[0] if v else None
+        # the LLM can't verify bots (rDNS does) — downgrade its unverified "legit-bot"
+        if verdict and verdict.get("kind") == "legit-bot":
+            verdict["kind"] = "подозрит."
+            verdict["reason"] = "LLM счёл ботом, но rDNS не подтвердил — проверь вручную. " + (verdict.get("reason") or "")
+        if verdict:
+            db.cache_put("verdict:" + ip, verdict)
+        return JSONResponse({"verdict": verdict})
+    except Exception as e:
+        return JSONResponse({"verdict": None, "error": str(e)})
+
+
+@app.get("/api/ip_profile")
+def api_ip_profile(ip: str = "", window: str = "1h"):
+    try:
+        return JSONResponse(loki.ip_profile(ip, _win(window) if window in _WINDOWS else "1h"))
+    except Exception as e:
+        return JSONResponse({"ip": ip, "error": str(e)})
+
+
+@app.get("/api/crs_samples")
+def api_crs_samples(family: str = "", window: str = "1h", limit: int = 30):
+    try:
+        return JSONResponse({"samples": loki.crs_samples(family, limit, _win(window) if window in _WINDOWS else "1h")})
+    except Exception as e:
+        return JSONResponse({"samples": [], "error": str(e)})
+
+
+@app.get("/api/requests")
+def api_requests(host: str = "", path: str = "", status: str = "", ip: str = "",
+                 ua: str = "", ref: str = "", limit: int = 60, minutes: int = 15):
+    try:
+        return JSONResponse({"requests": loki.recent_requests(host, path, status, ip, ua, ref, limit, minutes)})
+    except Exception as e:
+        return JSONResponse({"requests": [], "error": str(e)})
+
+
+@app.get("/api/ips")
+def api_ips(country: str = "", limit: int = 20, window: str = "", host: str = ""):
+    try:
+        return JSONResponse({"country": country,
+                             "ips": loki.top_ips(country, limit, _win(window), host)})
+    except Exception as e:
+        return JSONResponse({"country": country, "ips": [], "error": str(e)})
+
+
+@app.get("/api/digest")
+def api_digest():
+    now = int(time.time())
+    with _state_lock:
+        cached, ts = _state["digest"], _state["digest_ts"]
+        stats0 = _state.get("digest_stats")
+    if cached and now - ts < config.DIGEST_TTL:
+        return JSONResponse({"ts": ts, "digest": cached, "stats": stats0, "cached": True})
+    snaps = db.recent_snapshots(288)  # ~ up to a day at 5min spacing of poll snapshots
+    stats = _aggregate_period(snaps)
+    obj = llm.digest(stats)
+    with _state_lock:
+        _state["digest"] = obj
+        _state["digest_stats"] = stats
+        _state["digest_ts"] = now
+    return JSONResponse({"ts": now, "digest": obj, "stats": stats, "cached": False})
+
+
+@app.get("/api/suggest")
+def api_suggest():
+    with _state_lock:
+        summary = _state["summary"]
+        analytics = _state["analytics"] or {}
+    if not summary:
+        return JSONResponse({"deny": [], "waf": [], "rationale": "Нет данных."})
+    return JSONResponse(llm.suggest_rules(summary, analytics))
+
+
+def _aggregate_period(snaps):
+    if not snaps:
+        return {}
+    keys = ["requests_total", "forbidden_new", "crs_detections", "status_404",
+            "status_4xx", "status_5xx", "distinct_attacker_ips"]
+    agg = {}
+    for k in keys:
+        vals = [s.get(k, 0) for s in snaps]
+        agg[k] = {"max": max(vals), "avg": round(sum(vals) / len(vals), 1)}
+    subs = {}
+    for s in snaps:
+        for x in s.get("top_subnets", []):
+            subs[x["subnet"]] = max(subs.get(x["subnet"], 0), x["count"])
+    # exclude already-blocked subnets (denylist + static deny ranges) from the digest
+    banned = _blocked_nets()
+    for d in getattr(config, "DENY_NETS", []):
+        try:
+            banned.append(ipaddress.ip_network(d))
+        except Exception:
+            pass
+
+    def _is_banned(subnet):
+        try:
+            n = ipaddress.ip_network(subnet, strict=False)
+            return any(n.overlaps(b) for b in banned)
+        except Exception:
+            return False
+    agg["top_subnets_peak"] = sorted(
+        [{"subnet": k, "peak": v} for k, v in subs.items() if not _is_banned(k)],
+        key=lambda x: -x["peak"])[:8]
+    agg["snapshots"] = len(snaps)
+    return agg
+
+
+@app.get("/api/llm")
+def api_llm():
+    """Current state of the LLM master switch."""
+    return JSONResponse({"enabled": llm.enabled()})
+
+
+@app.post("/api/llm/toggle")
+async def api_llm_toggle(request: Request):
+    """Enable/disable the LLM globally. When off, all AI features (insight loop,
+    digest, rule suggestions, IP verdicts, NL explorer) skip the model and degrade
+    gracefully — the rest of the dashboard keeps working."""
+    body = await request.json()
+    enabled = bool(body.get("enabled"))
+    db.setting_set("llm_enabled", enabled)
+    return JSONResponse({"ok": True, "enabled": enabled})
+
+
+@app.get("/api/status")
+def api_status():
+    """Component health + freshness + last errors for the dashboard."""
+    now = int(time.time())
+    with _state_lock:
+        s = dict(_state)
+    poll_age = now - s["updated"] if s["updated"] else None
+    insight_age = now - s["last_insight"] if s["last_insight"] else None
+    llm_enabled = llm.enabled()
+    problems = []
+    if not s["loki_up"]:
+        problems.append({"component": "Loki", "msg": s.get("loki_error") or "нет связи с Loki"})
+    # When the LLM is switched off, its staleness/availability is expected — don't
+    # report it as a problem.
+    if llm_enabled and s["llm_up"] is False:
+        problems.append({"component": "LLM", "msg": s.get("llm_error") or "модель недоступна"})
+    if poll_age is not None and poll_age > max(90, config.POLL_INTERVAL * 3):
+        problems.append({"component": "Сбор данных", "msg": "данные устарели (%sс)" % poll_age})
+    if llm_enabled and insight_age is not None and insight_age > config.LLM_INTERVAL * 2.5:
+        problems.append({"component": "AI-разбор", "msg": "разбор устарел (%sс)" % insight_age})
+    p403 = s.get("path403")
+    if p403 and not p403.get("rendered_ok"):
+        problems.append({"component": "Правила 403",
+                         "msg": "managed-секция не отрендерена в ingress (дрейф/перетёрто) — нужен ресинк"})
+    return JSONResponse({
+        "ok": len(problems) == 0,
+        "loki_up": s["loki_up"], "loki_error": s.get("loki_error"),
+        "llm_up": s["llm_up"], "llm_error": s.get("llm_error"),
+        "llm_enabled": llm_enabled,
+        "poll_age": poll_age, "insight_age": insight_age,
+        "path403": p403,
+        "problems": problems,
+    })
+
+
+@app.get("/api/health")
+def health():
+    with _state_lock:
+        return {"ok": True, "loki_up": _state["loki_up"], "updated": _state["updated"]}
+
+
+# Serve the dashboard (single-page, no build). Mounted last so /api/* and
+# /metrics take precedence.
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

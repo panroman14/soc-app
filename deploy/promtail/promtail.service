@@ -1,0 +1,18 @@
+[Unit]
+Description=soc Promtail (ship nginx logs to Loki)
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+# Env file carries LOKI_PUSH_URL, VM_LABEL, NGINX_ACCESS_LOG, etc.
+EnvironmentFile=/etc/soc/promtail.env
+# -config.expand-env lets promtail.yml read ${...} from the environment.
+ExecStart=/usr/local/bin/promtail -config.file=/etc/soc/promtail.yml -config.expand-env=true
+Restart=always
+RestartSec=5
+# promtail needs to read nginx logs (often root:adm) — adjust group as needed.
+SupplementaryGroups=adm
+StateDirectory=promtail
+
+[Install]
+WantedBy=multi-user.target

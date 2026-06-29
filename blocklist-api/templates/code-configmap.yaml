@@ -1,0 +1,13 @@
+# App source shipped as a ConfigMap (no image build). Mounted at /srv/app.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blocklist-api-code
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "blocklist-api.labels" . | indent 4 }}
+data:
+{{- range $path, $bytes := .Files.Glob "app/*.py" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

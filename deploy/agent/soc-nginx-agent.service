@@ -1,0 +1,15 @@
+[Unit]
+Description=soc-nginx-agent (pull denylist → local nginx deny + reload)
+After=network-online.target nginx.service
+Wants=network-online.target nginx.service
+
+[Service]
+EnvironmentFile=/etc/soc/agent.env
+ExecStart=/usr/bin/env python3 /usr/local/bin/soc-nginx-agent.py
+Restart=always
+RestartSec=10
+# Needs to write nginx config + reload nginx; runs as root by default. To run
+# unprivileged, grant write on the two files and allow `nginx -s reload` via sudo.
+
+[Install]
+WantedBy=multi-user.target

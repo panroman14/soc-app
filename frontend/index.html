@@ -1,0 +1,2334 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SOC Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#0a0c10; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .card { background:#11151c; border:1px solid #1e2530; border-radius:14px; }
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2a3340;border-radius:4px}
+  .pulse{animation:p 2s infinite}@keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
+  h2.sec{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:#64748b;font-weight:600;margin:1.5rem 0 .75rem}
+  .bar-bg{height:6px;border-radius:3px;background:#1a212c}
+  /* «Кто и что» — карточки можно тянуть за угол (resize) */
+  #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
+  #whoswhat > .card::-webkit-resizer{background:#2a3340}
+</style>
+</head>
+<body class="text-slate-200 min-h-screen">
+<div class="max-w-[1400px] mx-auto px-5 py-5">
+
+  <header class="flex items-center justify-between mb-5 flex-wrap gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 grid place-items-center text-indigo-300 font-bold">k</div>
+      <div>
+        <h1 class="text-lg font-semibold tracking-tight">SOC Dashboard</h1>
+        <p class="text-xs text-slate-500">мониторинг трафика и атак · все домены</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <button id="llm-toggle" onclick="toggleLLM()" class="px-2.5 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-400 hover:bg-slate-800" title="включить/выключить LLM">🤖 LLM: —</button>
+      <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800" title="пауза авто-обновления">⏸</button>
+      <div id="status-badge" class="px-3 py-1.5 rounded-lg text-xs font-semibold border">—</div>
+      <div class="text-right">
+        <div class="flex items-center gap-1.5 justify-end text-xs">
+          <span id="live-dot" class="w-2 h-2 rounded-full bg-slate-600"></span>
+          <span id="live-text" class="text-slate-400">подключение…</span>
+        </div>
+        <div id="updated" class="text-[11px] text-slate-600 mono mt-0.5">—</div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="flex items-center gap-1 mb-4 border-b border-slate-800">
+    <button id="navtab-dash" onclick="showView('dash')" class="px-3 py-2 text-sm border-b-2 -mb-px border-indigo-500 text-indigo-200 font-medium">Дашборд</button>
+    <button id="navtab-autoban" onclick="showView('autoban')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⛔ Автобан</button>
+    <button id="navtab-p403" onclick="showView('p403')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🚫 Правила 403</button>
+    <button id="navtab-nodes" onclick="showView('nodes')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🖥️ Ноды</button>
+    <button id="navtab-settings" onclick="showView('settings')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⚙️ Настройки</button>
+  </nav>
+
+  <div id="view-dash">
+  <div id="banner" class="hidden mb-4"></div>
+  <section class="flex flex-wrap items-center gap-2 mb-3">
+    <span class="text-[11px] text-slate-500">окно:</span>
+    <div id="winsel" class="flex gap-1"></div>
+    <input id="ipsearch" placeholder="🔍 поиск IP → профиль" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-48" onkeydown="if(event.key==='Enter')globalSearch(this.value)">
+    <span id="winnote" class="text-[11px] text-slate-600"></span>
+  </section>
+  <section id="health" class="flex flex-wrap gap-2 mb-4"></section>
+  <section id="stats" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-2"></section>
+  <section class="card p-3 mb-2"><div class="flex items-center gap-3"><span class="text-[11px] text-slate-500 shrink-0">статусы:</span><div id="status_pct" class="flex-1 flex h-3 rounded overflow-hidden bg-slate-800"></div><span id="status_pct_legend" class="text-[11px] text-slate-500 shrink-0"></span></div></section>
+
+  <h2 class="sec">Динамика</h2>
+  <section class="grid lg:grid-cols-2 gap-4">
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик / 5м</h3><canvas id="chartTraffic" height="140"></canvas></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Сигнатуры атак</h3><canvas id="chartThreats" height="140"></canvas></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Статусы ответов</h3><canvas id="chartStatus" height="140"></canvas></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Латентность p95, c</h3><canvas id="chartLatency" height="140"></canvas></div>
+  </section>
+
+  <h2 class="sec">AI-аналитик</h2>
+  <section class="space-y-4">
+    <div class="grid lg:grid-cols-3 gap-4">
+      <div id="insight-current" class="lg:col-span-2 card p-5"></div>
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-medium text-slate-300">Предложения по защите</h3>
+          <button id="suggest-btn" class="text-[11px] px-2 py-1 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25">сгенерировать</button></div>
+        <div id="suggest" class="text-sm text-slate-400">Нажми «сгенерировать» — LLM предложит deny/WAF-правила по текущей атаке.</div>
+      </div>
+    </div>
+    <div class="card p-5"><h3 class="text-sm font-medium text-slate-300 mb-2">Дайджест за период</h3><div id="digest" class="text-sm text-slate-300 leading-relaxed">загрузка…</div></div>
+  </section>
+
+  <h2 class="sec">Кто и что <span class="text-slate-600 font-normal normal-case tracking-normal">— тяни за правый-нижний угол карточки, чтобы менять размер</span></h2>
+  <section id="whoswhat" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ атакуемых путей <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="top_paths" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ User-Agent <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="top_user_agents" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Типы атак <span class="text-slate-500 font-normal">/ CRS</span></h3><div id="attack_types" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">География</h3><div id="geo" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ доменов</h3><div id="top_domains" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Карта угроз <span class="text-slate-500 font-normal">/ новые подсети</span></h3><div id="subnets" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">CRS-правила <span class="text-slate-500 font-normal">/ клик → payload</span></h3><div id="crs_rules" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">HTTP-методы</h3><div id="methods" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Referer <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="referers" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">TLS-протоколы</h3><div id="tls" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ talkers <span class="text-slate-500 font-normal">/ клик → профиль IP</span></h3><div id="talkers" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">WAF: кандидаты в ложные <span class="text-slate-500 font-normal">/ URI, триггерящие CRS</span></h3><div id="waf_fp" class="space-y-1.5"></div></div>
+  </section>
+
+  <h2 class="sec">Производительность и нагрузка</h2>
+  <section class="grid md:grid-cols-2 gap-4">
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Медленные эндпоинты <span class="text-slate-500 font-normal">/ avg сек</span></h3><div id="slow_endpoints" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик по доменам <span class="text-slate-500 font-normal">/ МБ</span></h3><div id="bytes_by_domain" class="space-y-1.5"></div></div>
+  </section>
+
+  <h2 class="sec">Обзор запросов <span class="text-slate-600 normal-case font-normal">— клик по путям/IP/UA выше тоже открывает запросы</span></h2>
+  <section class="card p-4 mb-2">
+    <div class="flex gap-2 mb-3">
+      <input id="nl_q" placeholder="Спросить словами: «404 на /admin за 30 минут»" class="flex-1 bg-slate-900 border border-indigo-700/50 rounded px-3 py-1.5 text-xs text-slate-200" onkeydown="if(event.key==='Enter')runNL()">
+      <button onclick="runNL()" class="px-3 py-1.5 rounded bg-indigo-500/25 text-indigo-200 border border-indigo-500/40 text-xs hover:bg-indigo-500/35">🤖 Спросить</button>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-3">
+      <input id="ex_host" placeholder="хост (example.com)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-40">
+      <input id="ex_path" placeholder="путь (/admin)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-40">
+      <input id="ex_status" placeholder="код (404)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-24">
+      <input id="ex_ip" placeholder="IP (203.0.113.)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-36">
+      <select id="ex_minutes" onchange="runExplorer()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="за какое время">
+        <option value="15">15 мин</option><option value="30">30 мин</option>
+        <option value="60" selected>1 час</option><option value="180">3 часа</option>
+        <option value="480">8 часов</option>
+      </select>
+      <button onclick="runExplorer()" class="px-3 py-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs hover:bg-indigo-500/30">Найти</button>
+      <span class="text-[11px] text-slate-600 self-center">до 80 строк · пресеты:</span>
+      <button onclick="preset('scanners')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">сканеры</button>
+      <button onclick="preset('auth')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">401/403 auth</button>
+      <button onclick="preset('5xx')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">5xx</button>
+    </div>
+    <div id="ex_out" class="overflow-auto max-h-96"><div class="text-slate-600 text-xs">Задай фильтр и нажми «Найти» — увидишь сырые запросы.</div></div>
+  </section>
+
+  <h2 class="sec">Денлист <span class="text-slate-500 font-normal">/ блокировки на ingress</span></h2>
+  <section class="card p-4 mb-8">
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      <input id="bl_cidr" placeholder="IP или CIDR (напр. 203.0.113.0/24)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-64" />
+      <input id="bl_reason" placeholder="причина" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-48" />
+      <select id="bl_ttl" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-300">
+        <option value="2592000" selected>30д</option><option value="0">навсегда</option><option value="3600">1ч</option><option value="86400">24ч</option><option value="604800">7д</option>
+      </select>
+      <button onclick="blockManual()" class="text-sm px-3 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ Заблокировать</button>
+      <button onclick="unbanAll()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700">↩ Разбанить всех</button>
+      <button onclick="resyncNow()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700" title="перечитать денлист в ingress (после kubectl apply)">↻ Ресинк</button>
+      <div id="bl_mode" class="flex gap-1 ml-auto"></div>
+      <input id="bl_search" oninput="_blPage=0;_renderBlPage()" placeholder="поиск по IP/причине…" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-56" />
+      <span id="bl_msg" class="text-xs"></span>
+    </div>
+    <div id="blocklist" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div>
+  </section>
+
+  <h2 class="sec">Просятся в бан <span class="text-slate-500 font-normal">/ сканеры .env · wp · .git · .php …</span></h2>
+  <section class="card p-4 mb-8">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div id="bc_summary" class="text-xs text-slate-400">загрузка…</div>
+      <div class="flex items-center gap-2">
+        <select id="bc_win" onchange="renderBanCandidates()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно анализа">
+          <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
+        </select>
+        <button onclick="banAllCandidates()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">⛔ Забанить всех</button>
+      </div>
+    </div>
+    <div id="ban_candidates" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+  </section>
+
+  <h2 class="sec">Подозрительная активность <span class="text-slate-500 font-normal">/ аномально много 4xx (перебор эндпоинтов)</span></h2>
+  <section class="card p-4 mb-8">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div id="sc_summary" class="text-xs text-slate-400">загрузка…</div>
+      <div class="flex items-center gap-2">
+        <select id="sc_win" onchange="renderSuspects()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно анализа">
+          <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
+        </select>
+        <button id="sc_judge" onclick="judgeSuspects()" class="text-sm px-3 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-600 font-medium">🤖 Оценить ИИ</button>
+        <button id="sc_recheck" onclick="judgeSuspects(true)" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700" title="форс-перепроверка ИИ (игнор кэша)">↻ Переоценить</button>
+        <button onclick="banAllSuspects()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">⛔ Забанить всех</button>
+      </div>
+    </div>
+    <div id="suspects" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+  </section>
+
+  <h2 class="sec">Лента AI-инсайтов</h2>
+  <section class="card p-4 mb-8"><div id="insight-history" class="max-h-[520px] overflow-y-auto pr-1"></div></section>
+  </div><!-- /view-dash -->
+
+  <div id="view-autoban" class="hidden">
+    <div id="ab-killswitch" class="card border-amber-500/30 bg-amber-500/5 p-4 mb-4">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div class="text-sm font-semibold text-amber-200">Механизм автобана</div>
+          <div id="ab-killswitch-note" class="text-[12px] text-slate-400 mt-0.5">загрузка…</div>
+        </div>
+        <button id="ab-arm-btn" onclick="toggleArm()" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">—</button>
+      </div>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
+        <div>
+          <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
+          <div class="text-[12px] text-slate-500 mt-0.5">Cloudflare / nginx / ingress — задаются переменными BAN_TARGETS / BAN_GROUPS</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-[11px] text-slate-500">ручной бан в группу:</label>
+          <select id="bt-group" onchange="_banGroup=this.value" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200"></select>
+          <button id="bt-check-btn" onclick="checkBanTargets()" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">Проверить</button>
+        </div>
+      </div>
+      <div id="ban-targets" class="text-sm text-slate-400">загрузка…</div>
+    </div>
+
+    <section class="card p-4 mb-4">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div>
+          <span class="text-sm font-medium text-slate-200">🛡️ Защищённые пути</span>
+          <span class="text-[11px] text-slate-500">— автобан их НИКОГДА не банит, и в 403 их добавить НЕЛЬЗЯ (общий предохранитель)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input id="ab-ignore-inp" placeholder="/новый/путь" onkeydown="if(event.key==='Enter')abIgnoreAdd()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono w-44">
+          <button onclick="abIgnoreAdd()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ добавить</button>
+          <button onclick="abIgnoreSave()" class="text-[11px] px-2 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-600">Сохранить</button>
+          <span id="ab-ignore-msg" class="text-[11px] text-slate-500"></span>
+        </div>
+      </div>
+      <div id="ab-ignore" class="flex flex-wrap gap-1.5"></div>
+    </section>
+
+    <div class="grid lg:grid-cols-2 gap-4 mb-4">
+      <section class="card p-4">
+        <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="abCardToggle('ab-form-body','ab-form-chev')">
+          <h3 class="text-sm font-medium text-slate-200"><span id="ab-form-chev" class="text-slate-600 mr-1">▸</span><span id="ab-form-title">Создать новое правило</span></h3>
+          <div class="flex gap-1" onclick="event.stopPropagation()">
+            <button id="ab-tab-form" onclick="abMode('form')" class="text-[11px] px-2 py-1 rounded bg-indigo-500/25 text-indigo-200 border border-indigo-500/40">Форма</button>
+            <button id="ab-tab-json" onclick="abMode('json')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">JSON</button>
+          </div>
+        </div>
+        <div id="ab-form-body" class="hidden">
+        <div id="ab-json-panel" class="hidden space-y-2">
+          <p class="text-[11px] text-slate-500">Вставь готовое правило (или несколько — массивом) в JSON и нажми «Загрузить в форму» либо «Сохранить из JSON».</p>
+          <textarea id="ab-json" rows="12" spellcheck="false" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs text-slate-200 mono" placeholder='{
+  "name": "WP-login brute",
+  "match_type": "substring",
+  "paths": ["/wp-login.php", "/xmlrpc.php"],
+  "threshold": 2,
+  "window": "5m",
+  "combine": true,
+  "ttl": 0,
+  "status": "",
+  "enabled": false
+}'></textarea>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="abJsonToForm()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700">↧ Загрузить в форму</button>
+            <button onclick="abSaveFromJson()" class="px-3 py-1.5 rounded bg-indigo-600/80 text-white text-sm hover:bg-indigo-600">Сохранить из JSON</button>
+            <button onclick="abFormToJson()" class="px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700" title="выгрузить текущую форму как JSON">⤓ форма → JSON</button>
+            <span id="ab-json-msg" class="text-[12px] text-slate-500"></span>
+          </div>
+        </div>
+        <div id="ab-form-panel" class="space-y-2.5">
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">Имя правила</label>
+            <input id="ab-name" placeholder="напр. WP-login brute" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200">
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">Условие</label>
+            <select id="ab-mtype" onchange="abMtypeChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mb-1.5">
+              <option value="substring">путь содержит</option>
+              <option value="regex">путь по regex</option>
+              <option value="family">семейство сигнатур</option>
+            </select>
+            <select id="ab-family" class="hidden w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200"></select>
+            <div id="ab-paths" class="space-y-1.5"></div>
+            <button id="ab-add-or" type="button" onclick="abAddPath()" class="mt-1.5 text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ ИЛИ ещё путь</button>
+            <label id="ab-combine-wrap" class="flex items-start gap-2 mt-2 cursor-pointer">
+              <input id="ab-combine" type="checkbox" checked class="mt-0.5 accent-indigo-500">
+              <span class="text-[11px] text-slate-400 leading-snug">складывать запросы по всем путям<br><span class="text-slate-600">вкл: 1×/.git + 1×/.env = 2 → сработает · выкл: порог должен набрать один путь</span></span>
+            </label>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-[11px] text-slate-500 block mb-1">Запросов ≥</label>
+              <input id="ab-threshold" type="number" min="1" value="5" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200">
+            </div>
+            <div>
+              <label class="text-[11px] text-slate-500 block mb-1">за окно</label>
+              <select id="ab-window" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200"></select>
+            </div>
+            <div>
+              <label class="text-[11px] text-slate-500 block mb-1">код (опц.)</label>
+              <input id="ab-status" placeholder="404 / 4.." class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono">
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">TTL бана</label>
+            <select id="ab-ttl" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200">
+              <option value="2592000" selected>30 дней</option>
+              <option value="0">навсегда</option>
+              <option value="3600">1 час</option>
+              <option value="21600">6 часов</option>
+              <option value="86400">24 часа</option>
+              <option value="604800">7 дней</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">Группа (куда банить)</label>
+            <select id="ab-group" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200"></select>
+          </div>
+          <div class="flex items-center gap-2 pt-1">
+            <button onclick="abSaveRule()" class="px-3 py-1.5 rounded bg-indigo-600/80 text-white text-sm hover:bg-indigo-600">Сохранить правило</button>
+            <button onclick="abPreview()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700" title="кого бы забанило (dry-run, без бана)">🔍 Превью</button>
+            <button id="ab-cancel" onclick="abResetForm()" class="hidden px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700">Отмена</button>
+            <span id="ab-form-msg" class="text-[12px] text-slate-500"></span>
+          </div>
+        </div>
+        </div><!-- /ab-form-body -->
+      </section>
+
+      <section class="card p-4">
+        <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="abCardToggle('ab-preview','ab-preview-chev')">
+          <h3 class="text-sm font-medium text-slate-200"><span id="ab-preview-chev" class="text-slate-600 mr-1">▸</span>Превью (dry-run)</h3>
+          <span class="text-[11px] text-slate-600">кого бы забанило · реального бана нет</span>
+        </div>
+        <div id="ab-preview" class="hidden text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">Заполни условие и нажми «Превью».</div></div>
+      </section>
+    </div>
+
+    <h2 class="sec">Готовые пути <span class="text-slate-600 font-normal normal-case tracking-normal">— клик добавит путь в условие правила (ИЛИ)</span></h2>
+    <section class="card p-4 mb-4"><div id="ab-presets" class="space-y-3"></div></section>
+
+    <h2 class="sec">Правила автобана</h2>
+    <section class="card p-4 mb-4"><div id="ab-rules" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div></section>
+
+    <h2 class="sec">Проверить IP <span class="text-slate-600 font-normal normal-case tracking-normal">— забанен ли и за что</span></h2>
+    <section class="card p-4 mb-4">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <input id="ab-why-ip" placeholder="IP (напр. 203.0.113.45)" onkeydown="if(event.key==='Enter')abWhy()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono w-64">
+        <button onclick="abWhy()" class="px-3 py-1.5 rounded bg-indigo-600/80 text-white text-sm hover:bg-indigo-600">Проверить</button>
+      </div>
+      <div id="ab-why" class="text-sm"></div>
+    </section>
+
+    <h2 class="sec">Логи автобана <span class="text-slate-600 font-normal normal-case tracking-normal">— кого и по какому правилу забанил</span></h2>
+    <section class="card p-4 mb-8">
+      <div class="flex items-center justify-between mb-2">
+        <span id="ab-log-sum" class="text-[11px] text-slate-500">загрузка…</span>
+        <button onclick="loadAbLog()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">↻ обновить</button>
+      </div>
+      <div id="ab-log" class="text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+  </div><!-- /view-autoban -->
+
+  <div id="view-p403" class="hidden">
+    <section class="card p-4 mb-4">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-base font-semibold text-slate-200">🚫 Правила 403 — блокировка по пути</h2>
+          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span> на nginx (сканеры/эксплойты: <span class="mono">/.env</span>, <span class="mono">/wp-login</span>, jndi…). Это <b>не бан IP</b> — режется сам путь, на всех доменах. Рендерится в ingress, как денлист.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span id="p403-render" class="text-[12px]"></span>
+          <span id="p403-master-lbl" class="text-[12px] text-slate-400">секция:</span>
+          <button id="p403-master" onclick="p403Master()" class="text-sm px-3 py-1.5 rounded bg-slate-700 text-slate-200">…</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card p-4 mb-4">
+      <h3 class="text-sm font-medium text-slate-300 mb-2">Добавить правило</h3>
+      <div class="flex flex-wrap items-end gap-2">
+        <div><label class="text-[11px] text-slate-500 block mb-1">Имя</label>
+          <input id="p403-name" placeholder="напр. env-файлы" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 w-44"/></div>
+        <div><label class="text-[11px] text-slate-500 block mb-1">Тип</label>
+          <select id="p403-mode" onchange="p403ModeChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200">
+            <option value="path" selected>Путь содержит</option>
+            <option value="exact">Точный URI</option>
+            <option value="wildcard">Wildcard (*)</option>
+            <option value="regex">Regex (вручную)</option>
+          </select></div>
+        <div class="flex-1 min-w-[200px]"><label id="p403-raw-lbl" class="text-[11px] text-slate-500 block mb-1">Путь</label>
+          <input id="p403-raw" oninput="p403Preview()" placeholder="/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono w-full"/></div>
+        <div><label class="text-[11px] text-slate-500 block mb-1">Куда</label>
+          <select id="p403-target" onchange="p403TargetChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[170px]"></select></div>
+        <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="добавить, даже если апка считает паттерн слишком широким"><input type="checkbox" id="p403-force"/> force</label>
+        <button onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600">Добавить</button>
+        <span id="p403-msg" class="text-xs"></span>
+      </div>
+      <div class="mt-2 grid md:grid-cols-2 gap-2 text-[11px]">
+        <div class="bg-slate-900/40 border border-slate-800 rounded px-2 py-1.5">
+          <div class="text-slate-500">сгенерится regex:</div>
+          <div id="p403-gen" class="mono text-indigo-300 break-all">—</div>
+          <div id="p403-warn" class="text-amber-300 mt-1"></div>
+        </div>
+        <div class="bg-slate-900/40 border border-slate-800 rounded px-2 py-1.5">
+          <div class="text-slate-500 mb-1">проверь на примере — забанит или нет:</div>
+          <div class="flex items-center gap-2"><input id="p403-test" oninput="p403Preview()" placeholder="/docs/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[12px] text-slate-200 mono flex-1"/><span id="p403-test-res" class="shrink-0">—</span></div>
+        </div>
+      </div>
+      <div class="mt-2 text-[11px] text-slate-500"><button onclick="p403SeedAutoban(this)" class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">засеять из правил автобана ▾</button><button onclick="p403Seed()" class="ml-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">базовый набор сканеров</button></div>
+      <div id="p403-protected" class="mt-2 text-[11px] text-slate-500"></div>
+    </section>
+
+    <section class="card p-4">
+      <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <h3 class="text-sm font-medium text-slate-300 shrink-0">Активные правила <span id="p403-count" class="text-slate-600"></span></h3>
+        <div class="flex items-center gap-2 ml-auto">
+          <input id="p403-search" oninput="_p403RenderList()" placeholder="🔍 поиск по имени / паттерну…" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-60"/>
+          <button onclick="loadP403()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">↻</button>
+        </div>
+      </div>
+      <div id="p403-list" class="space-y-1.5"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+  </div><!-- /view-p403 -->
+
+  <div id="view-nodes" class="hidden">
+    <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h2 class="text-sm font-medium text-slate-200">🖥️ Подключённые ноды</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">nginx-VM с агентом soc-nginx-agent — откуда собираем трафик и куда применяем баны.</p>
+        </div>
+        <button onclick="showAddNode()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">+ Добавить ноду</button>
+      </div>
+      <div id="nodes-add" class="hidden mb-3 bg-slate-950/70 border border-slate-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-medium text-slate-300">Установка агента на nginx-VM</h3>
+          <button onclick="document.getElementById('nodes-add').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-2">Выполни на виртуалке (Linux, root). Нода появится в списке после первого heartbeat:</p>
+        <div class="flex items-stretch gap-2">
+          <pre id="nodes-install-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300">загрузка…</pre>
+          <button onclick="copyInstallCmd()" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+        </div>
+        <p id="nodes-install-hint" class="text-[11px] text-amber-400/80 mt-2 hidden"></p>
+      </div>
+      <div id="nodes-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+  </div><!-- /view-nodes -->
+
+  <div id="view-settings" class="hidden">
+    <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-sm font-medium text-slate-200">⚙️ Настройки</h2>
+        <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
+      </div>
+      <p class="text-[11px] text-slate-500 mb-3">Значения из ENV — это дефолты; здесь их можно переопределить (хранится в БД). Секреты вписываются один раз и не показываются обратно.</p>
+      <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">🔒 CONFIG_LOCK=env — конфиг только из переменных окружения, редактирование через GUI отключено.</div>
+      <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="set-msg" class="text-[11px] mt-3"></div>
+    </section>
+  </div><!-- /view-settings -->
+
+  <footer class="text-center text-[11px] text-slate-700 mb-6 mono">soc · обновление 15с</footer>
+</div>
+
+<!-- IP drill-down modal -->
+<div id="modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="card max-w-5xl w-full max-h-[90vh] overflow-auto p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 id="modal-title" class="text-sm font-semibold text-slate-200">Топ IP</h3>
+      <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
+    </div>
+    <div id="modal-body" class="space-y-1.5"></div>
+  </div>
+</div>
+
+<script>
+const SEV = {
+  ok:{label:"спокойно",cls:"bg-emerald-500/10 text-emerald-300 border-emerald-500/30",dot:"#10b981"},
+  notice:{label:"внимание",cls:"bg-sky-500/10 text-sky-300 border-sky-500/30",dot:"#38bdf8"},
+  warning:{label:"тревога",cls:"bg-amber-500/10 text-amber-300 border-amber-500/30",dot:"#f59e0b"},
+  critical:{label:"критично",cls:"bg-red-500/10 text-red-300 border-red-500/40",dot:"#ef4444"},
+};
+const fmt=n=>n==null?"—":(n>=1000?(n/1000).toFixed(n>=10000?0:1)+"k":Math.round(n));
+const pct=n=>n==null?"—":(n*100).toFixed(1)+"%";
+const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000-ts);return s<60?s+"с":Math.floor(s/60)+"м";};
+const dt=ts=>{if(!ts)return"—";const d=new Date(ts*1000);const p=n=>String(n).padStart(2,"0");return `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;};
+const esc=s=>String(s==null?"":s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const CNAMES={US:"США",UA:"Украина",RU:"Россия",GB:"Великобритания",DE:"Германия",FR:"Франция",NL:"Нидерланды",IE:"Ирландия",PL:"Польша",CA:"Канада",IN:"Индия",CN:"Китай",SG:"Сингапур",IT:"Италия",ES:"Испания",SE:"Швеция",FI:"Финляндия",CZ:"Чехия",RO:"Румыния",LV:"Латвия",LT:"Литва",EE:"Эстония",BY:"Беларусь",KZ:"Казахстан",TR:"Турция",BR:"Бразилия",JP:"Япония",KR:"Корея",AU:"Австралия",CH:"Швейцария",AT:"Австрия",BE:"Бельгия",DK:"Дания",NO:"Норвегия",PT:"Португалия",MD:"Молдова",GE:"Грузия",AM:"Армения",AZ:"Азербайджан",IL:"Израиль",AE:"ОАЭ",HK:"Гонконг",VN:"Вьетнам",ID:"Индонезия",MX:"Мексика",ZA:"ЮАР",BG:"Болгария",HU:"Венгрия",GR:"Греция"};
+function flag(cc){if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc))return"🏳️";return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));}
+function countryLabel(cc){if(!cc)return"— не определено";return flag(cc)+" "+(CNAMES[cc.toUpperCase()]||cc.toUpperCase());}
+
+const STATS=[
+  {k:"requests_total",l:"Запросов/5м",c:"text-slate-100"},
+  {k:"requests_real",l:"Реальных",c:"text-slate-100"},
+  {k:"forbidden_new",l:"Новые блоки",c:"text-amber-300",hot:1},
+  {k:"crs_detections",l:"CRS payload",c:"text-red-300",hot:1},
+  {k:"distinct_attacker_ips",l:"Атак. IP",c:"text-orange-300",hot:1},
+  {k:"unique_visitors",l:"Уник. IP",c:"text-slate-100"},
+  {k:"latency_p95",l:"p95, c",c:"text-slate-100",fmt:v=>v==null?"—":v.toFixed(2)},
+  {k:"availability",l:"Доступность",c:"text-emerald-300",fmt:v=>v==null?"—":(v*100).toFixed(2)+"%"},
+  {k:"bytes_mb",l:"Трафик, МБ",c:"text-slate-100",fmt:v=>v==null?"—":Math.round(v)},
+  {k:"malicious_ratio",l:"Вредного",c:"text-slate-100",fmt:pct,hotr:1},
+];
+let uniqueVisitors=null;
+const WINS=["5m","15m","1h","6h","8h"];
+const WIN_HIST={"5m":12,"15m":34,"1h":130,"6h":740,"8h":960};
+let WIN="5m", HOST="";
+let lastAn={analytics:{}}, lastAnKey="", lastAnAt=0;
+let lastHist={snapshots:[]}, lastIns={current:null,history:[]}, lastHistKey="", lastHistAt=0;
+function renderWinSel(){
+  document.getElementById("winsel").innerHTML=WINS.map(w=>
+    `<button onclick="setWin('${w}')" class="text-[11px] px-2 py-1 rounded ${w===WIN?'bg-indigo-500/25 text-indigo-200 border border-indigo-500/40':'bg-slate-800 text-slate-400 hover:bg-slate-700'}">${w}</button>`).join("");
+}
+function setWin(w){WIN=w;renderWinSel();updateHash();refresh();}
+function setHost(v){HOST=(v||"").trim();updateHash();refresh();}
+function updateHash(){location.hash=`win=${WIN}&host=${encodeURIComponent(HOST)}`;}
+function parseHash(){const h=new URLSearchParams(location.hash.slice(1));if(WINS.includes(h.get("win")))WIN=h.get("win");if(h.get("host")){HOST=h.get("host");const el=document.getElementById("hostsel");if(el)el.value=HOST;}}
+function renderStatusPct(s){
+  const el=document.getElementById("status_pct");const lg=document.getElementById("status_pct_legend");if(!el)return;
+  if(!s){el.innerHTML="";lg.textContent="";return;}
+  const parts=[["2xx",s.status_2xx||0,"#10b981"],["3xx",s.status_3xx||0,"#38bdf8"],["4xx",s.status_4xx||0,"#f59e0b"],["5xx",s.status_5xx||0,"#ef4444"]];
+  const tot=parts.reduce((a,p)=>a+p[1],0)||1;
+  el.innerHTML=parts.map(p=>`<div title="${p[0]}: ${fmt(p[1])} (${(p[1]/tot*100).toFixed(1)}%)" style="width:${(p[1]/tot*100).toFixed(1)}%;background:${p[2]}"></div>`).join("");
+  lg.innerHTML=parts.map(p=>`<span style="color:${p[2]}">${p[0]} ${(p[1]/tot*100).toFixed(0)}%</span>`).join(" · ");
+}
+function renderStats(s){
+  document.getElementById("stats").innerHTML=STATS.map(d=>{
+    let v=s?s[d.k]:null; const hot=(d.hot&&v>0)||(d.hotr&&v>=0.35);
+    const disp=d.fmt?d.fmt(v):fmt(v);
+    return `<div class="card p-3 ${hot?'ring-1 ring-amber-500/40':''}"><div class="text-[10px] text-slate-500 mb-1">${d.l}</div><div class="text-xl font-semibold mono ${hot?'text-amber-300':d.c}">${disp}</div></div>`;
+  }).join("");
+}
+
+let charts={};
+function mkChart(id,datasets,stacked){
+  return new Chart(document.getElementById(id),{type:"line",data:{labels:[],datasets},
+    options:{responsive:true,animation:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#94a3b8",boxWidth:9,font:{size:10}}}},
+      scales:{x:{ticks:{color:"#475569",maxTicksLimit:6,font:{size:9}},grid:{color:"#161c25"},stacked:!!stacked},
+              y:{ticks:{color:"#475569",font:{size:9}},grid:{color:"#161c25"},beginAtZero:true,stacked:!!stacked}}}});
+}
+const ds=(l,c,fill)=>({label:l,data:[],borderColor:c,backgroundColor:c+(fill?"33":"22"),borderWidth:2,pointRadius:0,fill:!!fill,tension:.3});
+function setChart(c,snaps,arrs){c.data.labels=snaps.map(s=>{const d=new Date(s.ts*1000);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");});arrs.forEach((a,i)=>c.data.datasets[i].data=snaps.map(a));c.update();}
+
+const ATTACK_RE=/(\bunion\b.{0,20}\bselect\b|\bselect\b.{0,30}\bfrom\b|sleep\(\d|benchmark\(|waitfor\s+delay|\bor\s+\d+\s*[-*=]|information_schema|\/\*!|0x[0-9a-f]{8}|<script|onerror\s*=|javascript:|\.\.\/\.\.|etc\/passwd|\$\{(jndi|@?print)|\bmd5\(|;\s*print|\bxor\b)/i;
+function looksMalicious(s){return ATTACK_RE.test(String(s||""));}
+function bars(id,list,color,drill){
+  const el=document.getElementById(id);
+  if(!list||!list.length){el.innerHTML=`<div class="text-slate-600 text-xs">нет данных</div>`;return;}
+  const max=Math.max(...list.map(x=>x.count||x.peak||0));
+  el.innerHTML=list.map(x=>{const v=x.count||x.peak||0;const value=x.key||x.subnet||x.country||"—";const label=x.display||value;
+    const mal=looksMalicious(label);
+    const click=drill?`onclick="drillRow('${drill}', this.dataset.v)" data-v="${esc(String(value))}" class="cursor-pointer hover:bg-slate-800/40 -mx-1 px-1 rounded"`:"";
+    const sub=(x.sub!=null&&x.sub>0)?` <span class="text-red-400" title="заблокировано">/ ${fmt(x.sub)}</span>`:"";
+    const badge=mal?`<span class="px-1 rounded bg-red-500/20 text-red-300 text-[9px] mr-1 shrink-0" title="похоже на атаку (SQLi/XSS/RCE)">⚠ атака</span>`:"";
+    const lblCls=mal?"text-red-300":"text-slate-300";
+    const valCls=mal?"text-red-300":color;
+    const barClr=mal?"#ef4444":(color==='text-amber-300'?'#f59e0b':color==='text-red-300'?'#ef4444':'#6366f1');
+    return `<div ${click}><div class="flex justify-between text-xs mb-0.5 gap-2"><span class="${lblCls} truncate" title="${esc(String(label))}">${badge}${esc(String(label).slice(0,46))}${drill?' <span class=\"text-slate-600\">↗</span>':''}</span><span class="mono ${valCls} shrink-0">${fmt(v)}${sub}</span></div><div class="bar-bg"><div class="h-full rounded" style="width:${(v/max*100).toFixed(0)}%;background:${barClr}99"></div></div></div>`;
+  }).join("");
+}
+let _map=null,_mapMode="count",_mapGeo=[];
+// jsVectorMap 1.5.3 поддерживает только OrdinalScale (значение→цвет по ключу),
+// поэтому раскладываем трафик по дискретным бакетам 1..6 (0 нельзя — setValues его пропускает).
+const _MAPCOLORS=["#38bdf8","#22d3ee","#a3e635","#fbbf24","#f97316","#ef4444"];
+const _MAPSCALE=Object.fromEntries(_MAPCOLORS.map((c,i)=>[i+1,c]));
+function _mapBuckets(geo,mode){
+  const lv={};let max=0,out={};
+  (geo||[]).forEach(x=>{const cc=(x.key||"").toUpperCase();if(/^[A-Z]{2}$/.test(cc)){const n=mode==="blocked"?(x.blocked||0):(x.count||0);if(n>0){const l=Math.log10(n+1);lv[cc]=l;if(l>max)max=l;}}});
+  Object.keys(lv).forEach(cc=>{const t=max>0?lv[cc]/max:0;out[cc]=1+Math.min(_MAPCOLORS.length-1,Math.floor(t*_MAPCOLORS.length));});
+  return out;
+}
+function _mapTip(code){const x=_mapGeo.find(g=>(g.key||"").toUpperCase()===code);const name=CNAMES[code]||code;if(!x)return `${flag(code)} ${name}`;return `${flag(code)} ${name}<br>Всего: ${fmt(x.count||0)} · Заблок.: ${fmt(x.blocked||0)}`;}
+function renderMap(geo){
+  _mapGeo=geo||[];
+  const empty=document.getElementById("map-empty"),cont=document.getElementById("worldmap");
+  if(!cont)return;   // карта удалена из UI
+  if(typeof jsVectorMap==="undefined"){cont.classList.add("hidden");empty.classList.remove("hidden");empty.textContent="карта не загрузилась (CDN недоступен)";return;}
+  const values=_mapBuckets(_mapGeo,_mapMode);
+  if(!Object.keys(values).length&&!_map){empty.classList.remove("hidden");cont.classList.add("hidden");return;}
+  empty.classList.add("hidden");cont.classList.remove("hidden");
+  if(_map){try{_map.series.regions[0].clear();_map.series.regions[0].setValues(values);}catch(e){}return;}
+  try{_map=new jsVectorMap({
+    selector:"#worldmap",map:"world",backgroundColor:"transparent",zoomButtons:true,zoomOnScroll:false,
+    regionStyle:{initial:{fill:"#171c25",stroke:"#0a0c10","stroke-width":0.4},hover:{fillOpacity:0.7}},
+    series:{regions:[{attribute:"fill",scale:_MAPSCALE,values}]},
+    onRegionTooltipShow(e,tip,code){tip.text(_mapTip(code),true);},
+    onRegionClick(e,code){if(_mapGeo.find(g=>(g.key||"").toUpperCase()===code))openIps(code);}
+  });}catch(e){cont.classList.add("hidden");empty.classList.remove("hidden");empty.textContent="ошибка карты: "+e;}
+}
+function setMapMode(m){
+  _mapMode=m;
+  const t=document.getElementById("map-mode-total");if(!t)return;
+  t.className="px-2 py-1 rounded border "+(m==="count"?"border-slate-600/50 bg-slate-700/30 text-slate-200":"border-slate-700/40 text-slate-400");
+  document.getElementById("map-mode-blocked").className="px-2 py-1 rounded border "+(m==="blocked"?"border-red-500/40 bg-red-500/15 text-red-300":"border-slate-700/40 text-slate-400");
+  renderMap(_mapGeo);
+}
+function showModal(title){const m=document.getElementById("modal");document.getElementById("modal-title").textContent=title;document.getElementById("modal-body").innerHTML=`<div class="text-slate-500 text-sm">загрузка…</div>`;m.classList.remove("hidden");return document.getElementById("modal-body");}
+
+function drillRow(type,label){
+  if(type==="country") return openIps(label);
+  if(type==="ip")      return openProfile(label);
+  if(type==="path")   return openRequests({path:label.split("?")[0]}, "Путь · "+label);
+  if(type==="ua")     return openRequests({ua:label}, "User-Agent");
+  if(type==="subnet") return openRequests({ip:label.replace(".0/24",".")}, "Подсеть · "+label);
+  if(type==="host")   return openRequests({host:label}, "Домен · "+label);
+  if(type==="ref")    return openRequests({ref:label}, "Referer · "+label.slice(0,40));
+  if(type==="crs")    return openCrs(label);
+}
+async function openCrs(label){
+  const fam=(label.split("·")[1]||"").trim();
+  const body=showModal("CRS payload · "+label);
+  try{const d=await fetch("/api/crs_samples?family="+encodeURIComponent(fam)+"&limit=30").then(r=>r.json());
+    if(!d.samples||!d.samples.length){body.innerHTML=`<div class="text-slate-500 text-sm">нет примеров за окно</div>`;return;}
+    body.innerHTML=d.samples.map(x=>`<div class="border-b border-slate-800/50 py-2 text-xs">
+      <div class="flex justify-between"><span class="mono text-red-300">${esc(x.rule)} ${esc(x.family)}</span><span class="text-slate-600 mono">${esc(x.client||"")}</span></div>
+      <div class="text-slate-400">${esc(x.msg||"")}</div>
+      ${x.uri?`<div class="mono text-slate-500">${esc(x.uri)}</div>`:""}
+      ${x.data?`<div class="mono text-amber-300 break-all">${esc(x.data)}</div>`:""}</div>`).join("");
+  }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
+}
+let lastIPs=[];
+function globalSearch(v){
+  v=(v||"").trim(); if(!v)return;
+  if(/^\d{1,3}(\.\d{1,3}){3}$/.test(v)||v.includes(":")) return openProfile(v);   // IP → профиль
+  return openRequests({path:v}, "Поиск · "+v);                                    // иначе — путь
+}
+async function openProfile(ip){
+  const body=showModal("Профиль · "+ip);
+  try{const p=await fetch("/api/ip_profile?ip="+encodeURIComponent(ip)+"&window=1h").then(r=>r.json());
+    if(p.error){body.innerHTML=`<div class="text-red-300 text-sm">${esc(p.error)}</div>`;return;}
+    const list=(arr,c)=>(arr||[]).map(x=>`<div class="flex justify-between text-xs"><span class="mono text-slate-300 truncate">${esc(String(x.key).slice(0,40))}</span><span class="mono ${c}">${fmt(x.count)}</span></div>`).join("")||'<span class="text-slate-600 text-xs">—</span>';
+    const a=p.asn||{};
+    const flags=[a.proxy?'<span class="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 text-[10px]">VPN/proxy</span>':'',
+                 a.hosting?'<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px]">datacenter</span>':'',
+                 a.mobile?'<span class="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 text-[10px]">mobile</span>':''].join(" ");
+    const trusted=p.trusted?`<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-xs border border-emerald-500/30">✓ доверенный: ${esc(p.trusted)}</span>`:"";
+    const rep=p.reputation||{};
+    const repCls={bad:"bg-red-500/15 text-red-300 border-red-500/30",warn:"bg-amber-500/15 text-amber-300 border-amber-500/30",ok:"bg-emerald-500/15 text-emerald-300 border-emerald-500/30"}[rep.level]||"bg-slate-700/30 text-slate-300";
+    const repBadge=rep.verdict?`<span class="px-2 py-0.5 rounded text-xs border ${repCls}">${rep.tor?"🧅 ":""}${esc(rep.verdict)}</span>`:"";
+    const botBadge=p.verified_bot?`<span class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 text-xs border border-sky-500/30" title="reverse-DNS подтверждён">🤖 ${esc(p.verified_bot)} · rDNS ✓</span>`:"";
+    body.innerHTML=`
+      <div class="mb-2 flex gap-2 flex-wrap">${trusted}${cfBadge(ip)}${botBadge}${repBadge}</div>
+      ${isCfIp(ip)?`<div class="mb-2 text-[12px] text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded px-2 py-1.5">☁ Это адрес <b>Cloudflare</b>, а не реального посетителя. Бан бесполезен — реальный клиент скрыт за фларой (в <span class="mono">CF-Connecting-IP</span>). Смотри реальный IP в запросах ниже.</div>`:""}
+      ${p.ptr?`<div class="mb-2 text-[11px] text-slate-500">rDNS: <span class="mono text-slate-400">${esc(p.ptr)}</span></div>`:""}
+      <div class="flex gap-4 mb-2 text-sm flex-wrap">
+        <div><div class="text-[11px] text-slate-500">всего/1ч</div><div class="mono text-slate-100 text-lg">${fmt(p.total)}${p.total_approx?"+":""}</div></div>
+        <div><div class="text-[11px] text-slate-500" title="ingress вернул 403">заблокировано (403)</div><div class="mono text-red-300 text-lg">${fmt(p.blocked)}</div></div>
+        <div><div class="text-[11px] text-slate-500" title="4xx кроме 403 — 404/422/429 и т.п. (не блок, ошибки запроса)">ошибки 4xx</div><div class="mono text-amber-300 text-lg">${fmt(p.err_4xx||0)}</div></div>
+        ${(p.err_5xx||0)?`<div><div class="text-[11px] text-slate-500" title="ошибки сервера">5xx</div><div class="mono text-orange-300 text-lg">${fmt(p.err_5xx)}</div></div>`:""}
+        <div><div class="text-[11px] text-slate-500">геолокация</div><div class="text-slate-200">${a.city?esc(a.city)+", ":""}${esc(a.country||countryLabel(p.country))}</div></div>
+      </div>
+      ${(a.isp||a.asn)?`<div class="mb-3 text-xs text-slate-400"><span class="text-slate-500">сеть:</span> ${esc(a.isp||a.org||"")} <span class="text-slate-600">${esc(a.asn||"")}</span> ${flags}</div>`:""}
+      <div class="grid grid-cols-2 gap-3">
+        <div><div class="text-[11px] text-slate-500 mb-1">Статусы</div>${list(p.by_status,"text-slate-300")}</div>
+        <div><div class="text-[11px] text-slate-500 mb-1">UA</div>${list(p.top_ua,"text-slate-400")}</div>
+        <div class="col-span-2"><div class="text-[11px] text-slate-500 mb-1">Топ путей <span class="text-slate-600">· «+автобан» добавит путь в правило</span></div>${abPathRows(p.top_paths)}</div>
+      </div>
+      <div class="mt-3 flex gap-2">
+        <button onclick="openRequests({ip:'${esc(ip)}'},'Запросы · ${esc(ip)}')" class="text-xs px-2 py-1 rounded bg-slate-700/40 text-slate-300 hover:bg-slate-700/60">показать запросы</button>
+        ${p.trusted?"":(isCfIp(ip)?`<button onclick="alert('Это IP Cloudflare, не реальный посетитель — бан бесполезен. Реальный клиент скрыт за фларой.')" class="text-xs px-2 py-1 rounded bg-slate-700/50 text-orange-300 border border-orange-500/30">⛔ бан бесполезен (Cloudflare)</button>`:`<button onclick="blockIP('${esc(ip)}','профиль IP')" class="text-xs px-2 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ заблокировать на ingress</button>`)}
+      </div>`;
+  }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
+}
+function exportList(items,filename){
+  const blob=new Blob([items.join("\n")+"\n"],{type:"text/plain"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename||"export.txt";a.click();
+}
+
+// --- блокировка на ingress (через blocklist-api) ---
+async function _post(path,payload){
+  const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  return r.json();
+}
+async function blockIP(cidr,reason,ttl){
+  if(!confirm("Заблокировать "+cidr+" на ingress?\nБудет возвращаться 403 для этого источника."))return;
+  const res=await _post("/api/block",{cidr:cidr,reason:reason||"",ttl:(ttl==null?2592000:ttl),group:_banGroup||undefined});
+  if(res.ok){alert("Заблокировано: "+(res.cidr||cidr)+" (активно правил: "+(res.active??"?")+")");renderBlocklist();}
+  else alert("Не удалось: "+(res.error||"ошибка"));
+}
+async function blockManual(){
+  const cidr=document.getElementById("bl_cidr").value.trim();
+  const reason=document.getElementById("bl_reason").value.trim();
+  const ttl=parseInt(document.getElementById("bl_ttl").value||"0",10);
+  const msg=document.getElementById("bl_msg");
+  if(!cidr){msg.textContent="введи IP/CIDR";msg.className="text-xs text-amber-300";return;}
+  msg.textContent="…";msg.className="text-xs text-slate-400";
+  const res=await _post("/api/block",{cidr:cidr,reason:reason,ttl:ttl,group:_banGroup||undefined});
+  if(res.ok){msg.textContent="✓ "+(res.cidr||cidr);msg.className="text-xs text-emerald-300";document.getElementById("bl_cidr").value="";document.getElementById("bl_reason").value="";renderBlocklist();}
+  else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-red-300";}
+}
+async function unblockCIDR(cidr){
+  if(!confirm("Снять блок с "+cidr+"?"))return;
+  const res=await _post("/api/unblock",{cidr:cidr});
+  if(res.ok)renderBlocklist(); else alert("Не удалось: "+(res.error||"ошибка"));
+}
+let _blAll=null, _blPage=0, _blEnabled=true, _blMode="all";
+const _BL_PER=12;
+const _blIsAutoban=e=>(e.added_by||"").toLowerCase().includes("autoban")||/автобан/i.test(e.reason||"");
+function renderBlMode(){
+  const el=document.getElementById("bl_mode");if(!el)return;
+  const mk=(m,l)=>`<button onclick="setBlMode('${m}')" class="text-[11px] px-2 py-1 rounded ${_blMode===m?'bg-indigo-500/25 text-indigo-200 border border-indigo-500/40':'bg-slate-800 text-slate-400 hover:bg-slate-700'}">${l}</button>`;
+  el.innerHTML=mk("all","все")+mk("autoban","только автобан");
+}
+function setBlMode(m){_blMode=m;_blPage=0;renderBlMode();_renderBlPage();}
+async function renderBlocklist(){
+  const el=document.getElementById("blocklist");if(!el)return;
+  try{
+    const d=await fetch("/api/blocklist").then(r=>r.json());
+    _blEnabled=!!d.enabled;
+    if(!d.enabled){el.innerHTML=`<div class="text-slate-600 text-xs">blocklist-api не настроен (BLOCKLIST_API_URL пуст) — кнопки блокировки отключены.</div>`;return;}
+    _blAll=(d.blocks||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0)); // свежие сверху
+    renderBlMode();_renderBlPage();
+  }catch(e){el.innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки денлиста</div>`;}
+}
+function _renderBlPage(){
+  const el=document.getElementById("blocklist");if(!el||_blAll==null)return;
+  const q=((document.getElementById("bl_search")||{}).value||"").toLowerCase().trim();
+  let base=_blMode==="autoban"?_blAll.filter(_blIsAutoban):_blAll;
+  const list=q?base.filter(e=>(e.cidr||"").toLowerCase().includes(q)||(e.reason||"").toLowerCase().includes(q)||(e.added_by||"").toLowerCase().includes(q)):base;
+  if(!list.length){el.innerHTML=`<div class="text-slate-600 text-xs">${q?"ничего не найдено":(_blMode==="autoban"?"автобаном пока ничего не заблокировано (исполнитель не подключён)":"активных блокировок нет")}</div>`;return;}
+  const pages=Math.ceil(list.length/_BL_PER);
+  if(_blPage>=pages)_blPage=pages-1; if(_blPage<0)_blPage=0;
+  const page=list.slice(_blPage*_BL_PER,_blPage*_BL_PER+_BL_PER);
+  const ttlTxt=e=>{if(!e.ttl)return"навсегда";const left=e.ts+e.ttl-Math.floor(Date.now()/1000);return left<=0?"истекает":(left<3600?Math.ceil(left/60)+"м":Math.ceil(left/3600)+"ч");};
+  const rows=page.map(e=>{
+   const abRule=_blIsAutoban(e)?abRuleFromReason(e.reason):null;
+   const abChip=abRule?`<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] border border-indigo-500/30 shrink-0" title="забанено автобаном по правилу">🤖 ${esc(abRule)}</span>`:"";
+   return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
+      <span class="mono text-slate-200 w-40 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc((e.cidr||'').split('/')[0])}')">${esc(e.cidr)}</span>
+      ${cfBadge((e.cidr||'').split('/')[0])}${abChip}
+      <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="${esc(e.reason||"")}">${esc(e.reason||"")}</span>
+      <span class="text-[11px] text-slate-500 shrink-0">${esc(e.added_by||"")} · ${dt(e.ts)} · ${ttlTxt(e)}</span>
+      <button onclick="unblockCIDR('${esc(e.cidr)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700 shrink-0">разбан</button>
+    </div>`;}).join("");
+  const pager=pages>1?`<div class="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+      <button onclick="_blPage--;_renderBlPage()" ${_blPage<=0?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_blPage<=0?"opacity-40":"hover:bg-slate-700"}">←</button>
+      <span>стр. ${_blPage+1}/${pages} · ${list.length} всего</span>
+      <button onclick="_blPage++;_renderBlPage()" ${_blPage>=pages-1?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_blPage>=pages-1?"opacity-40":"hover:bg-slate-700"}">→</button>
+    </div>`:`<div class="text-[11px] text-slate-500 mt-2">${list.length} активных</div>`;
+  el.innerHTML=rows+pager;
+}
+
+// --- просятся в бан (сканеры) ---
+let _banCandObjs=[], _cfCandObjs=[], _showCf=false;
+let _suspectObjs=[], _showCfS=false, _verdictMap={};
+let _reviewedSet=new Set();
+async function loadReviewed(){try{const d=await fetch("/api/reviewed").then(r=>r.json());_reviewedSet=new Set(d.ips||[]);}catch(e){}}
+async function toggleReviewed(ip,btn){
+  const now=!_reviewedSet.has(ip);
+  if(now)_reviewedSet.add(ip);else _reviewedSet.delete(ip);
+  const row=btn.closest('[data-ip]'); if(row)['grayscale','opacity-60'].forEach(c=>row.classList.toggle(c,now));
+  btn.textContent=now?'✓ просмотрено':'пометить';
+  btn.title=now?'снять отметку «просмотрено»':'пометить просмотренным';
+  btn.className=`text-[11px] px-1.5 py-0.5 rounded shrink-0 ${now?'bg-emerald-600/70 text-white hover:bg-emerald-600':'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`;
+  try{await _post("/api/review",{ip,reviewed:now});}catch(e){}
+}
+function toggleCf(){_showCf=!_showCf;renderBanCandidates();}
+function toggleCfS(){_showCfS=!_showCfS;renderSuspects();}
+function _verdictBadge(ip){
+  const v=_verdictMap[ip]; if(!v) return "";
+  const m={malicious:["bg-red-500/20 text-red-300 border-red-500/40","вредонос"],scanner:["bg-red-500/15 text-red-300 border-red-500/30","сканер"],"legit-bot":["bg-sky-500/15 text-sky-300 border-sky-500/30","легит-бот"],user:["bg-emerald-500/15 text-emerald-300 border-emerald-500/30","юзер"],"подозрит.":["bg-amber-500/15 text-amber-300 border-amber-500/30","подозрит."]};
+  const k=m[v.kind]||["bg-slate-700/40 text-slate-300 border-slate-600/40",esc(v.kind||"?")];
+  return `<span class="px-1.5 py-0.5 rounded text-[10px] border ${k[0]} shrink-0" title="${esc(v.reason||"")} · уверенность: ${esc(v.confidence||"")}">🤖 ${k[1]}${v.ban?" · бан":""}</span>`;
+}
+function _bcRow(x,i,isCf,fn){
+  const rv=_reviewedSet.has(x.ip);
+  const rvBtn=`<button onclick="toggleReviewed('${esc(x.ip)}',this)" title="${rv?'снять отметку «просмотрено»':'пометить просмотренным'}" class="text-[11px] px-1.5 py-0.5 rounded shrink-0 ${rv?'bg-emerald-600/70 text-white hover:bg-emerald-600':'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}">${rv?'✓ просмотрено':'пометить'}</button>`;
+  return `<div data-ip="${esc(x.ip)}" class="flex items-center gap-2 py-1.5 border-b border-slate-800/60 last:border-0${rv?' grayscale opacity-60':''}">
+    <span class="mono text-slate-200 w-32 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc(x.ip)}')" title="профиль / вся инфа">${esc(x.ip)} ↗</span>
+    <span class="text-xs shrink-0 w-24 truncate" title="${esc(countryLabel(x.country))}">${countryLabel(x.country)}</span>
+    <span class="mono text-amber-300 shrink-0 w-12 text-right" title="хитов 4xx">${fmt(x.count)}</span>
+    <span class="shrink-0 flex gap-1">${_sigBadges(x)}${_verdictBadge(x.ip)}</span>
+    <span class="text-[11px] text-slate-500 flex-1 min-w-0 truncate" title="${esc((x.paths||[]).join(', '))}">${esc((x.paths||[]).slice(0,2).join(", "))}${(x.paths||[]).length>2?` +${(x.paths||[]).length-2}`:""}</span>
+    ${rvBtn}
+    ${isCf
+      ?`<span class="text-[10px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">за CF</span>`
+      :`<button onclick="${fn}(${i})" class="text-[11px] px-2 py-0.5 rounded bg-red-600/70 text-white hover:bg-red-600 shrink-0">бан</button>`}
+  </div>`;
+}
+function _banReason(x){
+  const sig=x.signals||[],parts=[];
+  if(sig.includes("scanner"))parts.push("сканер"+((x.paths&&x.paths.length)?": "+x.paths.join(", "):""));
+  if(sig.includes("payload"))parts.push("payload (SQLi/XSS)");
+  if(sig.includes("4xx"))parts.push("подозрительно: "+(x.count||"?")+"× 4xx");
+  return parts.join("; ")||"подозрительная активность";
+}
+function _sigBadges(x){return (x.signals||[]).map(s=>
+  s==="payload"?`<span class="px-1.5 py-0.5 rounded text-[10px] bg-red-500/15 text-red-300 border border-red-500/30">SQLi/XSS</span>`
+  :s==="4xx"?`<span class="px-1.5 py-0.5 rounded text-[10px] bg-orange-500/15 text-orange-300 border border-orange-500/30">4xx</span>`
+  :`<span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30">scanner</span>`).join(" ");}
+function banCand(i){const x=_banCandObjs[i];if(!x)return;blockIP(x.ip,_banReason(x));}
+function banSuspect(i){const x=_suspectObjs[i];if(!x)return;blockIP(x.ip,_banReason(x));}
+async function renderBanCandidates(_try){
+  _try=_try||0;
+  const el=document.getElementById("ban_candidates");if(!el)return;
+  try{
+    const bw=(document.getElementById("bc_win")||{}).value||"1h";
+    await loadReviewed();
+    const d=await fetch("/api/ban_candidates?window="+encodeURIComponent(bw)).then(r=>r.json());
+    if(d.error){el.innerHTML=`<div class="text-red-300 text-xs">ошибка: ${esc(d.error)}</div>`;return;}
+    // расчёт ещё идёт (лок занят, кэша нет) → подождём и перезапросим, не мигая пустотой
+    if(d.stale&&!(d.candidates||[]).length&&_try<4){
+      if(!el.innerHTML.trim()||_try===0)el.innerHTML='<div class="text-slate-600 text-xs">считаю…</div>';
+      return void setTimeout(()=>renderBanCandidates(_try+1),3500);
+    }
+    const c=d.candidates||[];
+    const real=c.filter(x=>!x.cf), cf=c.filter(x=>x.cf);
+    _banCandObjs=real; _cfCandObjs=cf;
+    const realHits=real.reduce((a,x)=>a+(x.count||0),0);
+    const tp=(d.top_paths||[]).slice(0,5).map(p=>`${esc(p.key)} (${fmt(p.count)})`).join(" · ");
+    document.getElementById("bc_summary").innerHTML=`<span class="text-slate-200 font-medium">${real.length}</span> IP · <span class="text-slate-200">${fmt(realHits)}</span> хитов${cf.length?` · <span class="text-slate-500">+${cf.length} за Cloudflare (IP скрыт)</span>`:""}`;
+    let html = real.length
+      ? real.map((x,i)=>_bcRow(x,i,false,'banCand')).join("")
+      : `<div class="text-slate-600 text-xs">чисто — реальных сканеров нет за окно (${esc(d.window||"")})</div>`;
+    if(cf.length){
+      html+=`<div class="mt-2"><button onclick="toggleCf()" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">${_showCf?"▾ скрыть":"▸ показать"} ${cf.length} за Cloudflare (реальный IP скрыт)</button></div>`;
+      if(_showCf) html+=`<div class="mt-1">`+cf.map((x,i)=>_bcRow(x,i,true,'banCand')).join("")+`</div>`;
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки</div>`;}
+}
+async function resyncNow(){
+  const res=await _post("/api/resync",{});
+  if(res.ok){alert("Ресинк выполнен. Активных правил: "+(res.active??"?"));renderBlocklist();}
+  else alert("Не удалось: "+(res.error||"ошибка"));
+}
+async function unbanAll(){
+  if(!confirm("Снять ВСЕ блокировки с ingress?\n(статический deny-список приложения не затрагивается)"))return;
+  const res=await _post("/api/unblock_all",{});
+  if(res.ok){alert("Снято блокировок: "+(res.removed??0));renderBlocklist();renderBanCandidates();}
+  else alert("Не удалось: "+(res.error||"ошибка"));
+}
+async function banAllCandidates(){
+  if(!_banCandObjs.length){alert("Список пуст — банить некого.");return;}
+  if(!confirm("Забанить ВСЕХ "+_banCandObjs.length+" IP на ingress?\nКаждый будет получать 403."))return;
+  const items=_banCandObjs.map(x=>({cidr:x.ip,reason:_banReason(x)}));
+  const res=await _post("/api/block_bulk",{items,ttl:2592000,group:_banGroup||undefined});
+  if(res.ok){alert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено: "+res.skipped.length):"")+"\nАктивных правил: "+(res.active??"?"));renderBanCandidates();renderBlocklist();}
+  else alert("Не удалось: "+(res.error||"ошибка"));
+}
+async function renderSuspects(_try){
+  _try=_try||0;
+  const el=document.getElementById("suspects");if(!el)return;
+  try{
+    const bw=(document.getElementById("sc_win")||{}).value||"1h";
+    await loadReviewed();
+    const d=await fetch("/api/suspect_ips?window="+encodeURIComponent(bw)).then(r=>r.json());
+    if(d.error){el.innerHTML=`<div class="text-red-300 text-xs">ошибка: ${esc(d.error)}</div>`;return;}
+    if(d.stale&&!(d.candidates||[]).length&&_try<4){
+      if(!el.innerHTML.trim()||_try===0)el.innerHTML='<div class="text-slate-600 text-xs">считаю…</div>';
+      return void setTimeout(()=>renderSuspects(_try+1),3500);
+    }
+    const c=d.candidates||[];const real=c.filter(x=>!x.cf),cf=c.filter(x=>x.cf);
+    // подтянуть уже посчитанные вердикты из кэша сервера (переживают reload)
+    const need=c.map(x=>x.ip).filter(ip=>!_verdictMap[ip]);
+    if(need.length){try{const vd=await fetch("/api/verdicts?ips="+encodeURIComponent(need.join(","))).then(r=>r.json());Object.assign(_verdictMap,vd.verdicts||{});}catch(e){}}
+    _suspectObjs=real;
+    const realHits=real.reduce((a,x)=>a+(x.count||0),0);
+    const tp=(d.top_paths||[]).slice(0,5).map(p=>`${esc(p.key)} (${fmt(p.count)})`).join(" · ");
+    document.getElementById("sc_summary").innerHTML=`<span class="text-slate-200 font-medium">${real.length}</span> IP · <span class="text-slate-200">${fmt(realHits)}</span> ошибок 4xx${cf.length?` · <span class="text-slate-500">+${cf.length} за Cloudflare (IP скрыт)</span>`:""}`;
+    let html = real.length
+      ? real.map((x,i)=>_bcRow(x,i,false,'banSuspect')).join("")
+      : `<div class="text-slate-600 text-xs">чисто — аномальных 4xx нет за окно (${esc(d.window||"")})</div>`;
+    if(cf.length){
+      html+=`<div class="mt-2"><button onclick="toggleCfS()" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">${_showCfS?"▾ скрыть":"▸ показать"} ${cf.length} за Cloudflare (реальный IP скрыт)</button></div>`;
+      if(_showCfS) html+=`<div class="mt-1">`+cf.map((x,i)=>_bcRow(x,i,true,'banSuspect')).join("")+`</div>`;
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки</div>`;}
+}
+async function judgeSuspects(force){
+  const btn=document.getElementById(force?"sc_recheck":"sc_judge");
+  const bw=(document.getElementById("sc_win")||{}).value||"1h";
+  let ips=_suspectObjs.slice(0,10).map(x=>x.ip);
+  if(force) ips.forEach(ip=>delete _verdictMap[ip]); else ips=ips.filter(ip=>!_verdictMap[ip]);
+  if(!ips.length){alert(force?"Список пуст.":"Все уже оценены — жми «Переоценить» для форс-перепроверки.");return;}
+  if(force)renderSuspects();
+  const label=btn?btn.textContent:"";
+  if(btn)btn.disabled=true;
+  for(let k=0;k<ips.length;k++){
+    if(btn)btn.textContent=`🤖 ${k+1}/${ips.length}…`;
+    try{
+      const d=await fetch("/api/judge_ip?window="+encodeURIComponent(bw)+"&ip="+encodeURIComponent(ips[k])+(force?"&force=1":"")).then(r=>r.json());
+      const v=d.verdict; if(v)_verdictMap[ips[k]]={...v,ip:ips[k]};
+      renderSuspects();
+    }catch(e){}
+  }
+  if(btn){btn.disabled=false;btn.textContent=label;}
+}
+async function banAllSuspects(){
+  if(!_suspectObjs.length){alert("Список пуст.");return;}
+  if(!confirm("Забанить ВСЕХ "+_suspectObjs.length+" подозрительных IP на ingress?"))return;
+  const items=_suspectObjs.map(x=>({cidr:x.ip,reason:_banReason(x)}));
+  const res=await _post("/api/block_bulk",{items,ttl:2592000,group:_banGroup||undefined});
+  if(res.ok){alert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено: "+res.skipped.length):"")+"\nАктивных правил: "+(res.active??"?"));renderSuspects();renderBlocklist();}
+  else alert("Не удалось: "+(res.error||"ошибка"));
+}
+function wcRender(job,data){
+  if(!data||data.error) return `<div class="text-slate-600 text-xs">${esc(job)}: ${esc((data&&data.error)||"—")}</div>`;
+  const kv=(o)=>Object.entries(o).slice(0,12).map(([k,v])=>{
+    let val=typeof v==="object"?JSON.stringify(v):String(v);
+    return `<div class="flex gap-2 text-xs"><span class="text-slate-500 shrink-0 w-40 truncate">${esc(k)}</span><span class="mono text-slate-300 truncate">${esc(val.slice(0,80))}</span></div>`;}).join("");
+  let body;
+  if(Array.isArray(data)) body=`<div class="mono text-xs text-slate-300">${esc(JSON.stringify(data).slice(0,400))}</div>`;
+  else if(typeof data==="object") body=kv(data);
+  else body=`<span class="text-xs text-slate-300">${esc(String(data))}</span>`;
+  return `<div class="border-b border-slate-800/50 py-2"><div class="text-xs font-medium text-emerald-300 mb-1">${esc(job)}</div>${body}</div>`;
+}
+async function openWebcheck(domain){
+  domain=(domain||"").replace(/^https?:\/\//,"").split("/")[0];
+  const body=showModal("web-check · "+domain);
+  body.innerHTML=`<div class="text-slate-500 text-sm">проверяю ${esc(domain)}… (несколько секунд)</div>`;
+  const url="https://"+domain;
+  const jobs=["ssl","headers","http-security","tech-stack","dns","ports","cookies","dnssec"];
+  try{
+    const results=await Promise.all(jobs.map(j=>
+      fetch(`/api/webcheck?job=${j}&url=${encodeURIComponent(url)}`).then(r=>r.json()).then(d=>[j,d]).catch(()=>[j,{error:"timeout"}])));
+    body.innerHTML=`<div class="text-[11px] text-slate-500 mb-2">Полный отчёт: проверки SSL, заголовков, безопасности, DNS, портов, стека.</div>`+
+      results.map(([j,d])=>wcRender(j,d)).join("");
+  }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка web-check</div>`;}
+}
+let notifiedAt=0;
+function notifyCritical(cur){
+  if(!cur||cur.severity!=="critical")return;
+  if(cur.ts===notifiedAt)return; notifiedAt=cur.ts;
+  if("Notification" in window){
+    if(Notification.permission==="granted") new Notification("SOC: критично",{body:cur.headline||"Атака"});
+    else if(Notification.permission!=="denied") Notification.requestPermission();
+  }
+}
+async function openIps(country){
+  const body=showModal("Топ IP · "+country);
+  try{const d=await fetch("/api/ips?country="+encodeURIComponent(country)+"&limit=25").then(r=>r.json());
+    if(d.error){body.innerHTML=`<div class="text-red-300 text-sm">Ошибка: ${esc(d.error)}</div>`;return;}
+    if(!d.ips||!d.ips.length){body.innerHTML=`<div class="text-slate-500 text-sm">нет данных</div>`;return;}
+    const max=Math.max(...d.ips.map(x=>x.count));lastIPs=d.ips.map(x=>x.ip);
+    body.innerHTML=`<div class="flex justify-end mb-2"><button onclick="exportList(lastIPs,'ips-${esc(country)}.txt')" class="text-xs px-2 py-1 rounded bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25">⤓ экспорт всех IP</button></div>`+
+      d.ips.map(x=>`<div class="cursor-pointer hover:bg-slate-800/40 -mx-1 px-1 rounded" onclick="openProfile('${esc(x.ip)}')"><div class="flex justify-between text-xs mb-0.5"><span class="mono text-slate-300">${esc(x.ip)} <span class="text-slate-600">↗</span></span><span class="mono text-indigo-300">${fmt(x.count)}</span></div><div class="bar-bg"><div class="h-full rounded" style="width:${(x.count/max*100).toFixed(0)}%;background:#6366f199"></div></div></div>`).join("");
+  }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка запроса</div>`;}
+}
+function reqTable(rows){
+  if(!rows||!rows.length) return `<div class="text-slate-500 text-sm">нет запросов за окно</div>`;
+  const sc=s=>s>="500"?"text-red-300":s>="400"?"text-amber-300":s>="300"?"text-sky-300":"text-emerald-300";
+  const kv=(l,v,mono)=>`<div><span class="text-slate-500 inline-block w-24 align-top">${l}</span><span class="${mono?"mono ":""}text-slate-300 break-all">${esc(v||"—")}</span></div>`;
+  return `<table class="w-full text-xs"><thead><tr class="text-slate-500 text-left">
+    <th class="py-1 font-medium"></th><th class="font-medium">время</th><th class="font-medium">IP</th><th class="font-medium"></th><th class="font-medium">м</th><th class="font-medium">путь</th><th class="font-medium">код</th><th class="font-medium">хост</th></tr></thead><tbody>
+    ${rows.map(r=>{
+      const detail=`<tr class="hidden bg-slate-900/50"><td colspan="8" class="px-3 py-2 space-y-1 text-[11px]">
+        ${kv("путь",r.path,1)}
+        ${r.args?kv("args",r.args,1):""}
+        ${kv("User-Agent",r.ua,1)}
+        ${r.ref?kv("referer",r.ref,1):""}
+        <div class="flex flex-wrap gap-4 pt-0.5">
+          <span class="text-slate-500">хост: <span class="mono text-slate-300">${esc(r.host||"—")}</span></span>
+          <span class="text-slate-500">страна: <span class="text-slate-300">${esc(r.country||"—")}</span></span>
+          <span class="text-slate-500">время ответа: <span class="mono text-slate-300">${esc(r.rt||"—")}с</span></span>
+          ${r.bytes?`<span class="text-slate-500">отдано: <span class="mono text-slate-300">${fmt(+r.bytes)} B</span></span>`:""}
+        </div></td></tr>`;
+      return `<tr class="border-t border-slate-800/50 hover:bg-slate-800/30 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden')">
+      <td class="text-slate-600 w-3">▸</td>
+      <td class="py-1 mono text-slate-500 whitespace-nowrap" title="${ago(r.ts)} назад">${dt(r.ts)}</td>
+      <td class="mono text-slate-300"><span class="cursor-pointer hover:text-indigo-300" onclick="event.stopPropagation();openProfile('${esc(r.ip)}')">${esc(r.ip||"")}</span> ${cfBadge(r.ip)}</td>
+      <td class="text-slate-600">${esc(r.country||"")}</td>
+      <td class="mono text-slate-400">${esc(r.method||"")}</td>
+      <td class="mono text-slate-300 max-w-[420px]"><div class="flex items-center gap-1"><span class="truncate" title="${esc(r.path)}">${esc(r.path||"")}</span><button data-p="${esc(r.path||"").replace(/"/g,'&quot;')}" onclick="event.stopPropagation();abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">+</button></div></td>
+      <td class="mono ${sc(String(r.status))}">${esc(r.status||"")}</td>
+      <td class="text-slate-500 truncate max-w-[200px]" title="${esc(r.host)}">${esc(r.host||"")}</td></tr>${detail}`;
+    }).join("")}
+  </tbody></table>`;
+}
+async function openRequests(filter,title){
+  const body=showModal(title||"Запросы");
+  filter=filter||{};
+  window._orExtra={host:filter.host||"",ua:filter.ua||"",ref:filter.ref||""};  // pass-through (chip context)
+  window._orWantCode=filter.status||"";   // preselect this code once it's in the list
+  const inp=(id,val,ph,w)=>`<input id="${id}" value="${esc(val||"")}" placeholder="${ph}" onkeydown="if(event.key==='Enter')runOpenRequests()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs mono ${w}">`;
+  body.innerHTML=`
+    <div class="flex flex-wrap gap-2 mb-3 items-end">
+      <div><label class="block text-[10px] text-slate-500 mb-0.5">IP</label>${inp("or_ip",filter.ip,"1.2.3.4","w-32")}</div>
+      <div><label class="block text-[10px] text-slate-500 mb-0.5">путь</label>${inp("or_path",filter.path,"/wp-admin","w-44")}</div>
+      <div><label class="block text-[10px] text-slate-500 mb-0.5">код</label>
+        <select id="or_status" onchange="orRenderFiltered()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option value="">все коды</option></select></div>
+      <div><label class="block text-[10px] text-slate-500 mb-0.5">время</label>
+        <select id="or_win" onchange="runOpenRequests()" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs">
+          <option value="15">15м</option><option value="60">1ч</option><option value="360">6ч</option><option value="720" selected>12ч</option><option value="1440">24ч</option><option value="4320">3д</option>
+        </select></div>
+      <button onclick="runOpenRequests()" class="px-3 py-1 rounded bg-indigo-600/80 text-white text-xs hover:bg-indigo-600">Найти</button>
+      <button onclick="orBanIPs()" class="px-3 py-1 rounded bg-red-600/80 text-white text-xs hover:bg-red-600" title="забанить IP из результата на ingress (403)">⛔ забанить на ingress</button>
+    </div>
+    <div id="or_out"><div class="text-slate-500 text-sm">загрузка…</div></div>`;
+  runOpenRequests();
+}
+async function runOpenRequests(){
+  // fetch WITHOUT the code filter → so the code dropdown shows every code present
+  // for this ip/path over the selected window; code filtering is done client-side.
+  const g=id=>{const e=document.getElementById(id);return e?e.value.trim():"";};
+  const f={ip:g("or_ip"),path:g("or_path"),...(window._orExtra||{})};
+  Object.keys(f).forEach(k=>{if(!f[k])delete f[k];});
+  const minutes=g("or_win")||720;
+  const out=document.getElementById("or_out");out.innerHTML=`<div class="text-slate-500 text-sm">поиск…</div>`;
+  const qs=new URLSearchParams({...f,limit:1000,minutes}).toString();
+  try{const d=await fetch("/api/requests?"+qs).then(r=>r.json());
+    if(d.error){out.innerHTML=`<div class="text-red-300 text-sm">Ошибка: ${esc(d.error)}</div>`;return;}
+    window._orAll=d.requests||[];
+    orRebuildCodes();
+    orRenderFiltered();
+  }catch(e){out.innerHTML=`<div class="text-red-300 text-sm">ошибка запроса</div>`;}
+}
+function orRebuildCodes(){
+  const sel=document.getElementById("or_status");if(!sel)return;
+  const cur=sel.value||window._orWantCode||"";window._orWantCode="";
+  const codes=[...new Set((window._orAll||[]).map(r=>String(r.status||"")).filter(Boolean))].sort();
+  const lbl=c=>c+(c[0]==="2"?" ✓":c==="403"?" ⛔":c[0]==="4"?" ⚠":c[0]==="5"?" ✖":"");
+  sel.innerHTML=`<option value="">все коды (${codes.length})</option>`+
+    codes.map(c=>{const n=(window._orAll||[]).filter(r=>String(r.status)===c).length;return `<option value="${c}">${lbl(c)} · ${n}</option>`;}).join("");
+  if(codes.includes(cur)) sel.value=cur;
+}
+function orRenderFiltered(){
+  const code=(document.getElementById("or_status")||{}).value||"";
+  let rows=window._orAll||[];
+  if(code) rows=rows.filter(r=>String(r.status)===code);
+  window._orRows=rows;
+  document.getElementById("or_out").innerHTML=reqTable(rows);
+}
+function _ip4int(ip){const p=String(ip).split(".");if(p.length!==4)return null;return ((+p[0]<<24)>>>0)+((+p[1])<<16)+((+p[2])<<8)+(+p[3]);}
+function ipInCidr(ip,cidr){
+  if(!cidr)return false;
+  if(!cidr.includes("/"))return cidr===ip;
+  const[net,bitsS]=cidr.split("/");const bits=+bitsS;
+  const a=_ip4int(ip),b=_ip4int(net);if(a==null||b==null)return false;
+  const mask=bits<=0?0:(bits>=32?0xffffffff:(~((1<<(32-bits))-1))>>>0);
+  return ((a&mask)>>>0)===((b&mask)>>>0);
+}
+// Cloudflare-принадлежность IP (помечаем везде: это edge, не реальный посетитель)
+const CF_CIDRS=["173.245.48.0/20","103.21.244.0/22","103.22.200.0/22","103.31.4.0/22","141.101.64.0/18","108.162.192.0/18","190.93.240.0/20","188.114.96.0/20","197.234.240.0/22","198.41.128.0/17","162.158.0.0/15","104.16.0.0/13","104.24.0.0/14","172.64.0.0/13","131.0.72.0/22"];
+const CF_V6=["2400:cb00","2606:4700","2803:f800","2405:b500","2405:8100","2a06:98c0","2c0f:f248"];
+function isCfIp(ip){if(!ip)return false;ip=String(ip);if(ip.includes(":")){const h=ip.toLowerCase();return CF_V6.some(p=>h.startsWith(p));}return CF_CIDRS.some(c=>ipInCidr(ip,c));}
+function cfBadge(ip){return isCfIp(ip)?`<span class="px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 text-[10px] border border-orange-500/30 shrink-0" title="IP Cloudflare — не реальный посетитель, банить бесполезно (реальный в CF-Connecting-IP)">☁ Cloudflare</span>`:"";}
+async function orBanIPs(){
+  const ips=[...new Set((window._orRows||[]).map(r=>r.ip).filter(Boolean))];
+  if(!ips.length){alert("Нет IP в результате");return;}
+  let blocks=[];
+  try{const d=await fetch("/api/blocklist").then(r=>r.json());
+    if(!d.enabled){alert("blocklist-api не настроен — бан недоступен.");return;}
+    blocks=d.blocks||[];
+  }catch(e){}
+  const isBanned=ip=>blocks.some(b=>ipInCidr(ip,b.cidr||""));
+  const matchOf=ip=>(blocks.find(b=>ipInCidr(ip,b.cidr||""))||{}).cidr;
+  const already=ips.filter(isBanned), fresh=ips.filter(ip=>!isBanned(ip));
+  if(ips.length===1){
+    if(already.length){alert("ℹ️ "+ips[0]+" уже забанен на ingress (правило "+matchOf(ips[0])+").");return;}
+    return blockIP(ips[0],"из «показать запросы»");
+  }
+  if(!fresh.length){alert("Все "+ips.length+" IP уже забанены на ingress.");return;}
+  if(!confirm("Забанить "+fresh.length+" новых IP на ingress?"+(already.length?("\n("+already.length+" уже забанены — пропущу)"):"")+"\nКаждый будет получать 403."))return;
+  const items=fresh.map(ip=>({cidr:ip,reason:"из «показать запросы»"}));
+  const res=await _post("/api/block_bulk",{items,ttl:2592000,group:_banGroup||undefined});
+  if(res.ok){alert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено (доверенные/приватные): "+res.skipped.length):"")+(already.length?(", уже было: "+already.length):"")+"\nАктивных правил: "+(res.active??"?"));renderBlocklist();}
+  else alert("Не удалось: "+(res.error||"ошибка"));
+}
+let lastExplorer=[];
+async function runExplorer(){
+  const g=id=>document.getElementById(id).value.trim();
+  const f={};["host","path","status","ip"].forEach(k=>{const v=g("ex_"+k);if(v)f[k]=v;});
+  const out=document.getElementById("ex_out");out.innerHTML=`<div class="text-slate-500 text-sm">поиск…</div>`;
+  const mins=parseInt((document.getElementById("ex_minutes")||{}).value)||60;
+  const qs=new URLSearchParams({...f,limit:80,minutes:mins}).toString();
+  try{const d=await fetch("/api/requests?"+qs).then(r=>r.json());
+    lastExplorer=d.requests||[];
+    out.innerHTML=d.error?`<div class="text-red-300 text-sm">${esc(d.error)}</div>`:reqTable(d.requests);
+  }catch(e){out.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
+}
+function exportExplorerIPs(){
+  const ips=[...new Set(lastExplorer.map(r=>r.ip).filter(Boolean))];
+  if(!ips.length){alert("Сначала «Найти» — нет результатов для экспорта");return;}
+  exportList(ips,"denylist-explorer.txt");
+}
+async function runNL(){
+  const q=document.getElementById("nl_q").value.trim();if(!q)return;
+  const out=document.getElementById("ex_out");out.innerHTML=`<div class="text-slate-500 text-sm">🤖 разбираю запрос… (LLM)</div>`;
+  try{const d=await fetch("/api/nl?q="+encodeURIComponent(q)).then(r=>r.json());
+    lastExplorer=d.requests||[];
+    const f=d.filters||{};const chips=Object.entries(f).map(([k,v])=>`<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[11px] mono">${esc(k)}=${esc(String(v))}</span>`).join(" ");
+    out.innerHTML=`<div class="mb-2 text-xs text-slate-500">LLM понял так: ${chips||"—"}</div>`+(d.error?`<div class="text-red-300 text-sm">${esc(d.error)}</div>`:reqTable(d.requests));
+  }catch(e){out.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
+}
+function preset(name){
+  const set=(h,p,s,i)=>{ex_host.value=h;ex_path.value=p;ex_status.value=s;ex_ip.value=i;runExplorer();};
+  if(name==="scanners") set("","/.env","","");
+  if(name==="auth") set("","/auth","403","");
+  if(name==="5xx") set("","","5","");
+}
+
+const SIG_LABEL={forbidden_new:"Заблокировано новых",status_4xx:"Ошибки 4xx",status_404:"404 (перебор путей)",status_5xx:"5xx (сервер)",crs_detections:"CRS-пейлоады (SQLi/XSS)",distinct_attacker_ips:"Атакующих IP",malicious_ratio:"Доля вредного трафика"};
+const SIG_THROUGH=new Set(["status_404","status_5xx","crs_detections","distinct_attacker_ips"]);
+function _sigText(s){
+  const name=SIG_LABEL[s.field]||s.field;
+  if(s.field==="malicious_ratio") return `${name}: ${(s.current*100).toFixed(0)}%`;
+  if(s.ratio) return `${name}: ${fmt(s.current)} — было ~${fmt(s.baseline)}, рост ×${s.ratio}`;
+  return `${name}: ${fmt(s.current)} (раньше почти не было)`;
+}
+function _whyHtml(c){
+  const data=c.data||c, sig=data.signals||[];
+  let h="";
+  if(sig.length){
+    const through=sig.some(s=>SIG_THROUGH.has(s.field));
+    const v=through
+      ?{t:"⚠️ Часть трафика доходит до приложения — стоит разобраться (детали ниже).",c:"bg-red-500/10 text-red-200 border-red-500/30"}
+      :{t:"✅ Атака отбита: всплеск — это заблокированный трафик (deny/403), до сайта он не дошёл. Срочных действий не требуется.",c:"bg-emerald-500/10 text-emerald-200 border-emerald-500/30"};
+    h+=`<div class="text-xs rounded-md border px-2.5 py-1.5 mb-2 leading-relaxed ${v.c}">${v.t}</div>`;
+    h+=`<div class="mt-1 mb-2"><div class="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Почему сработало</div><ul class="space-y-1">`+
+      sig.map(s=>{const thr=SIG_THROUGH.has(s.field);const cls=s.level==='high'?(thr?'text-red-400':'text-amber-400'):'text-slate-400';
+        const tag=thr?'<span class="text-[10px] text-red-300/70">проходит</span>':'<span class="text-[10px] text-emerald-300/60">блокируется</span>';
+        return `<li class="flex gap-2 text-xs"><span class="${cls} shrink-0">▲</span><span class="text-slate-300">${esc(_sigText(s))} ${tag}</span></li>`;}).join("")+`</ul></div>`;
+  }
+  if(data.attention&&data.attention.length) h+=`<div class="mb-2"><div class="text-[11px] text-slate-500 mb-1">На что смотреть</div><ul class="text-xs text-slate-300 space-y-1">${data.attention.map(a=>`<li class="flex gap-2"><span class="text-amber-400 shrink-0">•</span>${esc(a)}</li>`).join("")}</ul></div>`;
+  if(data.actions&&data.actions.length) h+=`<div><div class="text-[11px] text-slate-500 mb-1">Что сделать</div><ul class="text-xs text-slate-300 space-y-1">${data.actions.map(a=>`<li class="flex gap-2"><span class="text-indigo-400 shrink-0">→</span>${esc(a)}</li>`).join("")}</ul></div>`;
+  return h||`<div class="text-xs text-slate-600">детали недоступны</div>`;
+}
+function renderInsightCurrent(c){
+  const el=document.getElementById("insight-current");
+  if(!c){el.innerHTML=`<div class="text-slate-500 text-sm">Ждём первый разбор от LLM…</div>`;return;}
+  const sev=SEV[c.severity]||SEV.ok;
+  el.innerHTML=`<div class="flex items-center justify-between mb-2"><span class="px-2.5 py-1 rounded-md text-xs font-semibold border ${sev.cls}">${sev.label.toUpperCase()}</span><span class="text-[11px] text-slate-500 mono" title="${dt(c.ts)}">${dt(c.ts)} · ${ago(c.ts)} назад</span></div>
+    <h3 class="text-base font-semibold text-slate-100 mb-2">${esc(c.headline)||"Разбор трафика"}</h3>
+    ${(c.summary&&c.summary!==c.headline)?`<p class="text-sm text-slate-300 leading-relaxed mb-3">${esc(c.summary)}</p>`:""}
+    ${_whyHtml(c)}`;
+}
+function renderHistory(list){
+  const el=document.getElementById("insight-history");
+  if(!list||!list.length){el.innerHTML=`<div class="text-slate-600 text-xs">пусто</div>`;return;}
+  el.innerHTML=`<div class="flex items-center justify-between mb-2"><div class="text-[11px] uppercase tracking-wide text-slate-500">Лента AI-разборов <span class="text-slate-600 normal-case">— клик, чтобы развернуть «почему»</span></div><div class="text-[11px] text-slate-600 mono">${list.length}</div></div>`+
+    list.map(c=>{const sev=SEV[c.severity]||SEV.ok;const hl=c.headline||(c.data&&c.data.headline)||"";
+    return `<details class="border-b border-slate-800/60 last:border-0 group">
+      <summary class="flex items-start gap-3 py-2 cursor-pointer list-none hover:bg-slate-800/30 -mx-1 px-1 rounded">
+        <span class="text-slate-600 text-[10px] mt-1 shrink-0 group-open:rotate-90 transition-transform">▶</span>
+        <span class="w-2 h-2 mt-1.5 rounded-full shrink-0" style="background:${sev.dot}"></span>
+        <span class="text-[11px] text-slate-500 mono shrink-0 w-[112px] mt-0.5">${dt(c.ts)}</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border shrink-0 ${sev.cls}">${sev.label.toUpperCase()}</span>
+        <span class="text-sm text-slate-300 min-w-0"><span class="text-slate-200 font-medium">${esc(hl)}</span>${(hl&&c.summary&&c.summary!==hl)?` — <span class="text-slate-400">${esc(c.summary)}</span>`:""}</span>
+      </summary>
+      <div class="pl-[34px] pb-3 pr-2">${_whyHtml(c)}</div>
+    </details>`;}).join("");
+}
+
+function chip(label,ok,detail){
+  const c=ok===null?"bg-slate-700/30 text-slate-400 border-slate-600/40":ok?"bg-emerald-500/10 text-emerald-300 border-emerald-500/30":"bg-red-500/10 text-red-300 border-red-500/40";
+  const dot=ok===null?"#64748b":ok?"#10b981":"#ef4444";
+  return `<span class="px-2.5 py-1 rounded-md text-xs font-medium border ${c} flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>${label}${detail?`<span class="text-slate-500">· ${detail}</span>`:""}</span>`;
+}
+function renderLLMToggle(enabled){
+  const b=document.getElementById("llm-toggle");if(!b)return;
+  b.textContent="🤖 LLM: "+(enabled?"вкл":"выкл");
+  b.className="px-2.5 py-1.5 rounded-lg text-xs border "+(enabled
+    ?"border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+    :"border-slate-700 text-slate-500 hover:bg-slate-800");
+}
+async function toggleLLM(){
+  const b=document.getElementById("llm-toggle");
+  const cur=b&&b.textContent.includes("вкл");
+  try{
+    const d=await fetch("/api/llm/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!cur})}).then(r=>r.json());
+    renderLLMToggle(!!d.enabled);refresh();
+  }catch(e){}
+}
+function renderStatus(st){
+  const fr=a=>a==null?"—":(a<60?a+"с":Math.floor(a/60)+"м");
+  renderLLMToggle(st.llm_enabled!==false);
+  const llmChip=st.llm_enabled===false?chip("LLM (выкл)",null)
+                :chip("LLM (Gemma)",st.llm_up===null?null:st.llm_up);
+  document.getElementById("health").innerHTML=
+    chip("Loki",st.loki_up)+llmChip+
+    chip("Данные",st.poll_age!=null&&st.poll_age<90,"обновлены "+fr(st.poll_age)+" назад")+
+    (st.llm_enabled===false?"":chip("AI-разбор",st.insight_age!=null&&st.insight_age<1500,fr(st.insight_age)+" назад"))+
+    (st.path403?chip("Правила 403",!!st.path403.rendered_ok,st.path403.enabled_count+" акт.· рендер "+(st.path403.rendered_ok?"OK":"дрейф!")):"");
+  const b=document.getElementById("banner");
+  if(st.problems&&st.problems.length){b.className="mb-4 card border-red-500/40 bg-red-500/5 p-4";
+    b.innerHTML=`<div class="flex items-start gap-3"><span class="text-red-400 text-lg leading-none">⚠</span><div><div class="text-sm font-semibold text-red-300 mb-1">Проблемы в обработке (${st.problems.length})</div><ul class="text-sm text-slate-300 space-y-0.5">${st.problems.map(p=>`<li><span class="text-red-400 font-medium">${esc(p.component)}:</span> ${esc(p.msg)}</li>`).join("")}</ul></div></div>`;b.classList.remove("hidden");}
+  else b.classList.add("hidden");
+}
+
+async function refresh(){
+  try{
+    const [sum,st]=await Promise.all([
+      fetch("/api/summary").then(r=>r.json()),fetch("/api/status").then(r=>r.json())]);
+    // история (графики) + инсайты — раз в 60с или при смене окна (данные меняются раз в 30с)
+    let histFresh=false;
+    if(WIN!==lastHistKey || Date.now()-lastHistAt>60000){
+      try{const [h,i]=await Promise.all([
+        fetch("/api/history?limit="+(WIN_HIST[WIN]||120)).then(r=>r.json()),
+        fetch("/api/insights?limit=100").then(r=>r.json())]);
+        lastHist=h;lastIns=i;lastHistKey=WIN;lastHistAt=Date.now();histFresh=true;}catch(e){}
+    }
+    const hist=lastHist, ins=lastIns;
+    // analytics — тяжёлое; тянем только при смене окна/домена или раз в 45с
+    const anKey=WIN+"|"+HOST;
+    if(anKey!==lastAnKey || Date.now()-lastAnAt>45000){
+      const aq=(WIN!=="5m"||HOST)?`?window=${WIN}&host=${encodeURIComponent(HOST)}`:"";
+      try{lastAn=await fetch("/api/analytics"+aq).then(r=>r.json());lastAnKey=anKey;lastAnAt=Date.now();}catch(e){}
+    }
+    const an=lastAn;
+    renderStatus(st);
+    const s=sum.summary;
+    const dot=document.getElementById("live-dot"),txt=document.getElementById("live-text");
+    if(sum.loki_up){dot.className="w-2 h-2 rounded-full bg-emerald-400 pulse";txt.textContent="онлайн";txt.className="text-emerald-400";}
+    else{dot.className="w-2 h-2 rounded-full bg-red-500";txt.textContent="нет связи с Loki";txt.className="text-red-400";}
+    document.getElementById("updated").textContent=ago(sum.updated)+" назад";
+    const cur=ins.current,sev=SEV[(cur&&cur.severity)||"ok"]||SEV.ok;
+    const badge=document.getElementById("status-badge");badge.className=`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sev.cls}`;badge.textContent=sev.label.toUpperCase();
+    if(s){s.unique_visitors=(an.analytics||{}).unique_visitors;
+      const tot=(s.status_2xx||0)+(s.status_3xx||0)+(s.status_4xx||0)+(s.status_5xx||0);
+      s.availability=tot?((s.status_2xx||0)+(s.status_3xx||0))/tot:null;}
+    renderStatusPct(s);
+    renderStats(s);
+    const sn=hist.snapshots||[];
+    if(sn.length && histFresh){
+      setChart(charts.traffic,sn,[x=>x.requests_total,x=>x.requests_real,x=>x.blocked_denylisted]);
+      setChart(charts.threats,sn,[x=>x.forbidden_new,x=>x.crs_detections,x=>x.status_404]);
+      setChart(charts.status,sn,[x=>x.status_2xx,x=>x.status_3xx,x=>x.status_4xx,x=>x.status_5xx]);
+      setChart(charts.latency,sn,[x=>x.latency_p95]);
+    }
+    if(histFresh){renderInsightCurrent(cur);renderHistory(ins.history);}
+    const a=an.analytics||{};
+    bars("top_paths",a.top_paths,"text-amber-300","path");
+    bars("top_user_agents",a.top_user_agents,"text-indigo-300","ua");
+    bars("attack_types",a.attack_types,"text-red-300");
+    bars("geo",(a.geo||[]).map(x=>({...x,display:countryLabel(x.key),sub:x.blocked})),"text-indigo-300","country");
+    renderMap(a.geo||[]);
+    bars("top_domains",a.top_domains,"text-indigo-300","host");
+    bars("subnets",(s&&s.top_subnets||[]).map(x=>({...x,display:(x.new?"🆕 ":"")+x.subnet})),"text-amber-300","subnet");
+    bars("waf_fp",a.waf_fp,"text-amber-300","path");
+    const ew=(a.eff_windows||{});
+    const degraded=Object.values(ew).filter(v=>v&&v!==WIN);
+    document.getElementById("winnote").textContent=degraded.length?`(топы за ${degraded[0]} — больше окно упирается в лимит Loki)`:"";
+    bars("crs_rules",a.crs_rules,"text-red-300","crs");
+    bars("methods",a.methods,"text-indigo-300");
+    bars("referers",a.referers,"text-amber-300","ref");
+    bars("tls",a.tls,"text-indigo-300");
+    bars("talkers",(a.top_talkers||[]).map(x=>({key:x.ip,count:x.count})),"text-indigo-300","ip");
+    bars("slow_endpoints",a.slow_endpoints,"text-amber-300","path");
+    bars("bytes_by_domain",a.bytes_by_domain,"text-indigo-300","host");
+    notifyCritical(cur);
+  }catch(e){
+    console.error(e);const b=document.getElementById("banner");b.className="mb-4 card border-red-500/40 bg-red-500/5 p-4";
+    b.innerHTML=`<div class="flex items-center gap-3"><span class="text-red-400 text-lg">⚠</span><div class="text-sm text-red-300">Дашборд не получает данные от backend (${esc(e.message||String(e))}).</div></div>`;b.classList.remove("hidden");
+  }
+}
+
+async function loadDigest(){
+  try{const d=await fetch("/api/digest").then(r=>r.json());renderDigest(d);}
+  catch(e){document.getElementById("digest").innerHTML='<div class="text-slate-500 text-sm">дайджест недоступен</div>';}
+}
+function renderDigest(d){
+  const el=document.getElementById("digest");
+  const dg=(d.digest&&typeof d.digest==="object")?d.digest:{overview:(d.digest||"—"),attacks:[],recommendations:[]};
+  const s=d.stats||{};
+  const chip=(l,v)=>`<div class="px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50"><div class="text-[10px] text-slate-500">${l}</div><div class="mono text-slate-200 text-sm">${v}</div></div>`;
+  const mm=o=>o?`${fmt(o.avg)} <span class="text-slate-600">/ ${fmt(o.max)}</span>`:"—";
+  let html="";
+  if(s.requests_total||s.status_4xx) html+=`<div class="flex flex-wrap gap-2 mb-3">
+    ${chip("Запросы avg/max",mm(s.requests_total))}${chip("4xx",mm(s.status_4xx))}${chip("404",mm(s.status_404))}${chip("5xx",mm(s.status_5xx))}${chip("Атакующих IP",mm(s.distinct_attacker_ips))}</div>`;
+  if(dg.overview) html+=`<p class="text-sm text-slate-300 leading-relaxed mb-3">${esc(dg.overview)}</p>`;
+  if(dg.attacks&&dg.attacks.length) html+=`<div class="mb-3"><div class="text-[11px] uppercase tracking-wide text-amber-400/80 mb-1">⚠ Замечено</div><ul class="space-y-1">${dg.attacks.map(a=>`<li class="flex gap-2 text-sm text-slate-300"><span class="text-amber-400 shrink-0">•</span>${esc(a)}</li>`).join("")}</ul></div>`;
+  if(dg.recommendations&&dg.recommendations.length) html+=`<div><div class="text-[11px] uppercase tracking-wide text-emerald-400/80 mb-1">✅ Рекомендации</div><ul class="space-y-1">${dg.recommendations.map(a=>`<li class="flex gap-2 text-sm text-slate-300"><span class="text-emerald-400 shrink-0">→</span>${esc(a)}</li>`).join("")}</ul></div>`;
+  el.innerHTML=html||'<div class="text-slate-500 text-sm">—</div>';
+}
+document.getElementById("suggest-btn").onclick=async()=>{
+  const el=document.getElementById("suggest");el.textContent="генерирую… (LLM ~30с)";
+  try{const r=await fetch("/api/suggest").then(r=>r.json());
+    el.innerHTML=`${r.rationale?`<p class="text-slate-300 mb-2">${esc(r.rationale)}</p>`:""}
+      ${(r.deny&&r.deny.length)?`<div class="mb-2"><div class="text-[11px] text-slate-500">deny</div>${r.deny.map(x=>`<code class="block mono text-xs text-amber-300">${esc(x)}</code>`).join("")}</div>`:""}
+      ${(r.waf&&r.waf.length)?`<div><div class="text-[11px] text-slate-500">WAF</div>${r.waf.map(x=>`<code class="block mono text-xs text-emerald-300 whitespace-pre-wrap">${esc(x)}</code>`).join("")}</div>`:""}
+      ${(!r.deny?.length&&!r.waf?.length)?'<span class="text-slate-500">Конкретных правил не предложено.</span>':""}`;
+  }catch(e){el.textContent="ошибка генерации";}
+};
+
+charts.traffic=mkChart("chartTraffic",[ds("всего","#6366f1"),ds("реальный","#22d3ee"),ds("denylist","#64748b")]);
+charts.threats=mkChart("chartThreats",[ds("новые блоки","#f59e0b"),ds("CRS","#ef4444"),ds("404","#a78bfa")]);
+charts.status=mkChart("chartStatus",[ds("2xx","#10b981",1),ds("3xx","#38bdf8",1),ds("4xx","#f59e0b",1),ds("5xx","#ef4444",1)],true);
+charts.latency=mkChart("chartLatency",[ds("p95","#a78bfa",1)]);
+let paused=false;
+function togglePause(){paused=!paused;const b=document.getElementById("pause-btn");b.textContent=paused?"▶":"⏸";b.title=paused?"возобновить":"пауза авто-обновления";if(!paused)refresh();}
+function setupCollapse(){
+  document.querySelectorAll('h2.sec').forEach(h=>{
+    const sec=h.nextElementSibling; if(!sec||sec.tagName!=='SECTION')return;
+    const key='collapse:'+h.textContent.trim().slice(0,40);
+    h.style.cursor='pointer'; h.title='свернуть/развернуть';
+    const ind=document.createElement('span'); ind.className='text-slate-600 mr-1'; h.prepend(ind);
+    const apply=c=>{sec.style.display=c?'none':'';ind.textContent=c?'▸ ':'▾ ';};
+    let c=localStorage.getItem(key)==='1'; apply(c);
+    h.addEventListener('click',()=>{c=!c;localStorage.setItem(key,c?'1':'0');apply(c);});
+  });
+}
+setupCollapse();
+
+// ===== Автобан (UI + dry-run; механизм исполнения пока не подключён) =====
+let _abLoaded=false, _abWindows=["1m","5m","10m","1h","8h"], _abFamilies=[], _abArmed=false, _abEditId=null;
+let _abInterval=60, _abMaxTick=20, _abLastRun=null, _abRules=null, _abIgnore=[];
+let _abLogRows=[], _abLogPage=0; const _AB_LOG_PER=10;
+let _view="dash";
+function showView(name){
+  const views=["dash","autoban","p403","nodes","settings"];
+  if(!views.includes(name))name="dash";
+  _view=name;
+  const on="border-indigo-500 text-indigo-200 font-medium", off="border-transparent text-slate-400 hover:text-slate-200";
+  views.forEach(v=>{
+    document.getElementById("view-"+v).classList.toggle("hidden",v!==name);
+    document.getElementById("navtab-"+v).className="px-3 py-2 text-sm border-b-2 -mb-px "+(v===name?on:off);
+  });
+  location.hash=name==="dash"?"":("#"+name);
+  if(name==="autoban")loadAutoban();
+  if(name==="p403")loadP403();
+  if(name==="nodes")loadNodes();
+  if(name==="settings")loadSettings();
+}
+
+// ── Настройки (гибрид ENV + GUI) ──────────────────────────────────────────────
+const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare",ingress:"☸️ ingress-nginx (k8s)",bans:"⛔ Баны: targets / groups"};
+let _setLocked=false;
+async function loadSettings(){
+  const wrap=document.getElementById("set-groups");
+  try{
+    const d=await (await fetch("/api/settings")).json();
+    _setLocked=!!d.locked;
+    document.getElementById("set-locked").classList.toggle("hidden",!_setLocked);
+    document.getElementById("set-save").disabled=_setLocked;
+    document.getElementById("set-save").classList.toggle("opacity-40",_setLocked);
+    const s=d.settings||{}, byGroup={};
+    Object.keys(s).forEach(k=>{const g=s[k].group||"other";(byGroup[g]=byGroup[g]||[]).push(k);});
+    const order=["llm","cloudflare","ingress","bans"];
+    const groups=Object.keys(byGroup).sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
+    wrap.innerHTML=groups.map(g=>{
+      const rows=byGroup[g].map(k=>settingRow(k,s[k])).join("");
+      const extra=g==="cloudflare"?`<button onclick="checkCF()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 mt-1">Проверить подключение</button><div id="set-cf-check" class="text-[11px] mt-1"></div>`:"";
+      return `<div class="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+        <h3 class="text-xs font-medium text-slate-300 mb-2">${_setGroupMeta[g]||g}</h3>
+        <div class="space-y-2">${rows}</div>${extra}</div>`;
+    }).join("");
+  }catch(e){ wrap.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+}
+function settingRow(key,it){
+  const src=it.source==="override"?`<span class="text-[10px] px-1 rounded bg-indigo-900/50 text-indigo-300">override</span>`:`<span class="text-[10px] px-1 rounded bg-slate-800 text-slate-500">env</span>`;
+  const dis=_setLocked?"disabled":"";
+  let input;
+  if(it.type==="secret"){
+    const roDis=(it.writable===false)?"disabled":dis;
+    const note=(it.writable===false)?`<div class="text-[10px] text-amber-400/80 mt-0.5">только через ENV (STORE=configmap — ConfigMap хранит открытым текстом)</div>`:"";
+    input=`<input type="password" data-skey="${esc(key)}" data-stype="secret" placeholder="${it.set?'•••• задан (введите, чтобы заменить)':'не задан'}" ${roDis}
+      class="w-full text-xs mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">${note}`;
+  }else if(it.type==="json"){
+    input=`<textarea data-skey="${esc(key)}" data-stype="json" rows="2" ${dis}
+      class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">${esc(JSON.stringify(it.value))}</textarea>`;
+  }else if(it.choices){
+    input=`<select data-skey="${esc(key)}" data-stype="str" ${dis} class="w-full text-xs bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`+
+      it.choices.map(c=>`<option ${c===it.value?'selected':''}>${esc(c)}</option>`).join("")+`</select>`;
+  }else{
+    input=`<input type="text" data-skey="${esc(key)}" data-stype="str" value="${esc(it.value==null?'':it.value)}" ${dis}
+      class="w-full text-xs mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`;
+  }
+  return `<div><div class="flex items-center gap-2 mb-0.5"><span class="text-[11px] text-slate-400">${esc(it.label||key)}</span>${src}</div>${input}</div>`;
+}
+async function saveSettings(){
+  if(_setLocked)return;
+  const updates={};
+  document.querySelectorAll("#set-groups [data-skey]").forEach(el=>{
+    const k=el.getAttribute("data-skey"), t=el.getAttribute("data-stype"), v=el.value;
+    if(t==="secret"){ if(v!=="")updates[k]=v; }   // blank = keep current
+    else updates[k]=v;
+  });
+  const msg=document.getElementById("set-msg"); msg.textContent="сохраняю…"; msg.className="text-[11px] mt-3 text-slate-400";
+  try{
+    const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates})});
+    const d=await r.json();
+    if(d.ok){ msg.textContent="✓ сохранено: "+(d.applied||[]).join(", "); msg.className="text-[11px] mt-3 text-emerald-400"; loadSettings(); }
+    else{ const part=(d.applied&&d.applied.length)?(" (сохранено: "+d.applied.join(", ")+")"):""; msg.textContent="✗ "+(d.error||"ошибка")+part; msg.className="text-[11px] mt-3 text-red-400"; loadSettings(); }
+  }catch(e){ msg.textContent="✗ "+e.message; msg.className="text-[11px] mt-3 text-red-400"; }
+}
+async function checkCF(){
+  const box=document.getElementById("set-cf-check"); box.textContent="проверяю…"; box.className="text-[11px] mt-1 text-slate-400";
+  try{
+    const d=await (await fetch("/api/ban_targets/check")).json();
+    const cf=(d.checks||[]).filter(c=>c.type==="cloudflare");
+    if(!cf.length){ box.textContent="нет Cloudflare-таргетов в targets."; return; }
+    box.innerHTML=cf.map(c=>{
+      const ok=c.ok; return `<div class="${ok?'text-emerald-400':'text-amber-400'}">${ok?'✓':'⚠'} ${esc(c.id||'cf')}: token ${c.token_valid?'ok':'нет'}, list ${c.list_id?'ok':'—'}, rule ${c.rule_id?'ok':'—'}${c.items!=null?(', items '+c.items):''}${c.error?(' — '+esc(c.error)):''}</div>`;
+    }).join("");
+  }catch(e){ box.textContent="ошибка: "+e.message; box.className="text-[11px] mt-1 text-red-400"; }
+}
+
+// ── Ноды (подключённые nginx-VM с агентом) ────────────────────────────────────
+let _nodesTimer=null;
+function _ago(sec){
+  if(!sec)return "никогда";
+  const d=Math.max(0,Math.floor(Date.now()/1000)-sec);
+  if(d<60)return d+"с назад"; if(d<3600)return Math.floor(d/60)+"м назад";
+  if(d<86400)return Math.floor(d/3600)+"ч назад"; return Math.floor(d/86400)+"д назад";
+}
+function _uptime(sec){
+  if(!sec)return "—"; const d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600);
+  return d>0?(d+"д "+h+"ч"):(h+"ч "+Math.floor(sec%3600/60)+"м");
+}
+function _bar(pct,warn,crit){
+  pct=Math.max(0,Math.min(100,pct||0));
+  const c=pct>=crit?"bg-red-500":pct>=warn?"bg-amber-500":"bg-emerald-500";
+  return `<div class="h-1.5 w-full bg-slate-800 rounded overflow-hidden"><div class="h-full ${c}" style="width:${pct}%"></div></div>`;
+}
+async function loadNodes(){
+  try{
+    const r=await fetch("/api/nodes"); const d=await r.json();
+    renderNodes(d);
+  }catch(e){ document.getElementById("nodes-list").innerHTML=`<div class="text-red-400 text-xs">ошибка загрузки: ${esc(e.message)}</div>`; }
+  if(_view==="nodes"){ clearTimeout(_nodesTimer); _nodesTimer=setTimeout(loadNodes,10000); }
+}
+function renderNodes(d){
+  const el=document.getElementById("nodes-list");
+  if(d.enabled===false){ el.innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен (BLOCKLIST_API_URL пуст) — ноды недоступны.</div>`; return; }
+  const nodes=d.nodes||[];
+  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">пока нет подключённых нод. Нажми «+ Добавить ноду».</div>`; return; }
+  el.innerHTML=nodes.map(n=>{
+    const m=n.metrics||{}, online=n.online;
+    const dot=online?"bg-emerald-500":"bg-slate-600";
+    const nginxBad=m.nginx_ok===false;
+    const load=m.load1!=null?(m.load1+(m.ncpu?(" / "+m.ncpu+" cpu"):"")):"—";
+    const loadPct=(m.load1!=null&&m.ncpu)?(m.load1/m.ncpu*100):null;
+    return `<div class="bg-slate-950/50 border ${nginxBad?'border-red-800/60':'border-slate-800'} rounded-lg p-3">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
+          <span class="text-sm font-medium text-slate-200 truncate">${esc(n.id)}</span>
+          ${n.group?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">🎯 ${esc(n.group)}</span>`:""}
+          ${nginxBad?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-300">nginx -t ✗</span>`:""}
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?"online":"offline"} · ${_ago(n.last_seen)}</span>
+          <button onclick="deleteNode('${esc(n.id)}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">отозвать</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-[11px]">
+        <div><div class="text-slate-500 mb-0.5">CPU load</div><div class="text-slate-300 mb-1">${esc(load)}</div>${loadPct!=null?_bar(loadPct,70,90):""}</div>
+        <div><div class="text-slate-500 mb-0.5">RAM</div><div class="text-slate-300 mb-1">${m.mem_used_pct!=null?(m.mem_used_pct+"%"+(m.mem_total_mb?(" / "+(m.mem_total_mb/1024).toFixed(1)+"G"):"")):"—"}</div>${m.mem_used_pct!=null?_bar(m.mem_used_pct,75,90):""}</div>
+        <div><div class="text-slate-500 mb-0.5">uptime</div><div class="text-slate-300">${_uptime(m.uptime_s)}</div></div>
+        <div><div class="text-slate-500 mb-0.5">баны на ноде</div><div class="text-slate-300">${m.applied_cidrs!=null?m.applied_cidrs:"—"} CIDR</div></div>
+      </div>
+      <div class="text-[10px] text-slate-600 mt-2 mono">${esc(n.hostname||"")}${n.ip?(" · "+esc(n.ip)):""}${n.agent_version?(" · agent "+esc(n.agent_version)):""}</div>
+    </div>`;
+  }).join("");
+}
+async function showAddNode(){
+  const box=document.getElementById("nodes-add"); box.classList.remove("hidden");
+  const pre=document.getElementById("nodes-install-cmd"), hint=document.getElementById("nodes-install-hint");
+  pre.textContent="загрузка…"; hint.classList.add("hidden");
+  try{
+    const d=await (await fetch("/api/nodes/install")).json();
+    if(d.enabled===false){ pre.textContent="# blocklist-api не настроен"; return; }
+    if(!d.configured){ pre.textContent="# ENROLL_SECRET не задан в blocklist-api — задай его, чтобы агенты могли регистрироваться."; return; }
+    if(d.needs_public_url){ hint.textContent="⚠ Задай PUBLIC_URL в blocklist-api (адрес, по которому VM достучатся до API) — без него команда неполная."; hint.classList.remove("hidden"); }
+    pre.textContent=d.install_cmd||"# команда недоступна";
+  }catch(e){ pre.textContent="# ошибка: "+e.message; }
+}
+function copyInstallCmd(){
+  const t=document.getElementById("nodes-install-cmd").textContent;
+  navigator.clipboard&&navigator.clipboard.writeText(t);
+}
+async function deleteNode(id){
+  if(!confirm("Отозвать токен ноды «"+id+"»? Агент перестанет получать баны, пока не перерегистрируется."))return;
+  await fetch("/api/nodes/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+  loadNodes();
+}
+
+// ── Правила 403 (блокировка по пути) ──────────────────────────────────────────
+let _p403={enabled:true,rules:[]};
+function _reEsc(s){return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");}
+function _pathToPattern(p){p=String(p).split("?")[0];return "^"+_reEsc(p)+"(\\?|$)";}
+// ── «основная пара» (одно 403 + одно автобан правило для быстрого добавления) ──
+let _mainRules={path_id:null,autoban_id:null};
+async function loadMainRules(){try{_mainRules=await fetch("/api/main_rules").then(r=>r.json());}catch(e){}}
+async function setMainRule(kind,id){
+  const body=kind==="path"?{path_id:id}:{autoban_id:id};
+  const r=await _post("/api/main_rules",body);
+  if(r.ok){_mainRules=r; if(_view==="p403")loadP403(); if(_view==="autoban"){_abRules=null;loadAutoban();}}
+}
+async function addToMain(path,el){
+  const res=await _post("/api/add_to_main",{path});
+  if(!res.ok){if(el){el.innerHTML="ошибка";}return;}
+  const f=(x)=>x?(x.already?"уже есть":(x.ok?"✓":"✗ "+(x.error||""))):"—";
+  const p=res.path403, a=res.autoban;
+  if(el){el.innerHTML="403:"+f(p)+" · автобан:"+f(a);el.disabled=true;el.className+=((p&&p.ok)||(a&&a.ok))?" text-emerald-300":" text-amber-300";}
+  // если что-то не настроено — подскажем
+  if((p&&!p.ok&&!p.already)||(a&&!a.ok&&!a.already)){
+    const probs=[]; if(p&&!p.ok&&!p.already)probs.push("403: "+(p.error||"?")); if(a&&!a.ok&&!a.already)probs.push("автобан: "+(a.error||"?"));
+    setTimeout(()=>alert("Добавлено частично:\n"+probs.join("\n")+"\n\nОтметь основные правила звёздочкой ★ во вкладках 403 и Автобан."),100);
+  }
+  if(_view==="p403")loadP403();
+}
+async function loadP403(){
+  try{
+    const [d,st,pp]=await Promise.all([
+      fetch("/api/path_rules").then(r=>r.json()),
+      fetch("/api/path_status").then(r=>r.json()).catch(()=>null),
+      fetch("/api/protected_paths").then(r=>r.json()).catch(()=>({paths:[]}))]);
+    await loadMainRules();
+    renderP403(d);renderP403Status(st);p403ModeChange();renderP403Protected(pp.paths||[]);
+  }catch(e){document.getElementById("p403-list").innerHTML='<div class="text-rose-400 text-xs">не удалось загрузить: '+esc(e.message||e)+'</div>';}
+}
+function renderP403Protected(paths){
+  const el=document.getElementById("p403-protected");if(!el)return;
+  if(!paths||!paths.length){el.innerHTML="";return;}
+  el.innerHTML='🛡️ защищённые (в 403 добавить нельзя, общий список с автобаном): '+paths.map(p=>`<span class="mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(p)}</span>`).join(" ")+' <span class="text-slate-600">— меняются в <a onclick="showView(\'autoban\')" class="text-indigo-300 cursor-pointer">Автобане</a></span>';
+}
+function renderP403Status(st){
+  const el=document.getElementById("p403-render");if(!el)return;
+  if(!st||st.rendered_ok===undefined){el.textContent="";return;}
+  if(!st.controller_reachable){el.innerHTML='<span class="text-amber-300">⚠ нет связи с ingress</span>';return;}
+  el.innerHTML=st.rendered_ok
+    ? '<span class="text-emerald-300">✓ рендер в ingress OK</span>'
+    : '<span class="text-rose-300">✗ не отрендерено — нажми ↻ ресинк в Денлисте</span>';
+}
+function renderP403(d){
+  _p403=d||{enabled:true,rules:[]};
+  const on=_p403.enabled!==false;
+  const mb=document.getElementById("p403-master");
+  mb.textContent=on?"🟢 включена":"⚪ выключена";
+  mb.className="text-sm px-3 py-1.5 rounded "+(on?"bg-emerald-600/80 text-white hover:bg-emerald-600":"bg-slate-700 text-slate-300 hover:bg-slate-600");
+  _p403RenderList();
+  p403FillTarget();
+}
+function _p403fmtDate(ts){if(!ts)return"";const d=new Date(ts*1000);return d.toLocaleDateString("ru",{day:"2-digit",month:"2-digit",year:"2-digit"});}
+function _p403RenderList(){
+  const rules=_p403.rules||[];
+  const q=(document.getElementById("p403-search").value||"").toLowerCase().trim();
+  const filt=q?rules.filter(r=>((r.name||"")+" "+(r.pattern||"")).toLowerCase().includes(q)):rules;
+  const enN=rules.filter(r=>r.enabled!==false).length;
+  document.getElementById("p403-count").textContent="· "+rules.length+" ("+enN+" вкл)"+(q?(" · найдено "+filt.length):"");
+  const list=document.getElementById("p403-list");
+  if(!rules.length){list.innerHTML='<div class="text-slate-600 text-xs">пусто — добавь правило, засей из автобана или базовый набор.</div>';return;}
+  if(!filt.length){list.innerHTML='<div class="text-slate-600 text-xs">ничего не найдено по «'+esc(q)+'».</div>';return;}
+  list.innerHTML=filt.map(r=>{const en=r.enabled!==false;
+    const by=r.added_by?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">${esc(r.added_by)}</span>`:"";
+    const dt=r.ts?`<span class="text-[10px] text-slate-600 shrink-0">${_p403fmtDate(r.ts)}</span>`:"";
+    const plen=(r.pattern||"").length;
+    const isMain=String(_mainRules.path_id)===String(r.id);
+    return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded px-3 py-2 ${en?'':'opacity-60'}">
+      <div class="flex items-center gap-2">
+        <button onclick="p403Toggle('${esc(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="text-sm shrink-0">${en?'🟢':'⚪'}</button>
+        <button onclick="setMainRule('path','${esc(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
+        <span class="text-sm text-slate-200 font-medium truncate">${esc(r.name||'(без имени)')}${isMain?' <span class="text-[10px] text-amber-400">основное</span>':''}</span>
+        ${en?'':'<span class="text-[10px] text-amber-400 shrink-0">выкл</span>'}${by}${dt}
+        <span class="text-[10px] text-slate-600 shrink-0 ml-auto">${plen}&nbsp;симв.</span>
+        <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0">паттерн&nbsp;▾</button>
+        <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">✎&nbsp;ред.</button>
+        <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20 shrink-0">удалить</button>
+      </div>
+      <div id="pat-${esc(r.id)}" class="hidden mono text-[11px] text-slate-400 break-all mt-1.5 bg-slate-950/60 rounded p-2 max-h-44 overflow-auto">${esc(r.pattern||"")}</div>
+      <div id="ed-${esc(r.id)}" class="hidden mt-2 border-t border-slate-800 pt-2"></div>
+    </div>`;}).join("");
+}
+// ── редактор правила: разбор паттерна на отдельные пути (top-level «|») ─────────
+let _p403EditState={};
+function _p403Unwrap(s){
+  s=String(s||"").trim();
+  if(s.length<2||s[0]!=="("||s[s.length-1]!==")")return s;
+  let depth=0;
+  for(let i=0;i<s.length;i++){
+    if(s[i]==="\\"){i++;continue;}
+    if(s[i]==="(")depth++;
+    else if(s[i]===")"){depth--; if(depth===0)return i===s.length-1?s.slice(1,-1):s;}
+  }
+  return s;
+}
+function _p403TopSplit(s){           // split on | только на глубине 0 (не внутри (...) / [...])
+  const out=[]; let depth=0,cur="",inCls=false;
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(c==="\\"){cur+=c+(s[i+1]||"");i++;continue;}
+    if(inCls){cur+=c;if(c==="]")inCls=false;continue;}
+    if(c==="["){inCls=true;cur+=c;continue;}
+    if(c==="("){depth++;cur+=c;continue;}
+    if(c===")"){depth--;cur+=c;continue;}
+    if(c==="|"&&depth===0){out.push(cur);cur="";continue;}
+    cur+=c;
+  }
+  out.push(cur);
+  return out.filter(p=>p.length);
+}
+function _p403Humanize(p){
+  // если в части есть НЕэкранированный regex-оператор — это паттерн, показываем как есть;
+  // иначе это литеральный путь → снимаем экранирование (\. → ., \- → -) для читаемости
+  for(let i=0;i<p.length;i++){
+    if(p[i]==="\\"){i++;continue;}
+    if("*+?^$.|()[]{}".indexOf(p[i])>=0)return {text:p,regex:true};
+  }
+  return {text:p.replace(/\\(.)/g,"$1"),regex:false};
+}
+function p403EditOpen(id){
+  const panel=document.getElementById("ed-"+id);
+  if(panel&&!panel.classList.contains("hidden")){panel.classList.add("hidden");return;}
+  const r=(_p403.rules||[]).find(x=>String(x.id)===String(id)); if(!r)return;
+  _p403EditState[id]={name:r.name||"",enabled:r.enabled!==false,parts:_p403TopSplit(_p403Unwrap(r.pattern||""))};
+  _p403RenderEditor(id); panel.classList.remove("hidden");
+}
+function _p403RenderEditor(id){
+  const st=_p403EditState[id], panel=document.getElementById("ed-"+id); if(!st||!panel)return;
+  panel.innerHTML=`
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-[11px] text-slate-500 shrink-0">имя:</span>
+      <input value="${esc(st.name)}" oninput="_p403EditState['${esc(id)}'].name=this.value" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 flex-1"/>
+    </div>
+    <div class="text-[11px] text-slate-500 mb-1">путей: ${st.parts.length} — × чтобы убрать <span class="text-slate-600">(ⓡ = регэксп, наведи — увидишь точный паттерн)</span></div>
+    <div class="flex flex-wrap gap-1 mb-2">
+      ${st.parts.map((p,i)=>{const h=_p403Humanize(p);return `<span class="inline-flex items-center gap-1 bg-slate-800 rounded px-1.5 py-0.5 text-[11px]"><span class="mono truncate max-w-[280px] ${h.regex?'text-amber-300':'text-slate-300'}" title="${esc(p)}">${esc(h.text)}${h.regex?' <span class="text-[9px] text-amber-500">ⓡ</span>':''}</span><button onclick="p403EditDel('${esc(id)}',${i})" title="убрать" class="text-rose-400 hover:text-rose-300 font-bold">×</button></span>`}).join("")||'<span class="text-slate-600 text-[11px]">пусто</span>'}
+    </div>
+    <div class="flex items-center gap-2 mb-2">
+      <input id="ed-add-${esc(id)}" onkeydown="if(event.key==='Enter')p403EditAdd('${esc(id)}')" placeholder="добавить путь (как «Путь содержит», напр. /.env)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono flex-1"/>
+      <button onclick="p403EditAdd('${esc(id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700 shrink-0">+ путь</button>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="p403EditSave('${esc(id)}')" class="text-xs px-3 py-1 rounded bg-emerald-600/80 text-white hover:bg-emerald-600">Сохранить</button>
+      <button onclick="document.getElementById('ed-${esc(id)}').classList.add('hidden')" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300">отмена</button>
+    </div>`;
+}
+function p403EditDel(id,i){const st=_p403EditState[id];if(!st)return;st.parts.splice(i,1);_p403RenderEditor(id);}
+function p403EditAdd(id){
+  const inp=document.getElementById("ed-add-"+id), v=(inp.value||"").trim(); if(!v)return;
+  const e=_reEsc(v);                          // как литеральный путь (экранируем)
+  const st=_p403EditState[id];
+  if(st.parts.includes(e)){inp.value="";inp.placeholder="«"+v+"» уже есть — пропущено";return;}
+  st.parts.push(e);
+  inp.value=""; inp.placeholder="добавить путь (как «Путь содержит», напр. /.env)"; _p403RenderEditor(id);
+  const ni=document.getElementById("ed-add-"+id); if(ni)ni.focus();
+}
+async function p403EditSave(id){
+  const st=_p403EditState[id]; if(!st)return;
+  const parts=st.parts.map(p=>p.trim()).filter(Boolean);
+  if(!parts.length){alert("в правиле не осталось ни одного пути — тогда удали правило целиком.");return;}
+  const pattern="("+parts.join("|")+")";
+  const res=await _post("/api/path_rule",{id,name:st.name,pattern,enabled:st.enabled});
+  if(res.ok)loadP403(); else alert("не удалось: "+(res.error||"?"));
+}
+// ── генератор паттернов: человек пишет путь/wildcard → regex для nginx ~* ──────
+const P403_BENIGN=["/","/index.html","/index.php","/home","/login","/account/login","/api/users","/api/v1/orders","/dashboard","/static/app.js","/assets/main.css","/favicon.ico","/robots.txt","/images/logo.png"];
+function p403GenPattern(mode,raw){
+  raw=String(raw||"").trim(); if(!raw)return "";
+  if(mode==="regex")return raw;                                  // как есть
+  if(mode==="wildcard")                                          // * → .*  (остальное экранируем)
+    return raw.replace(/[.+?^${}()|[\]\\]/g,"\\$&").replace(/\*/g,".*");
+  const e=_reEsc(raw);                                           // путь/exact → литерал
+  return mode==="exact" ? ("^"+e+"(\\?|$)") : e;                 // exact — якорь, path — подстрока
+}
+function p403ModeChange(){
+  const mode=document.getElementById("p403-mode").value;
+  const map={path:["Путь (подстрока)","/.env"],exact:["Точный URI","/wp-login.php"],
+             wildcard:["Wildcard (* = что угодно)","/admin/*  или  *.sql"],regex:["Regex (как nginx ~*)","/\\.env|/wp-login"]};
+  const [l,p]=map[mode]||map.path;
+  document.getElementById("p403-raw-lbl").textContent=l;
+  document.getElementById("p403-raw").placeholder=p;
+  p403Preview();
+}
+function p403Preview(){
+  const mode=document.getElementById("p403-mode").value;
+  const gen=p403GenPattern(mode,document.getElementById("p403-raw").value);
+  document.getElementById("p403-gen").textContent=gen||"—";
+  const warn=document.getElementById("p403-warn"); warn.textContent="";
+  let rx=null;
+  if(gen){try{rx=new RegExp(gen,"i");}catch(e){warn.textContent="✗ некорректный regex: "+e.message;}}
+  if(rx){
+    if(gen.indexOf('"')>=0)warn.textContent='✗ кавычка " запрещена — сломает nginx';
+    else{const hit=P403_BENIGN.find(s=>rx.test(s)); if(hit)warn.textContent="⚠ поймает обычный путь «"+hit+"» — отклонится (или включи force)";}
+  }
+  const t=document.getElementById("p403-test").value, res=document.getElementById("p403-test-res");
+  if(!t||!rx){res.textContent="—";res.className="shrink-0 text-slate-500";}
+  else if(rx.test(t)){res.textContent="🚫 забанит";res.className="shrink-0 text-rose-300 font-medium";}
+  else{res.textContent="✓ пропустит";res.className="shrink-0 text-emerald-300 font-medium";}
+}
+function p403FillTarget(){
+  const sel=document.getElementById("p403-target");if(!sel)return;
+  const prev=sel.value, rules=_p403.rules||[], mainId=_mainRules.path_id;
+  const main=rules.find(r=>String(r.id)===String(mainId));
+  let opts="";
+  if(main)opts+=`<option value="${esc(main.id)}">★ ${esc(main.name)} (основное)</option>`;
+  rules.filter(r=>String(r.id)!==String(mainId)).forEach(r=>{opts+=`<option value="${esc(r.id)}">${r.enabled!==false?'':'(выкл) '}${esc(r.name)}</option>`;});
+  opts+=`<option value="__new__">＋ новое правило</option>`;
+  sel.innerHTML=opts;
+  if(prev&&Array.from(sel.options).some(o=>o.value===prev))sel.value=prev;
+  else sel.value=main?String(main.id):"__new__";
+  p403TargetChange();
+}
+function p403TargetChange(){
+  const sel=document.getElementById("p403-target");if(!sel)return;
+  const isNew=sel.value==="__new__", name=document.getElementById("p403-name");
+  name.disabled=!isNew; name.classList.toggle("opacity-40",!isNew);
+  name.placeholder=isNew?"напр. env-файлы":"— (имя только для нового)";
+}
+async function p403Save(){
+  const mode=document.getElementById("p403-mode").value;
+  const raw=document.getElementById("p403-raw").value.trim();
+  const pattern=p403GenPattern(mode,raw);
+  const force=document.getElementById("p403-force").checked;
+  const msg=document.getElementById("p403-msg");
+  const target=document.getElementById("p403-target").value;
+  if(!pattern){msg.textContent="введи путь";msg.className="text-xs text-amber-300";return;}
+  msg.textContent="…";msg.className="text-xs text-slate-400";
+  const _clear=()=>{document.getElementById("p403-raw").value="";document.getElementById("p403-force").checked=false;p403Preview();};
+  if(target&&target!=="__new__"){               // дописать в существующее (по умолчанию — основное ★)
+    const r=(_p403.rules||[]).find(x=>String(x.id)===String(target));
+    if(!r){msg.textContent="правило не найдено";msg.className="text-xs text-rose-300";return;}
+    const parts=_p403TopSplit(_p403Unwrap(r.pattern||""));
+    if(parts.includes(pattern)){msg.textContent="• уже есть в «"+r.name+"»";msg.className="text-xs text-amber-300";return;}
+    parts.push(pattern);
+    const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:"("+parts.join("|")+")",enabled:r.enabled!==false,force});
+    if(res.ok){msg.textContent="✓ в «"+r.name+"»";msg.className="text-xs text-emerald-300";_clear();loadP403();}
+    else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
+    return;
+  }
+  // новое правило
+  const name=document.getElementById("p403-name").value.trim();
+  const res=await _post("/api/path_rule",{name,pattern,force});
+  if(res.ok&&res.duplicate){msg.textContent="• такое правило уже есть — не дублирую";msg.className="text-xs text-amber-300";loadP403();return;}
+  if(res.ok){msg.textContent="✓ создано";msg.className="text-xs text-emerald-300";
+    document.getElementById("p403-name").value="";_clear();loadP403();}
+  else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
+}
+async function p403Toggle(id,enabled){const res=await _post("/api/path_rule/toggle",{id,enabled});if(res.ok)loadP403();else alert("не удалось: "+(res.error||"?"));}
+async function p403Delete(id){if(!confirm("Удалить правило 403?"))return;const res=await _post("/api/path_rule/delete",{id});if(res.ok)loadP403();else alert("не удалось: "+(res.error||"?"));}
+async function p403Master(){
+  const on=_p403&&_p403.enabled!==false;
+  if(on&&!confirm("Выключить ВСЮ секцию 403?\nВсе правила по путям перестанут блокировать — сканеры снова будут проходить."))return;
+  const res=await _post("/api/path_master",{enabled:!on});
+  if(res.ok)loadP403();else alert("не удалось: "+(res.error||"?"));
+}
+async function p403Seed(){
+  if(!confirm("Добавить базовый набор правил сканеров одним правилом «base-scanners»?\n(повторный засев обновит его, не создаст дубль)"))return;
+  const res=await _post("/api/path_seed",{});
+  if(res.ok){loadP403();alert("✓ базовый набор добавлен/обновлён.\nЕсли у тебя был свой ручной if в ингрессе — убери его, чтобы не дублировать.");}
+  else alert("не удалось: "+(res.error||"?"));
+}
+function _p403CloseSeedMenu(){const m=document.getElementById("p403-seed-menu");if(m)m.remove();document.removeEventListener("click",_p403SeedOutside,true);}
+function _p403SeedOutside(e){const m=document.getElementById("p403-seed-menu");if(m&&!m.contains(e.target))_p403CloseSeedMenu();}
+async function p403SeedAutoban(btn){
+  _p403CloseSeedMenu();
+  let rules=[];try{rules=await ensureAbRules();}catch(e){alert("не удалось получить правила автобана");return;}
+  const rc=btn.getBoundingClientRect();
+  const m=document.createElement("div");m.id="p403-seed-menu";
+  m.className="fixed z-[60] card border-slate-700 p-1.5 text-xs shadow-xl max-h-[320px] overflow-auto";
+  m.style.background="#0f141c";m.style.top=(rc.bottom+4)+"px";
+  m.style.left=Math.max(8,Math.min(rc.left,window.innerWidth-300))+"px";m.style.width="292px";
+  let html=`<div class="text-[10px] text-slate-500 px-1.5 py-1">выбери правило автобана → станет правилом 403</div>`;
+  const usable=rules.filter(r=>r.match_type!=="family");
+  if(usable.length>1)html+=`<button onclick="p403SeedAutobanGo(null)" class="block w-full text-left px-2 py-1 rounded hover:bg-indigo-500/20 text-indigo-200 font-medium">★ все (${usable.length}) — кроме семейств</button><div class="border-t border-slate-800 my-1"></div>`;
+  html+=rules.map(r=>{
+    const fam=r.match_type==="family";
+    const npath=fam?0:String(r.path||"").split("\n").filter(Boolean).length;
+    if(fam)return `<div class="px-2 py-1 text-slate-600">${esc(r.name)} <span class="text-[10px]">— семейство, нельзя</span></div>`;
+    return `<button onclick="p403SeedAutobanGo([${r.id}])" class="block w-full text-left px-2 py-1 rounded hover:bg-indigo-500/20 text-slate-200">${r.enabled?'🟢':'⚪'} ${esc(r.name)} <span class="text-slate-600">· ${npath} пут.</span></button>`;
+  }).join("")||'<div class="px-2 py-1.5 text-slate-500">нет правил автобана.</div>';
+  m.innerHTML=html;document.body.appendChild(m);
+  setTimeout(()=>document.addEventListener("click",_p403SeedOutside,true),0);
+}
+async function p403SeedAutobanGo(ids){
+  _p403CloseSeedMenu();
+  const res=await _post("/api/path_seed_autoban", ids?{ids}:{});
+  if(res.ok){loadP403();
+    const c=(res.created||[]).length, sk=(res.skipped||[]);
+    let m="✓ создано/обновлено: "+c+(c?(" ("+(res.created||[]).join(", ")+")"):"");
+    if(sk.length)m+="\nпропущено: "+sk.map(x=>x.name+" ("+x.reason+")").join(", ");
+    alert(m);}
+  else alert("не удалось: "+(res.error||"?"));
+}
+async function p403AddPath(path,el){
+  const pat=_pathToPattern(path);
+  // уже ловится существующим правилом?
+  try{
+    const d=await fetch("/api/path_rules").then(r=>r.json());
+    const hit=(d.rules||[]).filter(r=>r.enabled!==false).find(r=>{try{return new RegExp(r.pattern,"i").test(path);}catch(e){return false;}});
+    if(hit&&!confirm("Путь «"+path+"» уже ловится правилом «"+(hit.name||hit.id)+"».\nВсё равно добавить отдельным правилом?")){
+      if(el){el.innerHTML="уже ловится";el.disabled=true;}return;}
+  }catch(e){}
+  const res=await _post("/api/path_rule",{name:"путь "+String(path).slice(0,40),pattern:pat});
+  if(res.ok&&res.duplicate){if(el){el.innerHTML="уже есть";el.disabled=true;}return;}
+  if(el){el.innerHTML=res.ok?"✓ 403":"✗";el.disabled=true;if(res.ok)el.className+=" text-rose-300";}
+  if(res.ok&&_view==="p403")loadP403();
+  if(!res.ok)alert("не удалось добавить в 403: "+(res.error||"?"));
+}
+function abMtypeChange(){
+  const mt=document.getElementById("ab-mtype").value, fam=mt==="family";
+  document.getElementById("ab-family").classList.toggle("hidden",!fam);
+  document.getElementById("ab-paths").classList.toggle("hidden",fam);
+  document.getElementById("ab-add-or").classList.toggle("hidden",fam);
+  document.getElementById("ab-combine-wrap").classList.toggle("hidden",fam);
+}
+function abPathRow(value){
+  const wrap=document.createElement("div");wrap.className="flex gap-1.5 ab-path-row";
+  wrap.innerHTML=`<input class="ab-path-inp flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono" placeholder="/wp-login.php">
+    <button type="button" onclick="this.parentElement.remove();abFixOr()" class="ab-path-del px-2 rounded bg-slate-800 text-slate-500 hover:text-red-300 hover:bg-slate-700 text-xs" title="убрать">✕</button>`;
+  wrap.querySelector("input").value=value||"";
+  return wrap;
+}
+function abFixOr(){
+  // hide the ✕ when only one row remains (can't remove the last path)
+  const rows=document.querySelectorAll("#ab-paths .ab-path-row");
+  rows.forEach(r=>r.querySelector(".ab-path-del").style.visibility=rows.length>1?"visible":"hidden");
+}
+function abAddPath(value){document.getElementById("ab-paths").appendChild(abPathRow(value));abFixOr();}
+function abRenderPaths(values){
+  const c=document.getElementById("ab-paths");c.innerHTML="";
+  (values&&values.length?values:[""]).forEach(v=>c.appendChild(abPathRow(v)));abFixOr();
+}
+function abPathValues(){return Array.from(document.querySelectorAll("#ab-paths .ab-path-inp")).map(i=>i.value.trim()).filter(Boolean);}
+// белый список путей (предохранитель — автобан их не считает)
+function renderAbIgnore(){
+  const el=document.getElementById("ab-ignore");if(!el)return;
+  el.innerHTML=_abIgnore.length?_abIgnore.map((p,i)=>`<span class="flex items-center gap-1 px-2 py-1 rounded bg-emerald-500/10 text-emerald-200 border border-emerald-500/25 text-[11px] mono">${esc(p)}<button onclick="abIgnoreDel(${i})" class="text-emerald-400/60 hover:text-red-300" title="убрать">✕</button></span>`).join(""):'<span class="text-slate-600 text-xs">список пуст — автобан считает все пути</span>';
+}
+function abIgnoreAdd(){
+  const inp=document.getElementById("ab-ignore-inp"), v=(inp.value||"").trim();
+  if(!v)return;
+  if(!_abIgnore.includes(v))_abIgnore.push(v);
+  inp.value="";renderAbIgnore();
+  document.getElementById("ab-ignore-msg").textContent="не забудь «Сохранить»";
+  document.getElementById("ab-ignore-msg").className="text-[11px] text-amber-300";
+}
+function abIgnoreDel(i){_abIgnore.splice(i,1);renderAbIgnore();
+  document.getElementById("ab-ignore-msg").textContent="не забудь «Сохранить»";
+  document.getElementById("ab-ignore-msg").className="text-[11px] text-amber-300";}
+async function abIgnoreSave(){
+  const msg=document.getElementById("ab-ignore-msg");msg.textContent="сохраняю…";msg.className="text-[11px] text-slate-500";
+  try{const d=await fetch("/api/autoban/ignore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paths:_abIgnore})}).then(r=>r.json());
+    if(!d.ok){msg.textContent="ошибка: "+(d.error||"?");msg.className="text-[11px] text-red-300";return;}
+    _abIgnore=d.ignore_paths||[];renderAbIgnore();msg.textContent="✓ сохранено";msg.className="text-[11px] text-emerald-300";
+  }catch(e){msg.textContent="ошибка: "+(e.message||e);msg.className="text-[11px] text-red-300";}
+}
+// проверить IP — забанен ли и за что
+async function abWhy(){
+  const ip=(document.getElementById("ab-why-ip").value||"").trim(), out=document.getElementById("ab-why");
+  if(!ip){out.innerHTML='<span class="text-amber-300 text-xs">введи IP</span>';return;}
+  out.innerHTML='<span class="text-slate-500 text-xs">проверяю…</span>';
+  try{
+    const d=await fetch("/api/autoban/why?ip="+encodeURIComponent(ip)).then(r=>r.json());
+    if(d.error){out.innerHTML=`<span class="text-red-300 text-xs">${esc(d.error)}</span>`;return;}
+    if(!d.banned){
+      out.innerHTML=`<div class="card border-emerald-500/25 bg-emerald-500/5 p-3">
+        <div class="text-emerald-300 text-sm">✓ <span class="mono">${esc(ip)}</span> НЕ в денлисте — автобаном/блоклистом не банился.${d.static_deny?' <span class="text-amber-300">(но это приватный/уже-denied статический диапазон)</span>':''}</div>
+        <div class="text-[11px] text-slate-500 mt-1">Если у него есть 403 — он от nginx-правила (сканер-блок) или приложения, не от нашего бана.</div>
+        <button onclick="openProfile('${esc(ip)}')" class="text-[11px] mt-2 px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">профиль IP →</button></div>`;
+      return;
+    }
+    const e=d.entry||{}, tt=!e.ttl?"навсегда":(e.ttl>=86400?(e.ttl/86400)+"д":(e.ttl>=3600?(e.ttl/3600)+"ч":e.ttl+"с"));
+    const ruleChip=d.rule?`<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] border border-indigo-500/30">🤖 правило: ${esc(d.rule)}</span>`:"";
+    let html=`<div class="card border-red-500/30 bg-red-500/5 p-3 mb-2">
+      <div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-red-300 font-medium">⛔ забанен</span>${ruleChip}<span class="text-[11px] text-slate-500">источник: ${esc(d.by||"?")}</span></div>
+      <div class="text-xs text-slate-300">CIDR: <span class="mono">${esc(e.cidr||"")}</span> ${cfBadge((e.cidr||'').split('/')[0])}</div>
+      <div class="text-xs text-slate-400">причина: ${esc(e.reason||"—")}</div>
+      <div class="text-[11px] text-slate-500">забанен: ${dt(e.ts)} · TTL: ${tt}</div>`;
+    const pp=d.paths||[];
+    if(pp.length){
+      const show=pp.slice(0,2).map(x=>`<span class="mono text-amber-300">${esc(x.path)}</span> <span class="text-slate-500">(${fmt(x.count)})</span>`).join(", ");
+      const more=pp.length>2?` <span class="text-slate-500">и ещё ${pp.length-2} ${pp.length-2===1?"путь":"путей"}</span>`:"";
+      html+=`<div class="text-xs text-slate-300 mt-1.5">сошлось по путям (24ч): ${show}${more}</div>`;
+    }else{
+      html+=`<div class="text-[11px] text-slate-500 mt-1.5">примеры путей не найдены (активность старше 24ч)</div>`;
+    }
+    html+=`</div>`;
+    if(d.audit&&d.audit.length){
+      const act={block:"⛔ бан",unblock:"↩ разбан",expire:"⌛ истёк"};
+      html+=`<div class="text-[11px] text-slate-500 mb-1">история (audit):</div>`+d.audit.map(a=>`<div class="text-[11px] text-slate-400 flex gap-2 py-0.5"><span class="mono text-slate-500 w-28 shrink-0">${dt(a.ts)}</span><span class="shrink-0">${act[a.action]||esc(a.action)}</span><span class="mono shrink-0">${esc(a.cidr)}</span><span class="text-slate-500 truncate" title="${esc(a.note||'')}">${esc(a.note||"")}</span></div>`).join("");
+    }
+    out.innerHTML=html;
+  }catch(e){out.innerHTML=`<span class="text-red-300 text-xs">ошибка: ${esc(e.message||String(e))}</span>`;}
+}
+// имя правила из reason вида "автобан · <rule> · ≥N/окно"
+function abRuleFromReason(reason){
+  const m=/^автобан\s*·\s*([^·]+?)\s*·/.exec(reason||"");
+  return m?m[1].trim():null;
+}
+// логи автобана — берём из audit blocklist-api (by="autoban")
+async function loadAbLog(){
+  const el=document.getElementById("ab-log"), sum=document.getElementById("ab-log-sum");
+  try{
+    const d=await fetch("/api/autoban/log?limit=300").then(r=>r.json());
+    _abLogRows=d.log||[]; _abLogPage=0;
+    _renderAbLogPage();
+  }catch(e){el.innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки логов: ${esc(e.message||String(e))}</div>`;sum.textContent="";}
+}
+function _renderAbLogPage(){
+  const el=document.getElementById("ab-log"), sum=document.getElementById("ab-log-sum");
+  if(!el)return;
+  const rows=_abLogRows;
+  sum.textContent=rows.length?`${rows.length} событий автобана (последние сверху)`:"событий автобана пока нет";
+  if(!rows.length){el.innerHTML='<div class="text-slate-600 text-xs">Автобан ещё никого не банил (или kill-switch был выключен).</div>';return;}
+  const pages=Math.ceil(rows.length/_AB_LOG_PER);
+  if(_abLogPage>=pages)_abLogPage=pages-1; if(_abLogPage<0)_abLogPage=0;
+  const page=rows.slice(_abLogPage*_AB_LOG_PER,_abLogPage*_AB_LOG_PER+_AB_LOG_PER);
+  const act={block:"⛔ бан",unblock:"↩ разбан",expire:"⌛ истёк"};
+  const body=page.map(e=>{const rule=abRuleFromReason(e.note);
+    const ip=(e.cidr||'').split('/')[0];
+    const pp=e.paths||[];
+    const pathStr=pp.length?pp.slice(0,2).map(x=>`<span class="mono text-amber-300">${esc(x.path)}</span> <span class="text-slate-600">(${fmt(x.count)})</span>`).join(", ")+(pp.length>2?` <span class="text-slate-600">+${pp.length-2}</span>`:""):'<span class="text-slate-600">пути не сохранены</span>';
+    const isBlock=e.action==="block", active=e.active;
+    const action=isBlock?(active?`<button onclick="abLogUnban('${esc(e.cidr)}',this)" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">↩ разбан</button>`:`<span class="text-[11px] text-slate-600">снят</span>`):"";
+    return `<div class="flex items-center gap-2 text-xs py-1.5 border-b border-slate-800/60${isBlock&&!active?' opacity-50':''}">
+      <span class="text-slate-500 mono whitespace-nowrap shrink-0">${dt(e.ts)}</span>
+      <span class="shrink-0">${act[e.action]||esc(e.action)}</span>
+      <span class="mono text-slate-200 cursor-pointer hover:text-indigo-300 shrink-0" onclick="openProfile('${esc(ip)}')">${esc(e.cidr)}</span>${cfBadge(ip)}
+      ${rule?`<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] border border-indigo-500/30 shrink-0">${esc(rule)}</span>`:""}
+      <span class="text-[11px] text-slate-500 flex-1 min-w-0 truncate" title="сошлось по путям">${pathStr}</span>
+      <span class="shrink-0">${action}</span>
+    </div>`;}).join("");
+  const pager=pages>1?`<div class="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+      <button onclick="_abLogPage--;_renderAbLogPage()" ${_abLogPage<=0?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_abLogPage<=0?"opacity-40":"hover:bg-slate-700"}">←</button>
+      <span>стр. ${_abLogPage+1}/${pages}</span>
+      <button onclick="_abLogPage++;_renderAbLogPage()" ${_abLogPage>=pages-1?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_abLogPage>=pages-1?"opacity-40":"hover:bg-slate-700"}">→</button>
+    </div>`:"";
+  el.innerHTML=body+pager;
+}
+async function abLogUnban(cidr,btn){
+  if(!confirm("Разбанить "+cidr+"?"))return;
+  if(btn){btn.disabled=true;btn.textContent="…";}
+  try{const r=await fetch("/api/unblock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cidr})}).then(x=>x.json());
+    if(r.ok){loadAbLog();if(typeof renderBlocklist==="function")renderBlocklist();}
+    else{alert("Не удалось: "+(r.error||"ошибка"));if(btn){btn.disabled=false;btn.textContent="↩ разбан";}}
+  }catch(e){alert("Ошибка: "+(e.message||e));if(btn){btn.disabled=false;btn.textContent="↩ разбан";}}
+}
+// готовые пути по группам — клик добавляет в условие текущего правила
+const AB_PRESETS=[
+  {g:"Секреты / dotfiles",p:["/.env","/.env.local","/.env.backup","/.env.prod","/.git/config","/.git/HEAD","/.aws/credentials","/.ssh/id_rsa","/.npmrc","/.htpasswd","/.DS_Store"]},
+  {g:"WordPress",p:["/wp-login.php","/wp-admin","/xmlrpc.php","/wp-config.php","/wp-config.php.bak","/wlwmanifest.xml","/wp-content/uploads","/wp-json/wp/v2/users"]},
+  {g:"Админки / БД",p:["/phpmyadmin","/pma","/myadmin","/adminer.php","/adminer","/dbadmin","/mysql","/phpMyAdmin","/sqlite","/pgadmin"]},
+  {g:"Конфиги / бэкапы",p:["/config.php","/configuration.php","/web.config","/application.yml","/docker-compose.yml","/config/parameters.yml","/backup.sql","/dump.sql","/database.sql","/.env.example",".bak",".sql",".zip",".tar.gz"]},
+  {g:"App-server / framework",p:["/actuator","/actuator/env","/actuator/health","/_profiler","/_ignition/execute-solution","/server-status","/server-info","/manager/html","/console/login","/solr/","/vendor/phpunit"]},
+  {g:"CVE / роутеры / RCE",p:["/boaform/admin/formLogin","/HNAP1","/GponForm/diag_Form","/wls-wsat/CoordinatorPortType","/cgi-bin/","/.well-known/openvpn","/latest/meta-data","/computeMetadata"]},
+];
+// добавить путь (из профиля / запросов) в одно из существующих правил автобана
+async function ensureAbRules(force){
+  if(_abRules&&!force)return _abRules;
+  try{const d=await fetch("/api/autoban/rules").then(r=>r.json());_abRules=d.rules||[];}catch(e){_abRules=[];}
+  return _abRules;
+}
+function _abCloseMenu(){const m=document.getElementById("ab-path-menu");if(m)m.remove();document.removeEventListener("click",_abMenuOutside,true);}
+function _abMenuOutside(e){const m=document.getElementById("ab-path-menu");if(m&&!m.contains(e.target))_abCloseMenu();}
+async function abPathMenu(path,btn){
+  _abCloseMenu();
+  const [abrules,p403d]=await Promise.all([
+    ensureAbRules().then(rs=>rs.filter(r=>r.match_type!=="family")).catch(()=>[]),
+    fetch("/api/path_rules").then(r=>r.json()).catch(()=>({rules:[]})),
+    loadMainRules()]);
+  const p403rules=p403d.rules||[];
+  const rc=btn.getBoundingClientRect();
+  const m=document.createElement("div");m.id="ab-path-menu";m.dataset.p=path;
+  m.className="fixed z-[60] card border-slate-700 p-1.5 text-xs shadow-xl max-h-[320px] overflow-auto";
+  m.style.background="#0f141c";m.style.top=(rc.bottom+4)+"px";
+  m.style.left=Math.max(8,Math.min(rc.left,window.innerWidth-252))+"px";m.style.width="244px";
+  let html=`<div class="text-[10px] text-slate-500 px-1.5 py-1 truncate" title="${esc(path)}">путь: <span class="mono text-amber-300">${esc(path)}</span></div>`;
+  const mainP=(p403rules.find(r=>String(r.id)===String(_mainRules.path_id))||{}).name;
+  const mainA=(abrules.find(r=>String(r.id)===String(_mainRules.autoban_id))||{}).name;
+  html+=`<button onclick="addToMainFromMenu(this)" class="block w-full text-left px-2 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-200 font-medium">➕ в основные (403 + автобан)</button>`;
+  html+=`<div class="text-[9px] text-slate-600 px-1.5 pb-1">${mainP?("403: "+esc(mainP)):'<span class="text-amber-400">403 не выбрано ★</span>'} · ${mainA?("автобан: "+esc(mainA)):'<span class="text-amber-400">автобан не выбрано ★</span>'}</div>`;
+  html+=`<div class="border-t border-slate-800 my-1"></div><div class="text-[10px] text-slate-600 px-1.5 py-0.5">🚫 добавить в правило 403:</div>`;
+  if(p403rules.length)html+=p403rules.map(r=>`<button onclick="p403AppendToRule('${esc(r.id)}',this)" class="block w-full text-left px-2 py-1 rounded hover:bg-rose-500/20 text-slate-200">${r.enabled!==false?'🟢':'⚪'} ${esc(r.name)}</button>`).join("");
+  html+=`<button onclick="p403AddPathFromMenu(this)" class="block w-full text-left px-2 py-1 rounded hover:bg-rose-500/20 text-rose-300">＋ новое 403-правило</button>`;
+  html+=`<div class="border-t border-slate-800 my-1"></div><div class="text-[10px] text-slate-600 px-1.5 py-0.5">⛔ в автобан (бан IP по порогу):</div>`;
+  if(abrules.length)html+=abrules.map(r=>`<button onclick="abAddPathToRule(${r.id},this)" class="block w-full text-left px-2 py-1 rounded hover:bg-indigo-500/20 text-slate-200">${r.enabled?'🟢':'⚪'} ${esc(r.name)} <span class="text-slate-600">≥${r.threshold}/${r.window}</span></button>`).join("");
+  else html+=`<div class="px-2 py-1.5 text-slate-500">нет автобан-правил с путями.<br><a onclick="_abCloseMenu();showView('autoban')" class="text-indigo-300 cursor-pointer">создать правило →</a></div>`;
+  m.innerHTML=html;document.body.appendChild(m);
+  setTimeout(()=>document.addEventListener("click",_abMenuOutside,true),0);
+}
+async function p403AppendToRule(ruleId,el){
+  const menu=document.getElementById("ab-path-menu");const path=menu?menu.dataset.p:"";
+  if(!path)return;
+  try{
+    const d=await fetch("/api/path_rules").then(r=>r.json());
+    const r=(d.rules||[]).find(x=>String(x.id)===String(ruleId));
+    if(!r){el.innerHTML="нет правила";return;}
+    const parts=_p403TopSplit(_p403Unwrap(r.pattern||""));
+    const e=_reEsc(path);
+    if(parts.includes(e)){el.innerHTML="✓ уже есть";el.disabled=true;setTimeout(_abCloseMenu,800);return;}
+    parts.push(e);
+    const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:"("+parts.join("|")+")",enabled:r.enabled!==false});
+    el.innerHTML=res.ok?"✓ добавлено":"✗ "+(res.error||"ошибка");el.disabled=true;if(res.ok)el.className+=" text-emerald-300";
+    if(res.ok&&_view==="p403")loadP403();
+    setTimeout(_abCloseMenu,900);
+  }catch(e){el.innerHTML="ошибка";}
+}
+function p403AddPathFromMenu(el){
+  const menu=document.getElementById("ab-path-menu");const path=menu?menu.dataset.p:"";
+  if(!path)return;
+  p403AddPath(path,el);
+  setTimeout(_abCloseMenu,800);
+}
+function addToMainFromMenu(el){
+  const menu=document.getElementById("ab-path-menu");const path=menu?menu.dataset.p:"";
+  if(!path)return;
+  addToMain(path,el);
+  setTimeout(_abCloseMenu,1400);
+}
+async function abAddPathToRule(id,el){
+  const menu=document.getElementById("ab-path-menu");const path=menu?menu.dataset.p:"";
+  if(!path)return;
+  try{const d=await fetch("/api/autoban/add_path",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,path})}).then(r=>r.json());
+    el.innerHTML=d.already?"✓ уже есть":(d.ok?"✓ добавлено":"ошибка: "+(d.error||"?"));
+    el.disabled=true;el.className+=" text-emerald-300";
+    _abRules=null; if(_view==="autoban")loadAutoban();
+    setTimeout(_abCloseMenu,800);
+  }catch(e){el.textContent="ошибка";}
+}
+// строка пути с кнопкой «+автобан» (профиль)
+function abPathRows(arr){
+  return (arr||[]).map(x=>{const k=String(x.key);
+    return `<div class="flex justify-between items-center text-xs gap-1">
+      <span class="mono text-slate-300 truncate" title="${esc(k)}">${esc(k.slice(0,40))}</span>
+      <span class="flex items-center gap-1 shrink-0"><span class="mono text-amber-300">${fmt(x.count)}</span>
+      <button data-p="${esc(k).replace(/"/g,'&quot;')}" onclick="abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">+ правило</button></span></div>`;
+  }).join("")||'<span class="text-slate-600 text-xs">—</span>';
+}
+function renderAbPresets(){
+  const el=document.getElementById("ab-presets");if(!el)return;
+  el.innerHTML=AB_PRESETS.map((grp,gi)=>`<div>
+    <div class="flex items-center gap-2 mb-1.5">
+      <span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(grp.g)}</span>
+      <button onclick="abAddPresetGroup(${gi})" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ все</button>
+    </div>
+    <div class="flex flex-wrap gap-1.5">${grp.p.map(p=>`<button onclick="abAddPresetPath('${esc(p).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-1 rounded bg-slate-800/70 text-slate-300 hover:bg-indigo-500/20 hover:text-indigo-200 mono border border-slate-700/50">${esc(p)}</button>`).join("")}</div>
+  </div>`).join("");
+}
+function _abEnsurePathMode(){
+  // пресеты — это явные пути; если выбрано «семейство», переключаем на «путь содержит»
+  const mt=document.getElementById("ab-mtype");
+  if(mt.value==="family"){mt.value="substring";abMtypeChange();}
+}
+function abAddPresetPath(p){
+  _abEnsurePathMode();
+  const cur=abPathValues();
+  if(cur.includes(p))return;   // уже добавлен
+  // если есть пустая строка — заполним её, иначе добавим новую
+  const empty=Array.from(document.querySelectorAll("#ab-paths .ab-path-inp")).find(i=>!i.value.trim());
+  if(empty)empty.value=p; else abAddPath(p);
+  abFixOr();
+}
+function abAddPresetGroup(gi){
+  _abEnsurePathMode();
+  (AB_PRESETS[gi]||{p:[]}).p.forEach(abAddPresetPath);
+}
+function abCardToggle(bodyId,chevId,force){
+  const b=document.getElementById(bodyId), c=document.getElementById(chevId);
+  if(!b)return;
+  const open=(force!==undefined)?force:b.classList.contains("hidden");
+  b.classList.toggle("hidden",!open);
+  if(c)c.textContent=open?"▾":"▸";
+}
+function abMode(m){
+  abCardToggle("ab-form-body","ab-form-chev",true);   // клик по табу раскрывает форму
+  const json=m==="json";
+  document.getElementById("ab-json-panel").classList.toggle("hidden",!json);
+  document.getElementById("ab-form-panel").classList.toggle("hidden",json);
+  const on="bg-indigo-500/25 text-indigo-200 border border-indigo-500/40", off="bg-slate-800 text-slate-400 hover:bg-slate-700";
+  document.getElementById("ab-tab-form").className="text-[11px] px-2 py-1 rounded "+(json?off:on);
+  document.getElementById("ab-tab-json").className="text-[11px] px-2 py-1 rounded "+(json?on:off);
+  if(json)abFormToJson();
+}
+// единый формат правила (то, что я буду тебе присылать)
+function abRuleToObj(){
+  const p=abFormPayload();
+  const o={name:p.name,match_type:p.match_type};
+  if(p.match_type==="family")o.family=p.path; else o.paths=p.path?p.path.split("\n"):[];
+  o.threshold=p.threshold;o.window=p.window;o.combine=!!p.combine;o.ttl=p.ttl;o.status=p.status;o.enabled=!!p.enabled;
+  return o;
+}
+function abFormToJson(){document.getElementById("ab-json").value=JSON.stringify(abRuleToObj(),null,2);}
+function abApplyObj(r){
+  // нормализуем: paths[] | path("a\nb") | family
+  _abEditId=null;
+  document.getElementById("ab-form-title").textContent="Создать новое правило";
+  document.getElementById("ab-cancel").classList.add("hidden");
+  document.getElementById("ab-name").value=r.name||"";
+  const mt=r.match_type||(r.family?"family":"substring");
+  document.getElementById("ab-mtype").value=mt;abMtypeChange();
+  if(mt==="family"){document.getElementById("ab-family").value=r.family||r.path||"";abRenderPaths([""]);}
+  else{let paths=Array.isArray(r.paths)?r.paths:(typeof r.path==="string"?r.path.split("\n"):[]);abRenderPaths(paths.filter(Boolean).length?paths.filter(Boolean):[""]);}
+  document.getElementById("ab-status").value=r.status||"";
+  document.getElementById("ab-threshold").value=r.threshold||1;
+  document.getElementById("ab-window").value=r.window||"10m";
+  document.getElementById("ab-ttl").value=String(r.ttl!=null?r.ttl:0);
+  document.getElementById("ab-combine").checked=(r.combine!==false&&r.combine!==0);
+}
+function _abParseJson(){
+  const raw=document.getElementById("ab-json").value.trim(), msg=document.getElementById("ab-json-msg");
+  if(!raw){msg.textContent="пусто";msg.className="text-[12px] text-amber-300";return null;}
+  try{return JSON.parse(raw);}catch(e){msg.textContent="не JSON: "+e.message;msg.className="text-[12px] text-red-300";return null;}
+}
+function abJsonToForm(){
+  const d=_abParseJson();if(d==null)return;
+  const r=Array.isArray(d)?d[0]:d;
+  if(Array.isArray(d)&&d.length>1)document.getElementById("ab-json-msg").textContent="массив: загрузил первое, для пачки жми «Сохранить из JSON»";
+  else document.getElementById("ab-json-msg").textContent="✓ загружено в форму";
+  document.getElementById("ab-json-msg").className="text-[12px] text-emerald-300";
+  abApplyObj(r);abMode("form");
+}
+async function abSaveFromJson(){
+  const d=_abParseJson();if(d==null)return;
+  const arr=Array.isArray(d)?d:[d], msg=document.getElementById("ab-json-msg");
+  // приводим к payload бэкенда: family→path, paths[]→"a\nb"
+  const toPayload=r=>({name:r.name,match_type:r.match_type||(r.family?"family":"substring"),
+    path:(r.match_type==="family"||r.family)?(r.family||r.path||""):(Array.isArray(r.paths)?r.paths.join("\n"):(r.path||"")),
+    status:r.status||"",threshold:r.threshold||1,window:r.window||"10m",ttl:r.ttl!=null?r.ttl:0,
+    combine:(r.combine!==false&&r.combine!==0)?1:0,enabled:r.enabled?1:0});
+  msg.textContent="сохраняю…";msg.className="text-[12px] text-slate-500";
+  let ok=0,fail=0;
+  for(const r of arr){
+    try{const res=await fetch("/api/autoban/rule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(toPayload(r))}).then(x=>x.json());res.ok?ok++:fail++;}
+    catch(e){fail++;}
+  }
+  msg.textContent=`✓ сохранено: ${ok}${fail?(", ошибок: "+fail):""}`;msg.className="text-[12px] "+(fail?"text-amber-300":"text-emerald-300");
+  loadAutoban();
+}
+let _abGroups=[], _abDefaultGroup="";
+function abFillSelects(){
+  document.getElementById("ab-window").innerHTML=_abWindows.map(w=>`<option value="${w}"${w==="10m"?" selected":""}>${w}</option>`).join("");
+  document.getElementById("ab-family").innerHTML=_abFamilies.map(f=>`<option value="${f.key}">${esc(f.label)}</option>`).join("");
+  abFillGroups();
+}
+function abFillGroups(){
+  const sel=document.getElementById("ab-group");if(!sel)return;
+  const cur=sel.value;
+  const dlabel=_abDefaultGroup?`по умолчанию (${_abDefaultGroup})`:"по умолчанию";
+  sel.innerHTML=`<option value="">${dlabel}</option>`+_abGroups.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
+  if(cur)sel.value=cur;
+}
+async function loadAutoban(){
+  try{
+    const d=await fetch("/api/autoban/rules").then(r=>r.json());
+    _abWindows=d.windows||_abWindows; _abFamilies=d.families||[]; _abArmed=!!d.armed;
+    _abInterval=d.interval||60; _abMaxTick=d.max_per_tick||20; _abLastRun=d.last_run||null;
+    _abIgnore=Array.isArray(d.ignore_paths)?d.ignore_paths:[]; renderAbIgnore();
+    _abGroups=Array.isArray(d.groups)?d.groups:[]; _abDefaultGroup=d.default_group||"";
+    if(!_abLoaded){abFillSelects();abRenderPaths([""]);abMtypeChange();renderAbPresets();_abLoaded=true;}
+    else abFillGroups();
+    renderArm(d.executor);
+    _abRules=d.rules||[];
+    await loadMainRules();
+    renderAbRules(d.rules||[]);
+    loadAbLog();
+    loadBanTargets();
+  }catch(e){document.getElementById("ab-rules").innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки: ${esc(e.message||String(e))}</div>`;}
+}
+
+let _banGroup="";
+function fillBanGroupSelect(groups,dflt){
+  const sel=document.getElementById("bt-group");if(!sel)return;
+  const names=Object.keys(groups||{});
+  const dl=dflt?`по умолчанию (${dflt})`:"по умолчанию";
+  sel.innerHTML=`<option value="">${dl}</option>`+names.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
+  sel.value=_banGroup;
+}
+async function loadBanTargets(){
+  const el=document.getElementById("ban-targets");if(!el)return;
+  try{
+    const d=await fetch("/api/ban_targets").then(r=>r.json());
+    if(d.enabled===false){el.innerHTML=`<span class="text-slate-500">blocklist-api не настроен — баны отключены.</span>`;return;}
+    const tg=d.targets||[], groups=d.groups||{}, errs=d.last_errors||{};
+    fillBanGroupSelect(groups,d.default_group||"");
+    if(!tg.length){el.innerHTML=`<span class="text-slate-500">таргеты не заданы (BAN_TARGETS).</span>`;return;}
+    const rows=tg.map(t=>{
+      const err=errs[t.id];
+      const dot=err?"#ef4444":"#10b981";
+      const inGroups=Object.keys(groups).filter(g=>(groups[g]||[]).includes(t.id));
+      return `<div class="flex items-center gap-2 py-1">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
+        <span class="text-slate-200 mono">${esc(t.id)}</span>
+        <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(t.type)}</span>
+        ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
+        <span class="text-[11px] text-slate-600">группы: ${inGroups.map(esc).join(", ")||"—"}</span>
+        ${err?`<span class="text-[11px] text-red-300">${esc(err)}</span>`:""}
+      </div>`;}).join("");
+    el.innerHTML=rows+`<div class="text-[11px] text-slate-600 mt-1">дефолтная группа: <span class="mono">${esc(d.default_group||"default")}</span></div>`;
+  }catch(e){el.innerHTML=`<span class="text-red-300">ошибка: ${esc(e.message||String(e))}</span>`;}
+}
+
+async function checkBanTargets(){
+  const el=document.getElementById("ban-targets"), btn=document.getElementById("bt-check-btn");
+  btn.disabled=true; const old=btn.textContent; btn.textContent="проверяю…";
+  try{
+    const d=await fetch("/api/ban_targets/check").then(r=>r.json());
+    const checks=d.checks||[];
+    el.innerHTML=checks.map(c=>{
+      const dot=c.ok?"#10b981":"#ef4444";
+      let detail="";
+      if(c.type==="cloudflare"){
+        detail=`token ${c.token_valid?"✓":"✗"} · list ${c.list_id?"✓":"✗"} · rule ${c.rule_id?"✓":"✗"}`+
+               (c.items!=null?` · ${c.items} IP`:"");
+      }
+      return `<div class="flex items-center gap-2 py-1">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
+        <span class="text-slate-200 mono">${esc(c.id)}</span>
+        <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(c.type||"")}</span>
+        <span class="text-[11px] text-slate-400">${esc(detail)}</span>
+        ${c.error?`<span class="text-[11px] text-red-300">${esc(c.error)}</span>`:`<span class="text-[11px] text-emerald-300">${c.ok?"OK":""}</span>`}
+      </div>`;}).join("")||`<span class="text-slate-500">нет таргетов.</span>`;
+  }catch(e){el.innerHTML=`<span class="text-red-300">ошибка проверки: ${esc(e.message||String(e))}</span>`;}
+  finally{btn.disabled=false; btn.textContent=old;}
+}
+function renderArm(executor){
+  const note=document.getElementById("ab-killswitch-note"), btn=document.getElementById("ab-arm-btn");
+  const card=document.getElementById("ab-killswitch");
+  let lr="";
+  if(_abLastRun&&_abLastRun.ts){
+    const r=_abLastRun;
+    lr=` · прогон ${ago(r.ts)} назад: включено правил ${r.checked_rules}, новых забанено ${r.banned}`+
+       (r.already?`, уже в бане ${r.already}`:"")+
+       (r.deferred?`, отложено по лимиту ${r.deferred}`:"");
+  }
+  if(executor===false){
+    note.innerHTML=`⚙️ Исполнитель не подключён — реального бана нет.`;
+  }else if(_abArmed){
+    note.innerHTML=`🟢 <b class="text-emerald-300">ВКЛЮЧЁН</b> — включённые правила банят на ingress каждые ${_abInterval}с (≤${_abMaxTick} новых/проход).<span class="text-slate-500">${lr}</span>`;
+    card.className="card border-emerald-500/40 bg-emerald-500/5 p-4 mb-4";
+  }else{
+    note.innerHTML=`⚪ Выключен — ни одно правило не банит (правила можно настраивать, превью работает).<span class="text-slate-500">${lr}</span>`;
+    card.className="card border-amber-500/30 bg-amber-500/5 p-4 mb-4";
+  }
+  btn.textContent=_abArmed?"🟢 Автобан включён":"⚪ Включить автобан";
+  btn.className="px-3 py-1.5 rounded-lg text-xs border "+(_abArmed?"border-emerald-600/50 text-emerald-300 hover:bg-emerald-900/20":"border-slate-700 text-slate-300 hover:bg-slate-800");
+}
+async function toggleArm(){
+  const turningOn=!_abArmed;
+  if(turningOn){
+    if(!confirm(`Включить автобан?\n\nВключённые правила начнут РЕАЛЬНО банить IP на ingress каждые ${_abInterval}с (до ${_abMaxTick} новых за проход).\nИсключаются: доверенные, приватные, Cloudflare, уже забаненные.\n\nВыключить можно этим же тумблером в любой момент.`))return;
+  }
+  try{const d=await fetch("/api/autoban/arm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({armed:turningOn})}).then(r=>r.json());
+    _abArmed=!!d.armed;renderArm(d.executor);if(_abArmed)setTimeout(loadAutoban,2000);}catch(e){alert("не удалось: "+(e.message||e));}
+}
+function abFormPayload(){
+  const mt=document.getElementById("ab-mtype").value;
+  return {id:_abEditId||undefined, name:document.getElementById("ab-name").value.trim(), match_type:mt,
+    path:mt==="family"?document.getElementById("ab-family").value:abPathValues().join("\n"),
+    status:document.getElementById("ab-status").value.trim(),
+    threshold:parseInt(document.getElementById("ab-threshold").value)||1,
+    window:document.getElementById("ab-window").value, ttl:parseInt(document.getElementById("ab-ttl").value)||0,
+    combine:document.getElementById("ab-combine").checked?1:0,
+    group:document.getElementById("ab-group").value||"",
+    enabled:_abEditId?undefined:0};
+}
+async function abSaveRule(){
+  const p=abFormPayload(), msg=document.getElementById("ab-form-msg");
+  if(!p.name){msg.textContent="нужно имя";return;}
+  if(p.match_type!=="family"&&!p.path){msg.textContent="укажи путь";return;}
+  msg.textContent="сохраняю…";
+  try{const d=await fetch("/api/autoban/rule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}).then(r=>r.json());
+    if(!d.ok){msg.textContent="ошибка: "+(d.error||"?");return;}
+    msg.textContent="✓ сохранено";abResetForm();loadAutoban();
+  }catch(e){msg.textContent="ошибка: "+(e.message||e);}
+}
+function abResetForm(){
+  _abEditId=null;
+  document.getElementById("ab-form-title").textContent="Создать новое правило";
+  document.getElementById("ab-name").value="";abRenderPaths([""]);
+  document.getElementById("ab-status").value="";document.getElementById("ab-threshold").value="5";
+  document.getElementById("ab-mtype").value="substring";document.getElementById("ab-window").value="10m";
+  document.getElementById("ab-ttl").value="2592000";document.getElementById("ab-combine").checked=true;abMtypeChange();
+  document.getElementById("ab-group").value="";
+  document.getElementById("ab-cancel").classList.add("hidden");
+  document.getElementById("ab-form-msg").textContent="";
+}
+function abEditRule(r){
+  _abEditId=r.id;
+  abCardToggle("ab-form-body","ab-form-chev",true);   // редактирование раскрывает форму
+  document.getElementById("ab-form-title").textContent="Редактировать правило #"+r.id;
+  document.getElementById("ab-name").value=r.name||"";
+  document.getElementById("ab-mtype").value=r.match_type||"substring";abMtypeChange();
+  if(r.match_type==="family"){document.getElementById("ab-family").value=r.path||"";abRenderPaths([""]);}
+  else abRenderPaths((r.path||"").split("\n").filter(Boolean));
+  document.getElementById("ab-status").value=r.status||"";
+  document.getElementById("ab-threshold").value=r.threshold||5;
+  document.getElementById("ab-window").value=r.window||"10m";
+  document.getElementById("ab-ttl").value=String(r.ttl||0);
+  document.getElementById("ab-combine").checked=(r.combine!==0);
+  abFillGroups();document.getElementById("ab-group").value=r.group||"";
+  document.getElementById("ab-cancel").classList.remove("hidden");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+async function abPreview(rule){
+  abCardToggle("ab-preview","ab-preview-chev",true);   // вызов превью раскрывает карточку
+  const out=document.getElementById("ab-preview");out.innerHTML='<div class="text-slate-500 text-xs">считаю (Loki)…</div>';
+  let qs;
+  if(rule&&rule.id){qs="id="+rule.id;}
+  else{const p=abFormPayload();
+    if(p.match_type!=="family"&&!p.path){out.innerHTML='<div class="text-amber-300 text-xs">укажи путь/паттерн</div>';return;}
+    qs=`match_type=${encodeURIComponent(p.match_type)}&path=${encodeURIComponent(p.path)}&status=${encodeURIComponent(p.status)}&threshold=${p.threshold}&window=${p.window}&combine=${p.combine}`;}
+  try{const d=await fetch("/api/autoban/preview?"+qs).then(r=>r.json());
+    if(d.error){out.innerHTML=`<div class="text-red-300 text-xs">${esc(d.error)}</div>`;return;}
+    const m=d.matches||[], ab=d.already_banned||0;
+    const abNote=ab?` <span class="text-slate-500">· ${ab} уже в денлисте (пропущено)</span>`:"";
+    if(!m.length){out.innerHTML=`<div class="text-emerald-300/80 text-xs">0 новых IP под условие (≥${d.threshold} за ${d.window}).${abNote} Никого нового бы не забанило.</div>`;return;}
+    out.innerHTML=`<div class="text-[12px] text-slate-400 mb-2">Забанило бы <b class="text-red-300">${m.length}</b> новых IP (≥${d.threshold} за ${d.window})${abNote}:</div>`+
+      m.map(x=>`<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-800/60">
+        <span class="mono text-slate-200 cursor-pointer hover:text-indigo-300 min-w-0 truncate" onclick="openProfile('${esc(x.ip)}')">${flag(x.country)} ${esc(x.ip)} ↗</span>
+        <span class="flex items-center gap-1.5 shrink-0">${cfBadge(x.ip)}<span class="mono text-red-300">${fmt(x.count)}</span></span></div>
+        ${x.paths&&x.paths.length?`<div class="text-[11px] text-slate-600 mono truncate mb-1">${x.paths.map(esc).join(" · ")}</div>`:""}`).join("");
+  }catch(e){out.innerHTML=`<div class="text-red-300 text-xs">ошибка: ${esc(e.message||String(e))}</div>`;}
+}
+function renderAbRules(rules){
+  const el=document.getElementById("ab-rules");
+  if(!rules.length){el.innerHTML='<div class="text-slate-500 text-xs">Правил пока нет. Создай первое слева.</div>';return;}
+  const cond=r=>r.match_type==="family"?("семейство: "+((_abFamilies.find(f=>f.key===r.path)||{}).label||r.path))
+    :(r.match_type==="regex"?"regex ":"путь ⊃ ")+(r.path||"").split("\n").filter(Boolean).join(" ИЛИ ");
+  const ttlL=t=>!t?"навсегда":(t>=86400?(t/86400)+"д":(t>=3600?(t/3600)+"ч":t+"с"));
+  el.innerHTML=rules.map(r=>`<div class="flex items-center gap-3 py-2 border-b border-slate-800/60 flex-wrap">
+    <button onclick="abToggle(${r.id},${r.enabled?0:1})" title="${r.enabled?"выключить":"включить"}" class="shrink-0 w-11 h-6 rounded-full relative transition ${r.enabled?"bg-emerald-600/70":"bg-slate-700"}">
+      <span class="absolute top-0.5 ${r.enabled?"left-6":"left-0.5"} w-5 h-5 rounded-full bg-white transition-all"></span></button>
+    ${r.match_type!=="family"?`<button onclick="setMainRule('autoban',${r.id})" title="${String(_mainRules.autoban_id)===String(r.id)?'основное автобан-правило':'сделать основным'}" class="text-base shrink-0 ${String(_mainRules.autoban_id)===String(r.id)?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>`:''}
+    <div class="flex-1 min-w-[200px]">
+      <div class="text-sm text-slate-200 font-medium">${esc(r.name)} ${String(_mainRules.autoban_id)===String(r.id)?'<span class="text-[10px] text-amber-400">основное</span>':''} ${r.enabled?'<span class="text-[10px] text-emerald-400">активно</span>':'<span class="text-[10px] text-slate-600">выкл</span>'}</div>
+      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${r.match_type!=="family"&&r.combine===0?" (по 1 пути)":(r.match_type!=="family"?" (∑ путей)":"")}${r.status?" · код "+esc(r.status):""} · бан ${ttlL(r.ttl)} · 🎯 ${esc(r.group||"группа по умолч.")}</div>
+    </div>
+    <button onclick='abPreview(${JSON.stringify({id:r.id})})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">🔍 превью</button>
+    <button onclick='abEditRule(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">ред.</button>
+    <button onclick="abDelete(${r.id})" class="text-[11px] px-2 py-1 rounded bg-red-600/40 text-red-200 hover:bg-red-600/60">удалить</button>
+  </div>`).join("");
+}
+async function abToggle(id,enabled){
+  try{await fetch("/api/autoban/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,enabled})});loadAutoban();}
+  catch(e){alert("не удалось: "+(e.message||e));}
+}
+async function abDelete(id){
+  if(!confirm("Удалить правило #"+id+"?"))return;
+  try{await fetch("/api/autoban/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});if(_abEditId===id)abResetForm();loadAutoban();}
+  catch(e){alert("не удалось: "+(e.message||e));}
+}
+// Only treat the hash as a view name for known views — the dashboard uses the hash
+// for its own win/host params (parseHash below), which showView('dash') would wipe.
+{const _h=location.hash.slice(1); if(["autoban","p403","nodes","settings"].includes(_h))showView(_h);}
+
+// активна ли вкладка: не на паузе И страница на экране (скрытая вкладка не грузит Loki)
+const isActive=()=>!paused&&document.visibilityState==="visible";
+const onDash=()=>_view==="dash";
+// вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
+document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
+
+parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
+setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
+setInterval(()=>{if(isActive())renderBlocklist();},60000);
+setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
+</script>
+</body>
+</html>

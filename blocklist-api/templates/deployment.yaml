@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blocklist-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "blocklist-api.labels" . | indent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blocklist-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+{{ include "blocklist-api.labels" . | indent 8 }}
+      annotations:
+        # re-roll the pod whenever the code ConfigMap changes
+        checksum/code: {{ .Files.Glob "app/*.py" | toString | sha256sum }}
+    spec:
+      serviceAccountName: blocklist-api
+      initContainers:
+        - name: deps
+          image: {{ .Values.image }}
+          command: ["sh", "-c", "pip install --no-cache-dir --target=/deps {{ .Values.pipPackages }}"]
+          volumeMounts:
+            - { name: deps, mountPath: /deps }
+      containers:
+        - name: api
+          image: {{ .Values.image }}
+          workingDir: /srv
+          command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+          env:
+            - name: PYTHONPATH
+              value: /deps:/srv
+            - name: BLOCKLIST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "blocklist-api.secretName" . }}
+                  key: BLOCKLIST_TOKEN
+            - { name: CONTROLLER_NS, value: "{{ .Values.controllerNamespace }}" }
+            - { name: CONTROLLER_CM, value: "{{ .Values.controllerConfigMap }}" }
+            - { name: DENYLIST_NS, value: "{{ .Release.Namespace }}" }
+            - { name: DENYLIST_CM, value: "{{ .Values.denylistConfigMap }}" }
+            - { name: ALLOWLIST, value: "{{ .Values.allowlist }}" }
+            - { name: MIN_PREFIX_V4, value: "{{ .Values.minPrefixV4 }}" }
+            - { name: MIN_PREFIX_V6, value: "{{ .Values.minPrefixV6 }}" }
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 15
+          resources: {{ .Values.resources | toYaml | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: code, mountPath: /srv/app, readOnly: true }
+            - { name: deps, mountPath: /deps, readOnly: true }
+      volumes:
+        - name: code
+          configMap:
+            name: blocklist-api-code
+        - name: deps
+          emptyDir: {}

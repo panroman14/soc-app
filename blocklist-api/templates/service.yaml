@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: blocklist-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "blocklist-api.labels" . | indent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: blocklist-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: 80
+      targetPort: 8080

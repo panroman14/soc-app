@@ -1,0 +1,25 @@
+# Production overrides for prod cluster (prod context).
+# Use together with the (gitignored) token file:
+#   helm upgrade --install blocklist-api . --kube-context prod \
+#     -n soc --create-namespace -f values-prod.yaml -f values-secret.yaml
+#
+# Prod facts (verified): ns ingress-nginx, CM ingress-nginx-controller,
+# ingressClassName nginx. The controller already uses http-snippet/server-snippet
+# ($should_block_build) — the api MERGES (marker-spliced), so that stays intact.
+
+controllerNamespace: ingress-nginx
+controllerConfigMap: ingress-nginx-controller
+
+ingress:
+  enabled: true
+  className: nginx
+  host: block-api.example.com
+  whitelistSourceRange: "198.51.100.20/32,192.0.2.10/32"
+  tls:
+    # No per-host cert / cert-manager: rely on the controller's wildcard
+    # default-ssl-certificate (wildcard-tls, *.example.com). HTTPS still
+    # terminates; http→https redirect stays on via force-ssl-redirect.
+    enabled: false
+
+# Never-blockable: office + monitoring VMs.
+allowlist: "192.0.2.10,198.51.100.10,198.51.100.20,192.0.2.20,192.0.2.12/32"

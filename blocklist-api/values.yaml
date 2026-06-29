@@ -1,0 +1,36 @@
+# No build: stock python image runs the code shipped in a ConfigMap; an
+# initContainer pip-installs deps into a shared volume at startup.
+image: python:3.11-slim
+pipPackages: "fastapi==0.111.0 uvicorn[standard]==0.30.1 kubernetes==29.0.0"
+
+# Bearer token the dashboard must send. Set via:  --set token=$(openssl rand -hex 32)
+# Leave empty + set existingSecret to reuse a pre-made Secret instead.
+token: ""
+existingSecret: ""   # name of a Secret with key BLOCKLIST_TOKEN (overrides token)
+
+# ingress-nginx controller ConfigMap to patch (where geo/server-snippet land)
+controllerNamespace: ingress-nginx
+controllerConfigMap: ingress-nginx-controller
+
+# data store ConfigMap (created in the release namespace)
+denylistConfigMap: soc-denylist
+
+# never-blockable IPs (office + monitoring VMs); CIDRs covering them are refused too
+allowlist: "192.0.2.10,198.51.100.10,198.51.100.20,192.0.2.20"
+
+minPrefixV4: 16
+minPrefixV6: 32
+
+ingress:
+  enabled: true
+  className: nginx
+  host: block-api.example.com
+  whitelistSourceRange: "198.51.100.20/32, 192.0.2.10/32"
+  tls:
+    enabled: true
+    secretName: block-api-tls
+    clusterIssuer: letsencrypt-prod
+
+resources:
+  requests: { cpu: 20m, memory: 64Mi }
+  limits: { cpu: 200m, memory: 192Mi }

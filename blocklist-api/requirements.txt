@@ -1,0 +1,6 @@
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+# Only needed for STORE=configmap or ENFORCE=ingress-cm (Kubernetes). The code
+# imports it lazily, so a plain-VM install (STORE=file/sqlite) runs without it —
+# you may drop this line from a non-k8s image.
+kubernetes==29.0.0

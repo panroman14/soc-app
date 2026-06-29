@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile (syntax) all Python
+        run: |
+          python -m py_compile backend/app/*.py blocklist-api/app/*.py deploy/agent/soc-nginx-agent.py
+
+      - name: Lint shell scripts
+        run: |
+          sh -n deploy/agent/install.sh
+          bash -n deploy/inventory-deploy.sh
+          bash -n tests/smoke.sh
+
+      - name: Validate YAML (compose + promtail + CI)
+        run: |
+          python -m pip install --quiet pyyaml
+          python - <<'PY'
+          import yaml
+          for f in ["deploy/compose/docker-compose.yml",
+                    "deploy/promtail/promtail.yml",
+                    "deploy/promtail/promtail-combined.yml",
+                    ".github/workflows/ci.yml"]:
+              yaml.safe_load(open(f))
+          print("yaml ok")
+          PY
+
+      - name: End-to-end smoke test (blocklist-api)
+        run: ./tests/smoke.sh
+
+      - name: Dependency audit (non-blocking)
+        run: |
+          python -m pip install --quiet pip-audit
+          pip-audit -r backend/requirements.txt || true
+          pip-audit -r blocklist-api/requirements.txt || true

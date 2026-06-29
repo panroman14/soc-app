@@ -1,0 +1,6 @@
+apiVersion: v2
+name: blocklist-api
+description: Semi-automatic IP/subnet blocking for ingress-nginx, driven by the soc dashboard (no image build — code shipped via ConfigMap).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

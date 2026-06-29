@@ -1,0 +1,15 @@
+[Unit]
+Description=soc Loki (central log store)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/soc/loki.env
+ExecStart=/usr/local/bin/loki -config.file=/etc/soc/loki-config.yml -config.expand-env=true
+Restart=always
+RestartSec=5
+StateDirectory=loki
+# loki-config.yml defaults LOKI_DATA_DIR to /var/lib/loki (== StateDirectory).
+
+[Install]
+WantedBy=multi-user.target

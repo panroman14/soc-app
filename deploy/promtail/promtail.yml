@@ -1,0 +1,53 @@
+# soc — Promtail config (VM, no Kubernetes). Ships nginx logs to a central Loki.
+#
+# All deployment-specific values come from the environment so the SAME file works
+# on every nginx VM. Promtail must be started with `-config.expand-env=true` (the
+# bundled systemd unit and compose profile already do this).
+#
+# Required env:  LOKI_PUSH_URL  (e.g. http://central-vm:3100/loki/api/v1/push)
+# Useful env:    VM_LABEL, NGINX_LOG_APP, NGINX_ACCESS_LOG, NGINX_ERROR_LOG,
+#                PROMTAIL_PORT, POSITIONS_FILE, LOKI_TENANT_ID,
+#                LOKI_BASIC_AUTH_USER, LOKI_BASIC_AUTH_PASS
+
+server:
+  http_listen_port: ${PROMTAIL_PORT:-9080}
+  grpc_listen_port: 0
+
+positions:
+  filename: ${POSITIONS_FILE:-/var/lib/promtail/positions.yaml}
+
+clients:
+  - url: ${LOKI_PUSH_URL}
+    tenant_id: ${LOKI_TENANT_ID:-}
+    # Basic auth is optional — leave the *_USER/_PASS env empty to disable.
+    basic_auth:
+      username: ${LOKI_BASIC_AUTH_USER:-}
+      password: ${LOKI_BASIC_AUTH_PASS:-}
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  # nginx access log (JSON, soc_json format). The `app` label MUST match the soc
+  # backend's INGRESS_SELECTOR (default {app="ingress-nginx"}). `vm` separates
+  # sources when many nginx hosts push to one Loki.
+  - job_name: nginx-access
+    static_configs:
+      - targets: [localhost]
+        labels:
+          app: ${NGINX_LOG_APP:-ingress-nginx}
+          vm: ${VM_LABEL:-nginx}
+          stream: access
+          __path__: ${NGINX_ACCESS_LOG:-/var/log/nginx/access.json.log}
+
+  # nginx error log — carries ModSecurity/CRS "client: <ip>" denials the soc app
+  # also mines. Plain text; left unparsed (loki.py greps the raw line).
+  - job_name: nginx-error
+    static_configs:
+      - targets: [localhost]
+        labels:
+          app: ${NGINX_LOG_APP:-ingress-nginx}
+          vm: ${VM_LABEL:-nginx}
+          stream: error
+          __path__: ${NGINX_ERROR_LOG:-/var/log/nginx/error.log}

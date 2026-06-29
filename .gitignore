@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+frontend/dist/
+*.pyc
+.DS_Store
+**/.DS_Store
+
+# secrets / local config — never commit real env files (the *.example are the templates)
+.env
+**/.env
+*.env
+!*.env.example
+deploy/hosts.txt
+
+# agent / runtime state
+state.json
+positions.yaml
+/data/

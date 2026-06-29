@@ -1,0 +1,16 @@
+[Unit]
+Description=soc backend (Loki aggregator + API + Prometheus metrics)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/soc/backend
+# All config (LOKI_URL, LLM_URL, BLOCKLIST_API_URL, auth, …) lives in this env
+# file — same vars as deploy/.env. Optional: unit still starts without it.
+EnvironmentFile=-/etc/soc/soc.env
+ExecStart=/opt/soc/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8077
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

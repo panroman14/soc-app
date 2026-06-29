@@ -1,0 +1,72 @@
+# soc — Promtail config for the DEFAULT nginx `combined` access log.
+#
+# Use this when you CAN'T (or don't want to) switch nginx to the soc_json format.
+# It parses the stock `combined` line at the edge and re-emits it as the SAME JSON
+# shape soc_json produces, so the soc backend (loki.py `| json`) works unchanged —
+# you don't touch nginx at all.
+#
+# Pick which config promtail loads:
+#   systemd : set PROMTAIL_CONFIG=/etc/soc/promtail-combined.yml in /etc/soc/promtail.env
+#   compose : set PROMTAIL_CONFIG=promtail-combined.yml in .env
+# Default everywhere is promtail.yml (soc_json passthrough — the recommended path,
+# since combined logs lack host / X-Forwarded-For / CF-Connecting-IP / timings).
+#
+# combined: $remote_addr - $remote_user [$time_local] "$request" $status
+#           $body_bytes_sent "$http_referer" "$http_user_agent"
+
+server:
+  http_listen_port: ${PROMTAIL_PORT:-9080}
+  grpc_listen_port: 0
+
+positions:
+  filename: ${POSITIONS_FILE:-/var/lib/promtail/positions.yaml}
+
+clients:
+  - url: ${LOKI_PUSH_URL}
+    tenant_id: ${LOKI_TENANT_ID:-}
+    basic_auth:
+      username: ${LOKI_BASIC_AUTH_USER:-}
+      password: ${LOKI_BASIC_AUTH_PASS:-}
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  - job_name: nginx-access
+    static_configs:
+      - targets: [localhost]
+        labels:
+          app: ${NGINX_LOG_APP:-ingress-nginx}
+          vm: ${VM_LABEL:-nginx}
+          stream: access
+          __path__: ${NGINX_ACCESS_LOG:-/var/log/nginx/access.log}
+    pipeline_stages:
+      # 1) extract the combined fields
+      - regex:
+          expression: '^(?P<remote_addr>\S+) \S+ \S+ \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<uri>\S+)[^"]*" (?P<status>\d{3}) (?P<body_bytes_sent>\S+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"'
+      # 2) sanitize free-text fields (combined doesn't escape " or \) so the
+      #    re-emitted JSON can't break — map both to a single quote.
+      - replace:
+          source: referer
+          expression: '["\\]'
+          replace: "'"
+      - replace:
+          source: user_agent
+          expression: '["\\]'
+          replace: "'"
+      # 3) re-emit as soc_json (fields combined can't supply are left empty)
+      - template:
+          source: soc_line
+          template: '{"time":"{{ .time_local }}","remote_addr":"{{ .remote_addr }}","real_ip_cloudflare":"","http_x_forwarded_for":"","http_host":"","request_method":"{{ .method }}","request_uri":"{{ .uri }}","status":"{{ .status }}","body_bytes_sent":"{{ .body_bytes_sent }}","bytes_sent":"{{ .body_bytes_sent }}","request_time":"","upstream_response_time":"","upstream_cache_status":"","http_referer":"{{ .referer }}","http_user_agent":"{{ .user_agent }}"}'
+      - output:
+          source: soc_line
+
+  - job_name: nginx-error
+    static_configs:
+      - targets: [localhost]
+        labels:
+          app: ${NGINX_LOG_APP:-ingress-nginx}
+          vm: ${VM_LABEL:-nginx}
+          stream: error
+          __path__: ${NGINX_ERROR_LOG:-/var/log/nginx/error.log}
