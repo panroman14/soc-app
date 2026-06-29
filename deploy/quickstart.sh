@@ -38,6 +38,28 @@ ensure_secret() {
   local cur; cur="$(get_env "$1")"
   case "$cur" in ""|changeme*|CHANGE*|*_HERE) set_env "$1" "$(gen)";; esac
 }
+# Firewall: opt-in (MANAGE_UFW=1). Restrict Loki:3100 + blocklist:8080 to the nginx
+# VMs (ALLOW_FROM=<ip/cidr>), dashboard:8077 to you (ADMIN_CIDR=<ip/cidr>). SSH(22) is
+# always allowed first so enabling ufw can't lock you out.
+setup_ufw() {
+  [ "${MANAGE_UFW:-}" = "1" ] || return 0
+  have ufw || { echo "[ufw] ufw not installed — skip"; return 0; }
+  echo "[ufw] configuring (opt-in via MANAGE_UFW=1)…"
+  ufw allow 22/tcp >/dev/null 2>&1 || true
+  local DP="${SOC_PORT:-8077}" BP="${BLOCKLIST_PORT:-8080}" LP="${LOKI_PORT:-3100}"
+  if [ -n "${ADMIN_CIDR:-}" ]; then ufw allow from "$ADMIN_CIDR" to any port "$DP" proto tcp >/dev/null 2>&1 || true
+  else ufw allow "$DP"/tcp >/dev/null 2>&1 || true; fi
+  if [ -n "${ALLOW_FROM:-}" ]; then
+    ufw allow from "$ALLOW_FROM" to any port "$BP" proto tcp >/dev/null 2>&1 || true
+    ufw allow from "$ALLOW_FROM" to any port "$LP" proto tcp >/dev/null 2>&1 || true
+    echo "[ufw] Loki:$LP + blocklist:$BP restricted to $ALLOW_FROM"
+  else
+    ufw allow "$BP"/tcp >/dev/null 2>&1 || true; ufw allow "$LP"/tcp >/dev/null 2>&1 || true
+    echo "[ufw] WARNING: $LP/$BP open to ALL — set ALLOW_FROM=<nginx ip/cidr> to lock down"
+  fi
+  ufw --force enable >/dev/null 2>&1 || true
+  echo "[ufw] enabled."
+}
 compose_up() {
   [ "${SKIP_UP:-}" = "1" ] && { echo "[quickstart] SKIP_UP=1 — wrote config only"; return; }
   if ! have docker; then
@@ -50,9 +72,11 @@ compose_up() {
     fi
   fi
   docker compose version >/dev/null 2>&1 || die "the 'docker compose' plugin is missing — install Docker Compose v2"
+  # REBUILD=1 (redeploy of code changes) → rebuild images before starting.
+  local build=""; [ "${REBUILD:-}" = "1" ] && build="--build"
   # --env-file: compose interpolates ${VARS} (e.g. PROMTAIL_CONFIG) from the file next
   # to docker-compose.yml by default, NOT from our deploy/.env — point it here explicitly.
-  ( cd "$HERE/compose" && docker compose --env-file "$ENVF" "$@" up -d )
+  ( cd "$HERE/compose" && docker compose --env-file "$ENVF" "$@" up -d $build )
 }
 
 case "$ROLE" in
@@ -72,6 +96,7 @@ case "$ROLE" in
     set_env PUBLIC_URL "http://$IP:8080"
     set_env BASIC_AUTH_USER admin
     compose_up --profile loki --profile soc --profile blocklist
+    setup_ufw
     cat <<EOF
 
 ────────────────────────────────────────────────────────────────────
