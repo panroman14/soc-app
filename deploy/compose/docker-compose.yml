@@ -16,6 +16,9 @@ services:
     image: grafana/loki:3.1.1
     command: ["-config.file=/etc/loki/loki-config.yml", "-config.expand-env=true"]
     restart: unless-stopped
+    # Loki's image runs as uid 10001; a fresh named volume is root-owned, so it can't
+    # create /var/lib/loki/{rules,chunks,…}. Run as root to own the volume (single-VM).
+    user: root
     env_file: ../.env
     ports:
       - "${LOKI_PORT:-3100}:3100"

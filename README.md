@@ -200,4 +200,4 @@ straight from `backend/app/config.py` and `blocklist-api/app/config.py`.
 
 ## License
 
-[MIT](LICENSE) — change the copyright holder to your name/org before publishing.
+[MIT](LICENSE) © 2026 panroman14.
