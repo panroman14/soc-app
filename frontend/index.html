@@ -52,6 +52,12 @@
     <button id="navtab-nodes" onclick="showView('nodes')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🖥️ Ноды</button>
     <button id="navtab-journal" onclick="showView('journal')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">📋 Журнал</button>
     <button id="navtab-settings" onclick="showView('settings')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⚙️ Настройки</button>
+    <div class="ml-auto flex items-center gap-1.5 pb-1">
+      <span class="text-[11px] text-slate-500">env:</span>
+      <select id="env-sw" onchange="setEnv(this.value)" class="text-xs bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" title="Окружение — фильтрует трафик/аналитику/ноды">
+        <option value="">все</option>
+      </select>
+    </div>
   </nav>
 
   <div id="view-dash">
@@ -534,6 +540,25 @@ const pct=n=>n==null?"—":(n*100).toFixed(1)+"%";
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000-ts);return s<60?s+"с":Math.floor(s/60)+"м";};
 const dt=ts=>{if(!ts)return"—";const d=new Date(ts*1000);const p=n=>String(n).padStart(2,"0");return `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;};
 const esc=s=>String(s==null?"":s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+// ── окружение (env) фильтр для анализа логов ──
+let _env=localStorage.getItem("soc_env")||"";
+function _withEnv(url){ return _env?url+(url.includes("?")?"&":"?")+"env="+encodeURIComponent(_env):url; }
+async function loadEnvSwitcher(){
+  try{
+    const d=await (await fetch("/api/environments")).json();
+    const sel=document.getElementById("env-sw"); if(!sel)return;
+    const envs=(d.environments||[]);
+    sel.innerHTML='<option value="">все</option>'+envs.map(e=>`<option value="${esc(e.id)}" ${e.id===_env?'selected':''}>${esc(e.name||e.id)}</option>`).join("");
+    if(_env&&!envs.some(e=>e.id===_env)){ _env=""; localStorage.removeItem("soc_env"); sel.value=""; }
+  }catch(e){}
+}
+function setEnv(v){
+  _env=v||""; if(_env)localStorage.setItem("soc_env",_env); else localStorage.removeItem("soc_env");
+  if(typeof refresh==="function")refresh();
+  if(typeof renderBanCandidates==="function")renderBanCandidates();
+  if(typeof renderSuspects==="function")renderSuspects();
+  if(_view==="nodes"&&typeof loadNodes==="function")loadNodes();
+}
 const CNAMES={US:"США",UA:"Украина",RU:"Россия",GB:"Великобритания",DE:"Германия",FR:"Франция",NL:"Нидерланды",IE:"Ирландия",PL:"Польша",CA:"Канада",IN:"Индия",CN:"Китай",SG:"Сингапур",IT:"Италия",ES:"Испания",SE:"Швеция",FI:"Финляндия",CZ:"Чехия",RO:"Румыния",LV:"Латвия",LT:"Литва",EE:"Эстония",BY:"Беларусь",KZ:"Казахстан",TR:"Турция",BR:"Бразилия",JP:"Япония",KR:"Корея",AU:"Австралия",CH:"Швейцария",AT:"Австрия",BE:"Бельгия",DK:"Дания",NO:"Норвегия",PT:"Португалия",MD:"Молдова",GE:"Грузия",AM:"Армения",AZ:"Азербайджан",IL:"Израиль",AE:"ОАЭ",HK:"Гонконг",VN:"Вьетнам",ID:"Индонезия",MX:"Мексика",ZA:"ЮАР",BG:"Болгария",HU:"Венгрия",GR:"Греция"};
 function flag(cc){if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc))return"🏳️";return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));}
 function countryLabel(cc){if(!cc)return"— не определено";return flag(cc)+" "+(CNAMES[cc.toUpperCase()]||cc.toUpperCase());}
@@ -846,7 +871,7 @@ async function renderBanCandidates(_try){
   try{
     const bw=(document.getElementById("bc_win")||{}).value||"1h";
     await loadReviewed();
-    const d=await fetch("/api/ban_candidates?window="+encodeURIComponent(bw)).then(r=>r.json());
+    const d=await fetch(_withEnv("/api/ban_candidates?window="+encodeURIComponent(bw))).then(r=>r.json());
     if(d.error){el.innerHTML=`<div class="text-red-300 text-xs">ошибка: ${esc(d.error)}</div>`;return;}
     // расчёт ещё идёт (лок занят, кэша нет) → подождём и перезапросим, не мигая пустотой
     if(d.stale&&!(d.candidates||[]).length&&_try<4){
@@ -894,7 +919,7 @@ async function renderSuspects(_try){
   try{
     const bw=(document.getElementById("sc_win")||{}).value||"1h";
     await loadReviewed();
-    const d=await fetch("/api/suspect_ips?window="+encodeURIComponent(bw)).then(r=>r.json());
+    const d=await fetch(_withEnv("/api/suspect_ips?window="+encodeURIComponent(bw))).then(r=>r.json());
     if(d.error){el.innerHTML=`<div class="text-red-300 text-xs">ошибка: ${esc(d.error)}</div>`;return;}
     if(d.stale&&!(d.candidates||[]).length&&_try<4){
       if(!el.innerHTML.trim()||_try===0)el.innerHTML='<div class="text-slate-600 text-xs">считаю…</div>';
@@ -1049,7 +1074,7 @@ async function runOpenRequests(){
   const minutes=g("or_win")||720;
   const out=document.getElementById("or_out");out.innerHTML=`<div class="text-slate-500 text-sm">поиск…</div>`;
   const qs=new URLSearchParams({...f,limit:1000,minutes}).toString();
-  try{const d=await fetch("/api/requests?"+qs).then(r=>r.json());
+  try{const d=await fetch(_withEnv("/api/requests?"+qs)).then(r=>r.json());
     if(d.error){out.innerHTML=`<div class="text-red-300 text-sm">Ошибка: ${esc(d.error)}</div>`;return;}
     window._orAll=d.requests||[];
     orRebuildCodes();
@@ -1115,7 +1140,7 @@ async function runExplorer(){
   const out=document.getElementById("ex_out");out.innerHTML=`<div class="text-slate-500 text-sm">поиск…</div>`;
   const mins=parseInt((document.getElementById("ex_minutes")||{}).value)||60;
   const qs=new URLSearchParams({...f,limit:80,minutes:mins}).toString();
-  try{const d=await fetch("/api/requests?"+qs).then(r=>r.json());
+  try{const d=await fetch(_withEnv("/api/requests?"+qs)).then(r=>r.json());
     lastExplorer=d.requests||[];
     out.innerHTML=d.error?`<div class="text-red-300 text-sm">${esc(d.error)}</div>`:reqTable(d.requests);
   }catch(e){out.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
@@ -1241,7 +1266,7 @@ function renderStatus(st){
 async function refresh(){
   try{
     const [sum,st]=await Promise.all([
-      fetch("/api/summary").then(r=>r.json()),fetch("/api/status").then(r=>r.json())]);
+      fetch(_withEnv("/api/summary")).then(r=>r.json()),fetch("/api/status").then(r=>r.json())]);
     // история (графики) + инсайты — раз в 60с или при смене окна (данные меняются раз в 30с)
     let histFresh=false;
     if(WIN!==lastHistKey || Date.now()-lastHistAt>60000){
@@ -1255,7 +1280,7 @@ async function refresh(){
     const anKey=WIN+"|"+HOST;
     if(anKey!==lastAnKey || Date.now()-lastAnAt>45000){
       const aq=(WIN!=="5m"||HOST)?`?window=${WIN}&host=${encodeURIComponent(HOST)}`:"";
-      try{lastAn=await fetch("/api/analytics"+aq).then(r=>r.json());lastAnKey=anKey;lastAnAt=Date.now();}catch(e){}
+      try{lastAn=await fetch(_withEnv("/api/analytics"+aq)).then(r=>r.json());lastAnKey=anKey;lastAnAt=Date.now();}catch(e){}
     }
     const an=lastAn;
     renderStatus(st);
@@ -1657,8 +1682,8 @@ async function loadNodes(){
 function renderNodes(d){
   const el=document.getElementById("nodes-list");
   if(d.enabled===false){ el.innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен (BLOCKLIST_API_URL пуст) — ноды недоступны.</div>`; return; }
-  const nodes=d.nodes||[];
-  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">пока нет подключённых нод. Нажми «+ Добавить ноду».</div>`; return; }
+  const nodes=(d.nodes||[]).filter(n=>!_env||(n.group||"")===_env);
+  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">${_env?"нет нод в этом env.":"пока нет подключённых нод. Нажми «+ Добавить ноду»."}</div>`; return; }
   el.innerHTML=nodes.map(n=>{
     const m=n.metrics||{}, online=n.online;
     const dot=online?"bg-emerald-500":"bg-slate-600";
@@ -2576,7 +2601,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
+loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);

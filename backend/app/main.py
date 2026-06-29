@@ -188,7 +188,18 @@ def prometheus_metrics():
 
 
 @app.get("/api/summary")
-def api_summary():
+def api_summary(env: str = ""):
+    # No env → the cached global snapshot (background poll). An env → a live, env-scoped
+    # aggregate (the background loop stays global; per-env is computed on demand).
+    if env:
+        try:
+            with loki.scope(env, _env_loki_url(env)):
+                summ = loki.collect_summary()
+            return JSONResponse({"updated": int(time.time()), "loki_up": True,
+                                 "summary": summ, "env": env})
+        except Exception as e:
+            return JSONResponse({"updated": int(time.time()), "loki_up": False,
+                                 "summary": None, "env": env, "error": str(e)})
     with _state_lock:
         return JSONResponse({
             "updated": _state["updated"],
@@ -227,17 +238,18 @@ _AN_TTL = 45
 
 
 @app.get("/api/analytics")
-def api_analytics(window: str = "", host: str = ""):
-    # default (no params) → cached background snapshot; custom window/host → live (TTL-cached)
-    if not window and not host:
+def api_analytics(window: str = "", host: str = "", env: str = ""):
+    # default (no params) → cached background snapshot; custom window/host/env → live
+    if not window and not host and not env:
         with _state_lock:
             return JSONResponse({"updated": _state["analytics_updated"], "analytics": _state["analytics"]})
-    key = (_win(window), host)
+    key = (_win(window), host, env)
     now = int(time.time())
     hit = _an_cache.get(key)
     if hit and now - hit[0] < _AN_TTL:
         return JSONResponse({"updated": hit[0], "analytics": hit[1], "cached": True})
-    data = loki.collect_analytics(key[0], host)
+    with loki.scope(env, _env_loki_url(env)):
+        data = loki.collect_analytics(key[0], host)
     _an_cache[key] = (now, data)
     if len(_an_cache) > 50:
         _an_cache.clear()
@@ -369,6 +381,25 @@ async def api_settings_save(request: Request):
             applied += (resp or {}).get("applied", [])
     return JSONResponse({"ok": err is None, "applied": applied, "error": err},
                         status_code=409 if err else 200)
+
+
+_env_url_cache = {"t": 0.0, "map": {}}
+
+
+def _env_loki_url(env):
+    """Per-env Loki URL override (empty = shared Loki + env label). Cached 30s from the
+    environments registry."""
+    if not env or not config.BLOCKLIST_API_URL:
+        return ""
+    if time.time() - _env_url_cache["t"] > 30:
+        try:
+            _, body = _blocklist_call("GET", "/environments")
+            _env_url_cache["map"] = {e["id"]: e.get("loki_url", "")
+                                     for e in (body or {}).get("environments", [])}
+            _env_url_cache["t"] = time.time()
+        except Exception:
+            pass
+    return _env_url_cache["map"].get(env, "")
 
 
 def _notify(event):
@@ -1268,9 +1299,9 @@ def _drop_already_blocked(data):
 
 
 @app.get("/api/ban_candidates")
-def api_ban_candidates(window: str = "1h", host: str = ""):
+def api_ban_candidates(window: str = "1h", host: str = "", env: str = ""):
     w = window if window in _BC_WINDOWS else "1h"
-    key = (w, host)
+    key = (w, host, env)
     now = int(time.time())
     hit = _bc_cache.get(key)
     if hit and now - hit[0] < _BC_TTL:
@@ -1280,7 +1311,8 @@ def api_ban_candidates(window: str = "1h", host: str = ""):
         base = hit[1] if hit else {"candidates": [], "top_paths": []}
         return JSONResponse({**_drop_already_blocked(base), "stale": True})
     try:
-        data = loki.ban_candidates(w, host, ignore_paths=_autoban_ignore())
+        with loki.scope(env, _env_loki_url(env)):
+            data = loki.ban_candidates(w, host, ignore_paths=_autoban_ignore())
         _bc_cache[key] = (now, data)
         if len(_bc_cache) > 20:
             _bc_cache.clear()
@@ -1295,9 +1327,9 @@ _sc_cache = {}
 
 
 @app.get("/api/suspect_ips")
-def api_suspect_ips(window: str = "1h", host: str = ""):
+def api_suspect_ips(window: str = "1h", host: str = "", env: str = ""):
     w = window if window in _BC_WINDOWS else "1h"
-    key = (w, host)
+    key = (w, host, env)
     now = int(time.time())
     hit = _sc_cache.get(key)
     if hit and now - hit[0] < _BC_TTL:
@@ -1306,7 +1338,8 @@ def api_suspect_ips(window: str = "1h", host: str = ""):
         base = hit[1] if hit else {"candidates": [], "top_paths": []}
         return JSONResponse({**_drop_already_blocked(base), "stale": True})
     try:
-        data = loki.suspect_ips(w, host, ignore_paths=_autoban_ignore())
+        with loki.scope(env, _env_loki_url(env)):
+            data = loki.suspect_ips(w, host, ignore_paths=_autoban_ignore())
         _sc_cache[key] = (now, data)
         if len(_sc_cache) > 20:
             _sc_cache.clear()
@@ -1439,9 +1472,10 @@ def api_crs_samples(family: str = "", window: str = "1h", limit: int = 30):
 
 @app.get("/api/requests")
 def api_requests(host: str = "", path: str = "", status: str = "", ip: str = "",
-                 ua: str = "", ref: str = "", limit: int = 60, minutes: int = 15):
+                 ua: str = "", ref: str = "", limit: int = 60, minutes: int = 15, env: str = ""):
     try:
-        return JSONResponse({"requests": loki.recent_requests(host, path, status, ip, ua, ref, limit, minutes)})
+        with loki.scope(env, _env_loki_url(env)):
+            return JSONResponse({"requests": loki.recent_requests(host, path, status, ip, ua, ref, limit, minutes)})
     except Exception as e:
         return JSONResponse({"requests": [], "error": str(e)})
 

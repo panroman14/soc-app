@@ -92,6 +92,7 @@ EOF
     set_env COMPOSE_PROFILES promtail
     set_env LOKI_PUSH_URL "http://$CENTRAL:3100/loki/api/v1/push"
     set_env VM_LABEL "$NODE"
+    set_env ENV_LABEL "$ENV"             # logs labelled env=<ENV> → dashboard env switcher
     # Default to reading the STOCK nginx combined log → works with zero nginx changes.
     # (For richer fields — host, real client IP, timings — switch to soc_json: see the
     #  note printed below, then set PROMTAIL_CONFIG=promtail.yml + the .json.log path.)

@@ -38,6 +38,7 @@ scrape_configs:
         labels:
           app: ${NGINX_LOG_APP:-ingress-nginx}
           vm: ${VM_LABEL:-nginx}
+          env: ${ENV_LABEL:-}
           stream: access
           __path__: ${NGINX_ACCESS_LOG:-/var/log/nginx/access.json.log}
 
@@ -49,5 +50,6 @@ scrape_configs:
         labels:
           app: ${NGINX_LOG_APP:-ingress-nginx}
           vm: ${VM_LABEL:-nginx}
+          env: ${ENV_LABEL:-}
           stream: error
           __path__: ${NGINX_ERROR_LOG:-/var/log/nginx/error.log}

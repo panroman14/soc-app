@@ -54,10 +54,48 @@ def ping(timeout=3):
                 "error": str(e), "url": config.LOKI_URL}
 
 
+# Per-request scoping: an env filter (label) + an optional per-env Loki URL. Set via
+# loki.scope(env, url) at the top of an env-scoped request; every query flows through
+# _get, so we inject the `env="…"` matcher into the stream selector + pick the base URL
+# in ONE place — no need to thread env through ~40 query builders.
+_ctx = threading.local()
+
+
+class scope:
+    def __init__(self, env="", loki_url=""):
+        self.env = env or ""
+        self.loki_url = loki_url or ""
+
+    def __enter__(self):
+        self._prev = (getattr(_ctx, "env", ""), getattr(_ctx, "loki_url", ""))
+        _ctx.env, _ctx.loki_url = self.env, self.loki_url
+        return self
+
+    def __exit__(self, *a):
+        _ctx.env, _ctx.loki_url = self._prev
+        return False
+
+
+def _apply_env(query):
+    """Inject env="<id>" into the FIRST stream selector {…} of a LogQL query."""
+    env = getattr(_ctx, "env", "")
+    if not env:
+        return query
+
+    def _repl(m):
+        inner = m.group(1)
+        sep = "," if inner.strip() else ""
+        return "{" + inner + sep + 'env="%s"}' % env
+    return re.sub(r"\{([^{}]*)\}", _repl, query, count=1)
+
+
 def _get(path, params, _retries=2):
     import time as _t
+    if "query" in params:
+        params = dict(params, query=_apply_env(params["query"]))
+    base = getattr(_ctx, "loki_url", "") or config.LOKI_URL
     qs = urllib.parse.urlencode(params)
-    url = config.LOKI_URL + path + "?" + qs
+    url = base + path + "?" + qs
     for attempt in range(_retries + 1):
         try:
             with urllib.request.urlopen(url, timeout=config.HTTP_TIMEOUT) as r:
