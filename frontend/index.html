@@ -462,12 +462,46 @@
   </div><!-- /view-journal -->
 
   <div id="view-settings" class="hidden">
-    <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+    <div class="flex items-center gap-1 mb-3">
+      <button id="ssub-env" onclick="setSub('env')" class="px-3 py-1.5 rounded-md text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">🌐 Окружения</button>
+      <button id="ssub-notify" onclick="setSub('notify')" class="px-3 py-1.5 rounded-md text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">🔔 Уведомления</button>
+      <button id="ssub-global" onclick="setSub('global')" class="px-3 py-1.5 rounded-md text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">⚙️ Глобальные</button>
+    </div>
+
+    <!-- ── Окружения ── -->
+    <section id="ssec-env" class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
       <div class="flex items-center justify-between mb-1">
-        <h2 class="text-sm font-medium text-slate-200">⚙️ Настройки</h2>
+        <div><h2 class="text-sm font-medium text-slate-200">🌐 Окружения (env / пул / проект)</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают в env при установке (<span class="mono">--env</span>).</p></div>
+        <button onclick="envNew()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium shrink-0">+ Окружение</button>
+      </div>
+      <div id="env-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+
+    <!-- ── Уведомления ── -->
+    <section id="ssec-notify" class="hidden bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-sm font-medium text-slate-200">🔔 Уведомления — Slack / Telegram</h2>
+        <button onclick="saveNotify()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
+      </div>
+      <p class="text-[11px] text-slate-500 mb-3">Сначала задай <b>каналы</b> (куда слать), затем <b>правила</b> (что и при каких условиях — событие × env × важность → канал).</p>
+      <div class="mb-2 flex items-center justify-between"><h3 class="text-xs font-medium text-slate-300">Каналы</h3>
+        <div class="flex gap-1"><button onclick="nfAddChannel('slack')" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+ Slack</button>
+          <button onclick="nfAddChannel('telegram')" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+ Telegram</button></div></div>
+      <div id="nf-channels" class="space-y-2"></div>
+      <div class="mt-4 mb-2 flex items-center justify-between"><h3 class="text-xs font-medium text-slate-300">Правила</h3>
+        <button onclick="nfAddRule()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+ Правило</button></div>
+      <div id="nf-rules" class="space-y-2"></div>
+      <div id="nf-msg" class="text-[11px] mt-3"></div>
+    </section>
+
+    <!-- ── Глобальные ── -->
+    <section id="ssec-global" class="hidden bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-sm font-medium text-slate-200">⚙️ Глобальные настройки</h2>
         <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
       </div>
-      <p class="text-[11px] text-slate-500 mb-3">Значения из ENV — это дефолты; здесь их можно переопределить (хранится в БД). Секреты вписываются один раз и не показываются обратно.</p>
+      <p class="text-[11px] text-slate-500 mb-3">LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), группа по умолчанию. ENV — дефолты, тут переопределяются.</p>
       <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">🔒 CONFIG_LOCK=env — конфиг только из переменных окружения, редактирование через GUI отключено.</div>
       <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
       <div id="set-msg" class="text-[11px] mt-3"></div>
@@ -1390,10 +1424,143 @@ function renderJournal(){
   }).join("");
 }
 
-// ── Настройки (гибрид ENV + GUI) ──────────────────────────────────────────────
-const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare",ingress:"☸️ ingress-nginx (k8s)",bans:"⛔ Баны: targets / groups"};
+// ── Настройки: суб-вкладки (Окружения / Уведомления / Глобальные) ─────────────
+let _sub="env";
+function setSub(name){
+  _sub=name;
+  [["env","ssec-env"],["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
+    document.getElementById(sec).classList.toggle("hidden",n!==name);
+    document.getElementById("ssub-"+n).className="px-3 py-1.5 rounded-md text-xs border "+(n===name?"border-indigo-500 bg-indigo-500/10 text-indigo-200":"border-slate-700 text-slate-300 hover:bg-slate-800");
+  });
+  if(name==="env")loadEnvs(); if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
+}
+function loadSettings(){ setSub(_sub); }
+
+// ── Окружения ──
+let _envs=[];
+async function loadEnvs(){
+  const el=document.getElementById("env-list");
+  try{ const d=await (await fetch("/api/environments")).json();
+    if(d.enabled===false){ el.innerHTML='<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>'; return; }
+    _envs=d.environments||[]; renderEnvs();
+  }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+}
+function renderEnvs(){
+  const el=document.getElementById("env-list");
+  el.innerHTML=_envs.map(envCard).join("")||'<div class="text-slate-500 text-xs">пока нет окружений. Нажми «+ Окружение».</div>';
+}
+function envCard(e){
+  const cf=e.cloudflare||{}, ing=e.ingress||{}, id=esc(e.id);
+  return `<div class="bg-slate-950/40 border border-slate-800 rounded-lg p-3" data-env="${id}">
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-sm text-slate-200 font-medium">${esc(e.name||e.id)} <span class="mono text-[11px] text-slate-500">${id}</span></div>
+      <div class="flex gap-1">
+        <button onclick="envSave('${id}')" class="text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Сохранить</button>
+        <button onclick="envDelete('${id}')" class="text-[11px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10">удалить</button></div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-3 text-[11px] text-slate-400">
+      <label class="block">Название<input data-f="name" value="${esc(e.name||'')}" class="w-full mt-0.5 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"></label>
+      <label class="block">Loki URL <span class="text-slate-600">(пусто = общий Loki + метка env)</span><input data-f="loki_url" value="${esc(e.loki_url||'')}" placeholder="http://loki:3100" class="w-full mt-0.5 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"></label>
+    </div>
+    <div class="mt-2 border-t border-slate-800 pt-2">
+      <label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" data-f="cf_enabled" ${cf.enabled?'checked':''}> ☁️ Cloudflare для этого env</label>
+      <div class="grid sm:grid-cols-2 gap-2 mt-1">
+        <input data-f="cf_token" type="password" placeholder="${cf.token_set?'•••• токен задан (введите, чтобы заменить)':'CF API token'}" class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+        <select data-f="cf_mode" class="w-full text-[11px] bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><option ${cf.mode==='ip-list'?'selected':''}>ip-list</option><option ${cf.mode==='access-rules'?'selected':''}>access-rules</option></select>
+      </div>
+    </div>
+    <div class="mt-2 border-t border-slate-800 pt-2">
+      <label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" data-f="ing_enabled" ${ing.enabled?'checked':''}> ☸️ ingress-nginx (k8s) для этого env</label>
+      <div class="grid sm:grid-cols-2 gap-2 mt-1">
+        <input data-f="ing_ns" value="${esc(ing.ns||'')}" placeholder="namespace" class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+        <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+      </div>
+    </div>
+  </div>`;
+}
+function envNew(){
+  const id=prompt("ID окружения (латиница, напр. prod / dev):"); if(!id)return;
+  _envs.push({id:id.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-'),name:id,cloudflare:{},ingress:{}}); renderEnvs();
+}
+function _envField(id,f){ const c=document.querySelector(`[data-env="${id}"]`),el=c&&c.querySelector(`[data-f="${f}"]`); return !el?undefined:(el.type==="checkbox"?el.checked:el.value); }
+async function envSave(id){
+  const body={id,name:_envField(id,"name"),loki_url:_envField(id,"loki_url"),
+    cloudflare:{enabled:_envField(id,"cf_enabled"),token:_envField(id,"cf_token"),mode:_envField(id,"cf_mode")},
+    ingress:{enabled:_envField(id,"ing_enabled"),ns:_envField(id,"ing_ns"),cm:_envField(id,"ing_cm")}};
+  const d=await (await fetch("/api/environments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  if(d.ok)loadEnvs(); else alert("не сохранилось: "+(d.error||"ошибка"));
+}
+async function envDelete(id){
+  if(!confirm("Удалить окружение «"+id+"»? Ноды/баны останутся, но потеряют его CF/Loki-конфиг."))return;
+  await fetch("/api/environments/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); loadEnvs();
+}
+
+// ── Уведомления ──
+let _nf={channels:[],rules:[],events:[],severities:[]};
+async function loadNotify(){
+  try{ _nf=await (await fetch("/api/notify_config")).json(); }catch(e){ _nf={channels:[],rules:[]}; }
+  if(_nf.enabled===false){ document.getElementById("nf-channels").innerHTML='<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>'; document.getElementById("nf-rules").innerHTML=""; return; }
+  renderNotify();
+}
+function renderNotify(){
+  document.getElementById("nf-channels").innerHTML=(_nf.channels||[]).map(nfChannelRow).join("")||'<div class="text-slate-600 text-[11px]">нет каналов</div>';
+  document.getElementById("nf-rules").innerHTML=(_nf.rules||[]).map(nfRuleRow).join("")||'<div class="text-slate-600 text-[11px]">нет правил</div>';
+}
+function nfChannelRow(c,i){
+  const tg=c.type==="telegram";
+  return `<div class="bg-slate-950/40 border border-slate-800 rounded p-2 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}">
+    <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">${tg?'Telegram':'Slack'}</span>
+    <input data-cf="id" value="${esc(c.id||'')}" placeholder="id" class="w-24 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+    <input data-cf="label" value="${esc(c.label||'')}" placeholder="метка" class="w-28 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+    ${tg?`<input data-cf="bot_token" type="password" placeholder="${c.configured?'•••• задан':'bot token'}" class="flex-1 min-w-[140px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><input data-cf="chat_id" value="${esc(c.chat_id||'')}" placeholder="chat_id" class="w-28 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`:`<input data-cf="webhook" type="password" placeholder="${c.configured?'•••• задан':'Slack webhook URL'}" class="flex-1 min-w-[180px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`}
+    <input type="hidden" data-cf="type" value="${tg?'telegram':'slack'}">
+    <button onclick="nfTest('${esc(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">тест</button>
+    <button onclick="nfDelChannel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
+    ${c.last?`<span class="${c.last.ok?'text-emerald-400':'text-red-400'}">${c.last.ok?'✓':'✗ '+esc(c.last.error||'')}</span>`:""}
+  </div>`;
+}
+function nfRuleRow(r,i){
+  const evs=_nf.events||["ban","ban_failed","unban","node_offline","autoban","anomaly_critical","path_rule"];
+  const sevs=_nf.severities||["info","notice","warning","critical"];
+  const chOpts=(_nf.channels||[]).map(c=>`<option value="${esc(c.id)}" ${r.channel===c.id?'selected':''}>${esc(c.label||c.id)}</option>`).join("");
+  const evChecks=evs.map(e=>`<label class="inline-flex items-center gap-1 mr-2"><input type="checkbox" data-ev="${e}" ${(r.events||[]).includes(e)?'checked':''}> ${e}</label>`).join("");
+  return `<div class="bg-slate-950/40 border border-slate-800 rounded p-2 text-[11px]" data-rule="${i}">
+    <div class="flex flex-wrap items-center gap-2 mb-1">
+      <label class="inline-flex items-center gap-1"><input type="checkbox" data-rf="enabled" ${r.enabled!==false?'checked':''}> вкл</label>
+      <span class="text-slate-500">env:</span><input data-rf="env" value="${esc(r.env||'')}" placeholder="(любой)" class="w-20 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+      <span class="text-slate-500">важность ≥</span><select data-rf="min_severity" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${sevs.map(s=>`<option ${r.min_severity===s?'selected':''}>${s}</option>`).join("")}</select>
+      <span class="text-slate-500">→</span><select data-rf="channel" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${chOpts}</select>
+      <button onclick="nfDelRule(${i})" class="ml-auto px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
+    </div>
+    <div class="text-slate-400">${evChecks}</div>
+  </div>`;
+}
+function _nfSync(){
+  _nf.channels=[...document.querySelectorAll("#nf-channels [data-ch]")].map(d=>{const o={};d.querySelectorAll("[data-cf]").forEach(el=>o[el.getAttribute("data-cf")]=el.value);return o;});
+  _nf.rules=[...document.querySelectorAll("#nf-rules [data-rule]")].map(d=>{const o={events:[]};d.querySelectorAll("[data-rf]").forEach(el=>o[el.getAttribute("data-rf")]=el.type==="checkbox"?el.checked:el.value);d.querySelectorAll("[data-ev]").forEach(el=>{if(el.checked)o.events.push(el.getAttribute("data-ev"));});return o;});
+}
+function nfAddChannel(type){ _nfSync(); _nf.channels.push({type,id:type+"-"+(_nf.channels.length+1),label:""}); renderNotify(); }
+function nfDelChannel(i){ _nfSync(); _nf.channels.splice(i,1); renderNotify(); }
+function nfAddRule(){ _nfSync(); _nf.rules.push({enabled:true,events:["ban_failed"],env:"",min_severity:"warning",channel:(_nf.channels[0]||{}).id||""}); renderNotify(); }
+function nfDelRule(i){ _nfSync(); _nf.rules.splice(i,1); renderNotify(); }
+async function nfTest(id){
+  if(!id){ alert("сначала задай id канала и сохрани"); return; }
+  const d=await (await fetch("/api/notify/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:id})})).json();
+  alert(d.ok?"✓ отправлено":"✗ "+(d.error||"ошибка"));
+}
+async function saveNotify(){
+  _nfSync();
+  const channels=_nf.channels.map(c=>{const o={...c};["webhook","bot_token"].forEach(k=>{if(!o[k])delete o[k];});return o;});
+  const msg=document.getElementById("nf-msg"); msg.textContent="сохраняю…"; msg.className="text-[11px] mt-3 text-slate-400";
+  const d=await (await fetch("/api/notify_config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channels,rules:_nf.rules})})).json();
+  if(d.ok){ msg.textContent="✓ сохранено"; msg.className="text-[11px] mt-3 text-emerald-400"; loadNotify(); }
+  else{ msg.textContent="✗ "+(d.error||"ошибка"); msg.className="text-[11px] mt-3 text-red-400"; }
+}
+
+// ── Глобальные настройки (ENV + GUI) ──────────────────────────────────────────
+const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare (дефолт/фолбэк)",ingress:"☸️ ingress-nginx (дефолт)",bans:"⛔ Баны: targets / groups"};
 let _setLocked=false;
-async function loadSettings(){
+async function loadGlobal(){
   const wrap=document.getElementById("set-groups");
   try{
     const d=await (await fetch("/api/settings")).json();
@@ -1447,8 +1614,8 @@ async function saveSettings(){
   try{
     const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates})});
     const d=await r.json();
-    if(d.ok){ msg.textContent="✓ сохранено: "+(d.applied||[]).join(", "); msg.className="text-[11px] mt-3 text-emerald-400"; loadSettings(); }
-    else{ const part=(d.applied&&d.applied.length)?(" (сохранено: "+d.applied.join(", ")+")"):""; msg.textContent="✗ "+(d.error||"ошибка")+part; msg.className="text-[11px] mt-3 text-red-400"; loadSettings(); }
+    if(d.ok){ msg.textContent="✓ сохранено: "+(d.applied||[]).join(", "); msg.className="text-[11px] mt-3 text-emerald-400"; loadGlobal(); }
+    else{ const part=(d.applied&&d.applied.length)?(" (сохранено: "+d.applied.join(", ")+")"):""; msg.textContent="✗ "+(d.error||"ошибка")+part; msg.className="text-[11px] mt-3 text-red-400"; loadGlobal(); }
   }catch(e){ msg.textContent="✗ "+e.message; msg.className="text-[11px] mt-3 text-red-400"; }
 }
 async function checkCF(){
