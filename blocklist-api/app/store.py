@@ -100,7 +100,21 @@ def _render(entries, path=None):
 
 
 def _audit(audit, action, cidr, who, extra=""):
-    audit.append({"ts": _now(), "action": action, "cidr": cidr, "by": who, "note": extra})
+    """Append an action event and RETURN it, so the caller can attach the enforcement
+    `result` after the render runs (did it actually apply to the targets, or fail?)."""
+    ev = {"ts": _now(), "action": action, "cidr": cidr, "by": who, "note": extra}
+    audit.append(ev)
+    return ev
+
+
+def _enf_result(group=None):
+    """Outcome of the LAST render for the relevant targets: did enforcement succeed
+    everywhere, and if not, which target failed with what error. `group` limits it to
+    that group's targets (a single ban); None = all targets (bulk/unblock/path)."""
+    errs = enforce.last_errors()
+    tids = enforce.resolve_group(group) if group is not None else enforce.all_target_ids()
+    failed = {t: errs[t] for t in tids if errs.get(t)}
+    return {"ok": not failed, "targets": tids, "failed": failed}
 
 
 def list_active(target=None):
@@ -128,11 +142,12 @@ def block(cidr, reason="", added_by="dashboard", ttl=0, force=False, group=None)
         entries = [e for e in entries if e["cidr"] != cidr]  # replace if exists
         entries.append({"cidr": cidr, "reason": reason, "added_by": added_by,
                         "ts": _now(), "ttl": int(ttl or 0), "group": group})
-        _audit(audit, "block", cidr, added_by, reason)
+        ev = _audit(audit, "block", cidr, added_by, reason)
         cidrs = _render(entries)
+        ev["result"] = _enf_result(group)
         _save_raw(entries, audit)
         return {"cidr": cidr, "active": len(cidrs), "group": group,
-                "targets": enforce.resolve_group(group)}
+                "targets": enforce.resolve_group(group), "result": ev["result"]}
 
 
 def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, force=False, group=None):
@@ -156,7 +171,7 @@ def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, f
     with _lock:
         entries, audit = _load_raw()
         now = _now()
-        added, seen = [], set()
+        added, seen, evs = [], set(), []
         for c, rs, g in valid:
             if c in seen:
                 continue
@@ -164,12 +179,16 @@ def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, f
             entries = [e for e in entries if e["cidr"] != c]
             entries.append({"cidr": c, "reason": rs, "added_by": added_by,
                             "ts": now, "ttl": int(ttl or 0), "group": g})
-            _audit(audit, "block", c, added_by, rs)
+            evs.append(_audit(audit, "block", c, added_by, rs))
             added.append(c)
         active = _render(entries) if added else _active(entries)
         if added:
+            res = _enf_result()
+            for ev in evs:
+                ev["result"] = res
             _save_raw(entries, audit)
-        return {"blocked": added, "skipped": skipped, "active": len(active)}
+        return {"blocked": added, "skipped": skipped, "active": len(active),
+                "result": (_enf_result() if added else {"ok": True, "targets": [], "failed": {}})}
 
 
 def unblock(cidr, by="dashboard"):
@@ -180,10 +199,11 @@ def unblock(cidr, by="dashboard"):
         entries = [e for e in entries if e["cidr"] != cidr]
         removed = before - len(entries)
         if removed:
-            _audit(audit, "unblock", cidr, by)
+            ev = _audit(audit, "unblock", cidr, by)
             cidrs = _render(entries)
+            ev["result"] = _enf_result()
             _save_raw(entries, audit)
-            return {"cidr": cidr, "removed": removed, "active": len(cidrs)}
+            return {"cidr": cidr, "removed": removed, "active": len(cidrs), "result": ev["result"]}
         return {"cidr": cidr, "removed": 0}
 
 
@@ -193,9 +213,11 @@ def clear_all(by="dashboard"):
         entries, audit = _load_raw()
         n = len(entries)
         if n:
-            for e in entries:
-                _audit(audit, "unblock", e["cidr"], by, "clear-all")
+            evs = [_audit(audit, "unblock", e["cidr"], by, "clear-all") for e in entries]
             _render([])
+            res = _enf_result()
+            for ev in evs:
+                ev["result"] = res
             _save_raw([], audit)
         return {"removed": n}
 
@@ -218,9 +240,11 @@ def prune():
         if len(active) == len(entries):
             return 0
         expired = [e["cidr"] for e in entries if e not in active]
-        for c in expired:
-            _audit(audit, "expire", c, "ttl")
+        evs = [_audit(audit, "expire", c, "ttl") for c in expired]
         _render(active)
+        res = _enf_result()
+        for ev in evs:
+            ev["result"] = res
         _save_raw(active, audit)
         return len(expired)
 
@@ -300,11 +324,12 @@ def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by
             id = _new_path_id(rules)
             rules.append({"id": id, "name": name, "pattern": pattern,
                           "enabled": bool(enabled), "added_by": by, "ts": _now()})
-        _audit(audit, "path_rule", id, by, (name or pattern)[:80])
+        ev = _audit(audit, "path_rule", id, by, (name or pattern)[:80])
         _render(entries, path)
+        ev["result"] = _enf_result()
         _save_path(path)
         _save_raw(entries, audit)
-        return {"id": id, "rules": len(rules)}
+        return {"id": id, "rules": len(rules), "result": ev["result"]}
 
 
 def delete_path_rule(id, by="dashboard"):
@@ -315,8 +340,9 @@ def delete_path_rule(id, by="dashboard"):
         path["rules"] = [r for r in path["rules"] if r.get("id") != id]
         removed = before - len(path["rules"])
         if removed:
-            _audit(audit, "path_rule_del", id, by)
+            ev = _audit(audit, "path_rule_del", id, by)
             _render(entries, path)
+            ev["result"] = _enf_result()
             _save_path(path)
             _save_raw(entries, audit)
         return {"removed": removed}
@@ -340,8 +366,9 @@ def set_path_master(enabled, by="dashboard"):
         entries, audit = _load_raw()
         path = _load_path()
         path["enabled"] = bool(enabled)
-        _audit(audit, "path_master", "*", by, "on" if enabled else "off")
+        ev = _audit(audit, "path_master", "*", by, "on" if enabled else "off")
         _render(entries, path)
+        ev["result"] = _enf_result()
         _save_path(path)
         _save_raw(entries, audit)
         return {"enabled": path["enabled"]}

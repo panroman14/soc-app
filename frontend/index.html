@@ -50,6 +50,7 @@
     <button id="navtab-autoban" onclick="showView('autoban')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⛔ Автобан</button>
     <button id="navtab-p403" onclick="showView('p403')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🚫 Правила 403</button>
     <button id="navtab-nodes" onclick="showView('nodes')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🖥️ Ноды</button>
+    <button id="navtab-journal" onclick="showView('journal')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">📋 Журнал</button>
     <button id="navtab-settings" onclick="showView('settings')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⚙️ Настройки</button>
   </nav>
 
@@ -436,6 +437,29 @@
       <div id="nodes-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
     </section>
   </div><!-- /view-nodes -->
+
+  <div id="view-journal" class="hidden">
+    <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-1">
+        <div>
+          <h2 class="text-sm font-medium text-slate-200">📋 Журнал действий</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Что приложение пыталось сделать (бан / разбан / истёк TTL / правила 403) и чем закончилось применение на таргетах.</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <select id="jr-filter" onchange="renderJournal()" class="text-xs bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-300">
+            <option value="">все действия</option>
+            <option value="block">баны</option>
+            <option value="unblock">разбаны</option>
+            <option value="expire">истёкшие (TTL)</option>
+            <option value="path">правила 403</option>
+            <option value="fail">только с ошибкой</option>
+          </select>
+          <button onclick="loadJournal()" class="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">обновить</button>
+        </div>
+      </div>
+      <div id="jr-list" class="mt-3 space-y-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+  </div><!-- /view-journal -->
 
   <div id="view-settings" class="hidden">
     <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
@@ -1300,7 +1324,7 @@ let _abInterval=60, _abMaxTick=20, _abLastRun=null, _abRules=null, _abIgnore=[];
 let _abLogRows=[], _abLogPage=0; const _AB_LOG_PER=10;
 let _view="dash";
 function showView(name){
-  const views=["dash","autoban","p403","nodes","settings"];
+  const views=["dash","autoban","p403","nodes","journal","settings"];
   if(!views.includes(name))name="dash";
   _view=name;
   const on="border-indigo-500 text-indigo-200 font-medium", off="border-transparent text-slate-400 hover:text-slate-200";
@@ -1313,6 +1337,57 @@ function showView(name){
   if(name==="p403")loadP403();
   if(name==="nodes")loadNodes();
   if(name==="settings")loadSettings();
+  if(name==="journal")loadJournal();
+}
+
+// ── Журнал действий (audit blocklist-api + исход применения) ───────────────────
+let _journal=[], _jrTimer=null;
+const _JR_ACT={block:{i:"🚫",t:"бан"},unblock:{i:"✅",t:"разбан"},expire:{i:"⏱",t:"истёк TTL"},
+  path_rule:{i:"🛂",t:"правило 403"},path_rule_del:{i:"🗑",t:"удалено правило 403"},
+  path_master:{i:"🔁",t:"переключатель 403"}};
+const _JR_BY={dashboard:"оператор",autoban:"автобан",ttl:"система"};
+async function loadJournal(){
+  try{
+    const d=await (await fetch("/api/blocklist_audit?limit=300")).json();
+    if(d.enabled===false){ document.getElementById("jr-list").innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>`; _journal=[]; return; }
+    _journal=d.audit||[];
+    renderJournal();
+  }catch(e){ document.getElementById("jr-list").innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+  if(_view==="journal"){ clearTimeout(_jrTimer); _jrTimer=setTimeout(loadJournal,15000); }
+}
+function _jrOutcome(a){
+  const r=a.result;
+  if(!r) return `<span class="text-slate-600">— нет данных о применении</span>`;
+  if(r.ok){
+    const n=(r.targets||[]).length;
+    return `<span class="text-emerald-400">✓ применено${n?` · ${n} таргет(ов)`:""}</span>`;
+  }
+  const f=r.failed||{};
+  const parts=Object.keys(f).map(t=>`${esc(t)}: ${esc(f[t])}`).join("; ");
+  return `<span class="text-red-400" title="${esc(parts)}">⚠ ошибка → ${esc(parts).slice(0,120)}</span>`;
+}
+function renderJournal(){
+  const el=document.getElementById("jr-list");
+  const f=document.getElementById("jr-filter").value;
+  let rows=_journal.filter(a=>{
+    if(!f) return true;
+    if(f==="fail") return a.result && !a.result.ok;
+    if(f==="path") return (a.action||"").startsWith("path");
+    return a.action===f;
+  });
+  if(!rows.length){ el.innerHTML=`<div class="text-slate-500 text-xs">нет записей под фильтр.</div>`; return; }
+  el.innerHTML=rows.map(a=>{
+    const m=_JR_ACT[a.action]||{i:"•",t:a.action};
+    const by=_JR_BY[a.by]||esc(a.by||"");
+    const bad=a.result&&!a.result.ok;
+    return `<div class="flex items-start gap-2 py-1.5 px-2 rounded ${bad?'bg-red-500/5 border border-red-500/20':'hover:bg-slate-800/40'} text-[12px]">
+      <span class="mono text-slate-500 w-32 shrink-0">${dt(a.ts)}</span>
+      <span class="shrink-0 w-36"><span class="mr-1">${m.i}</span><span class="text-slate-300">${esc(m.t)}</span></span>
+      <span class="mono text-slate-200 shrink-0 w-40 truncate" title="${esc(a.cidr||'')}">${esc(a.cidr||"")}</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">${by}</span>
+      <span class="flex-1 min-w-0">${_jrOutcome(a)}${a.note?`<span class="text-slate-500"> · ${esc(a.note)}</span>`:""}</span>
+    </div>`;
+  }).join("");
 }
 
 // ── Настройки (гибрид ENV + GUI) ──────────────────────────────────────────────
