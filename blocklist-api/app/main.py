@@ -17,7 +17,7 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import config, enforce, nodes, notify, safety, settings, store
+from . import config, enforce, environments, nodes, notify, safety, settings, store
 
 app = FastAPI(title="blocklist-api", version="0.1.0")
 
@@ -222,6 +222,38 @@ async def post_settings(request: Request):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=409)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.get("/environments")
+def get_environments():
+    """Environments (env=pool=project) for the dashboard — CF token redacted."""
+    return {"environments": environments.public_view()}
+
+
+@app.post("/environments")
+async def post_environment(request: Request):
+    body = await request.json()
+    try:
+        e = environments.upsert(env_id=body.get("id", ""), name=body.get("name", ""),
+                                loki_url=body.get("loki_url"), cloudflare=body.get("cloudflare"),
+                                ingress=body.get("ingress"))
+        # a CF token change may invalidate the per-env discovery cache
+        try:
+            from . import cloudflare
+            cloudflare._resolved.clear()
+        except Exception:
+            pass
+        return {"ok": True, "id": e["id"]}
+    except ValueError as ex:
+        return JSONResponse({"ok": False, "error": str(ex)}, status_code=400)
+    except Exception as ex:
+        return JSONResponse({"ok": False, "error": str(ex)}, status_code=500)
+
+
+@app.post("/environments/delete")
+async def delete_environment(request: Request):
+    body = await request.json()
+    return {"ok": True, "deleted": environments.delete(body.get("id", ""))}
 
 
 @app.get("/notify_config")

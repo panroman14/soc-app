@@ -99,19 +99,45 @@ def _enrolled_nodes():
         return []
 
 
-def targets():
-    """Configured targets + auto-promoted enrolled nodes (each must have id + type).
+def _env_targets():
+    """Synthetic per-environment targets: each env that enables its own Cloudflare or
+    ingress-nginx backend contributes one target tagged with that env. No secrets are
+    placed here (cloudflare.py looks the token up by env) — safe to expose via /targets."""
+    try:
+        from . import environments
+        envs = environments.all_envs()
+    except Exception:
+        return []
+    out = []
+    for e in envs:
+        cf = e.get("cloudflare") or {}
+        if cf.get("enabled") and cf.get("token"):
+            out.append({"id": "cf:" + e["id"], "type": "cloudflare", "env": e["id"],
+                        "mode": cf.get("mode") or ""})
+        ing = e.get("ingress") or {}
+        if ing.get("enabled"):
+            out.append({"id": "ingress:" + e["id"], "type": "ingress-cm", "env": e["id"],
+                        "ns": ing.get("ns") or "", "cm": ing.get("cm") or ""})
+    return out
 
-    A freshly enrolled agent becomes an nginx-file target automatically, so it starts
-    receiving its group's bans without anyone editing BAN_TARGETS. Explicit config
-    wins if an id collides."""
+
+def targets():
+    """Configured targets + auto-promoted enrolled nodes + per-env backends.
+
+    A freshly enrolled agent becomes an nginx-file target automatically (its `group`
+    is its env). Each env that enables Cloudflare/ingress adds a synthetic target.
+    Explicit config wins if an id collides."""
     out = [dict(t) for t in (settings.get("BAN_TARGETS") or []) if t.get("id") and t.get("type")]
     have = {t["id"] for t in out}
     for n in _enrolled_nodes():
         if n["id"] not in have:
             out.append({"id": n["id"], "type": n.get("target_type") or "nginx-file",
-                        "group": n.get("group") or "", "enrolled": True})
+                        "group": n.get("group") or "", "env": n.get("group") or "", "enrolled": True})
             have.add(n["id"])
+    for t in _env_targets():
+        if t["id"] not in have:
+            out.append(t)
+            have.add(t["id"])
     return out
 
 
@@ -124,15 +150,16 @@ def _adapter(t):
 
 
 def _effective_groups():
-    """BAN_GROUPS overlaid with enrolled-node group memberships (node id added to the
-    group it enrolled with), so node groups route bans without manual config."""
+    """BAN_GROUPS overlaid with env membership: every target tagged with an env (an
+    enrolled node, or a synthetic per-env Cloudflare/ingress backend) is added to that
+    env's group, so a ban routed to env `prod` fans out to all of prod's backends."""
     groups_cfg = dict(settings.get("BAN_GROUPS") or {})
-    for n in _enrolled_nodes():
-        g = n.get("group")
-        if g:
-            groups_cfg.setdefault(g, [])
-            if n["id"] not in groups_cfg[g]:
-                groups_cfg[g] = list(groups_cfg[g]) + [n["id"]]
+    for t in targets():
+        env = t.get("env")
+        if env:
+            groups_cfg.setdefault(env, [])
+            if t["id"] not in groups_cfg[env]:
+                groups_cfg[env] = list(groups_cfg[env]) + [t["id"]]
     return groups_cfg
 
 

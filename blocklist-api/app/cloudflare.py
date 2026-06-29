@@ -55,9 +55,22 @@ _resolved = {}  # target_id -> {token, account_id, zone_id, mode, list_name, rul
 
 
 def _cfg(target):
-    """Merge resolved settings (GUI override or ENV) with the target dict (target
-    wins). The CF token is never taken from BAN_TARGETS — only settings/ENV."""
-    from . import settings
+    """Resolve a target's CF config. A per-env target (`env` set) uses THAT env's
+    Cloudflare config + token (from the environments registry). Otherwise fall back to
+    the global GUI/ENV settings. The token is never taken from the exposed target dict."""
+    from . import settings, environments
+    env = target.get("env")
+    cf = environments.get_cf(env) if env else None
+    if cf:
+        return {
+            "token": cf.get("token"),
+            "mode": target.get("mode") or cf.get("mode") or settings.get("CF_MODE"),
+            "zone_id": cf.get("zone_id") or "",
+            "zone_name": cf.get("zone_name") or "",
+            "account_id": cf.get("account_id") or "",
+            "list_name": cf.get("list_name") or settings.get("CF_LIST_NAME"),
+            "rule_desc": cf.get("rule_desc") or ("soc %s" % env),
+        }
     return {
         "token": settings.get("CF_API_TOKEN"),
         "mode": target.get("mode") or settings.get("CF_MODE"),
@@ -95,13 +108,13 @@ def _resolve(target, ensure=False):
     The per-process cache is keyed implicitly on the token: if the live token differs
     from the cached one (operator rotated it, possibly in another worker), the cache is
     bypassed and the config re-discovered — so a stale token is never used silently."""
-    from . import settings
     tid = target["id"]
     cached = _resolved.get(tid)
-    if cached and cached.get("token") == settings.get("CF_API_TOKEN"):
+    live = _cfg(target)
+    if cached and cached.get("token") == live.get("token"):
         c = dict(cached)
     else:
-        c = _cfg(target)
+        c = live
     if not c.get("token"):
         raise CFError("CF_API_TOKEN не задан")
     _discover_zone(c)
