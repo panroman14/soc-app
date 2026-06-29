@@ -1160,8 +1160,17 @@ function renderStatus(st){
   renderLLMToggle(st.llm_enabled!==false);
   const llmChip=st.llm_enabled===false?chip("LLM (выкл)",null)
                 :chip("LLM (Gemma)",st.llm_up===null?null:st.llm_up);
+  const lk=st.loki;
+  let lokiOk=st.loki_up, lokiDetail;
+  if(lk){
+    lokiOk = !!(lk.reachable && lk.ready && lk.query_ok);
+    lokiDetail = !lk.reachable ? "недоступен"
+               : !lk.ready ? "не готов"
+               : !lk.query_ok ? "запрос не прошёл"
+               : "ready"+(lk.ms!=null?" · "+lk.ms+" мс":"");
+  }
   document.getElementById("health").innerHTML=
-    chip("Loki",st.loki_up)+llmChip+
+    chip("Loki",lokiOk,lokiDetail)+llmChip+
     chip("Данные",st.poll_age!=null&&st.poll_age<90,"обновлены "+fr(st.poll_age)+" назад")+
     (st.llm_enabled===false?"":chip("AI-разбор",st.insight_age!=null&&st.insight_age<1500,fr(st.insight_age)+" назад"))+
     (st.path403?chip("Правила 403",!!st.path403.rendered_ok,st.path403.enabled_count+" акт.· рендер "+(st.path403.rendered_ok?"OK":"дрейф!")):"");

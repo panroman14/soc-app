@@ -1471,6 +1471,19 @@ async def api_llm_toggle(request: Request):
     return JSONResponse({"ok": True, "enabled": enabled})
 
 
+_loki_ping = {"ts": 0.0, "val": None}
+
+
+def _loki_status():
+    """Cached active Loki probe (5s TTL) so many polling dashboards don't multiply
+    /ready hits, and a down Loki only costs one timeout per window."""
+    now = time.time()
+    if _loki_ping["val"] is None or now - _loki_ping["ts"] > 5:
+        _loki_ping["val"] = loki.ping()
+        _loki_ping["ts"] = now
+    return _loki_ping["val"]
+
+
 @app.get("/api/status")
 def api_status():
     """Component health + freshness + last errors for the dashboard."""
@@ -1481,8 +1494,16 @@ def api_status():
     insight_age = now - s["last_insight"] if s["last_insight"] else None
     llm_enabled = llm.enabled()
     problems = []
-    if not s["loki_up"]:
-        problems.append({"component": "Loki", "msg": s.get("loki_error") or "нет связи с Loki"})
+    # Direct reachability probe distinguishes "Loki down" from "query failing".
+    lk = _loki_status()
+    query_ok = bool(s["loki_up"])
+    if not lk["reachable"]:
+        problems.append({"component": "Loki", "msg": "недоступен: " + (lk.get("error") or "нет связи")})
+    elif not lk["ready"]:
+        problems.append({"component": "Loki", "msg": lk.get("error") or "не готов"})
+    elif not query_ok:
+        problems.append({"component": "Loki",
+                         "msg": "доступен, но запрос не прошёл: " + (s.get("loki_error") or "ошибка")})
     # When the LLM is switched off, its staleness/availability is expected — don't
     # report it as a problem.
     if llm_enabled and s["llm_up"] is False:
@@ -1498,6 +1519,8 @@ def api_status():
     return JSONResponse({
         "ok": len(problems) == 0,
         "loki_up": s["loki_up"], "loki_error": s.get("loki_error"),
+        "loki": {"reachable": lk["reachable"], "ready": lk["ready"], "ms": lk["ms"],
+                 "url": lk["url"], "query_ok": query_ok, "error": lk.get("error")},
         "llm_up": s["llm_up"], "llm_error": s.get("llm_error"),
         "llm_enabled": llm_enabled,
         "poll_age": poll_age, "insight_age": insight_age,

@@ -29,6 +29,31 @@ CLIENT_RE = r'client[: ]+\[?(?P<ip>\d+\.\d+\.\d+\.\d+)'
 SUBNET_RE = r'client[: ]+\[?(?P<subnet>\d+\.\d+\.\d+)\.\d+'
 
 
+def ping(timeout=3):
+    """Active availability probe — hits Loki's /ready (cheap, query-independent), so
+    we can tell "Loki unreachable" apart from "a heavy query failed". Never raises.
+    Returns {reachable, ready, ms, detail, error, url}. /ready → 200 "ready" when
+    serving; 503 while a component is still starting (reachable but not ready)."""
+    import time as _t
+    url = config.LOKI_URL.rstrip("/") + "/ready"
+    t0 = _t.time()
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            ms = int((_t.time() - t0) * 1000)
+            body = r.read(200).decode("utf-8", "replace").strip()
+            return {"reachable": True, "ready": r.status == 200, "ms": ms,
+                    "detail": (body[:80] or ("HTTP %d" % r.status)), "error": None,
+                    "url": config.LOKI_URL}
+    except urllib.error.HTTPError as e:
+        ms = int((_t.time() - t0) * 1000)        # got a response → reachable, not ready
+        return {"reachable": True, "ready": False, "ms": ms, "detail": "HTTP %d" % e.code,
+                "error": "Loki не готов (HTTP %d)" % e.code, "url": config.LOKI_URL}
+    except Exception as e:
+        ms = int((_t.time() - t0) * 1000)
+        return {"reachable": False, "ready": False, "ms": ms, "detail": None,
+                "error": str(e), "url": config.LOKI_URL}
+
+
 def _get(path, params, _retries=2):
     import time as _t
     qs = urllib.parse.urlencode(params)
