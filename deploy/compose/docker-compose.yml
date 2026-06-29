@@ -83,6 +83,10 @@ services:
       - "${BLOCKLIST_PORT:-8080}:8080"
     volumes:
       - blocklist-data:/data
+      # Serve the LIVE installer + agent at /install/* (no image rebuild needed when
+      # these change — config.INSTALLER_PATH/AGENT_PATH point here).
+      - ../agent/install.sh:/opt/soc/install.sh:ro
+      - ../agent/soc-nginx-agent.py:/opt/soc/soc-nginx-agent.py:ro
 
 volumes:
   loki-data:

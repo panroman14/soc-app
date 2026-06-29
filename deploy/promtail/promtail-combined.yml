@@ -45,17 +45,9 @@ scrape_configs:
       # 1) extract the combined fields
       - regex:
           expression: '^(?P<remote_addr>\S+) \S+ \S+ \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<uri>\S+)[^"]*" (?P<status>\d{3}) (?P<body_bytes_sent>\S+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"'
-      # 2) sanitize free-text fields (combined doesn't escape " or \) so the
-      #    re-emitted JSON can't break — map both to a single quote.
-      - replace:
-          source: referer
-          expression: '["\\]'
-          replace: "'"
-      - replace:
-          source: user_agent
-          expression: '["\\]'
-          replace: "'"
-      # 3) re-emit as soc_json (fields combined can't supply are left empty)
+      # 2) re-emit as soc_json (fields combined can't supply are left empty). The
+      #    referer/user_agent captures use "[^"]*" so they can't contain a double
+      #    quote; a rare trailing backslash could corrupt only that single line.
       - template:
           source: soc_line
           template: '{"time":"{{ .time_local }}","remote_addr":"{{ .remote_addr }}","real_ip_cloudflare":"","http_x_forwarded_for":"","http_host":"","request_method":"{{ .method }}","request_uri":"{{ .uri }}","status":"{{ .status }}","body_bytes_sent":"{{ .body_bytes_sent }}","bytes_sent":"{{ .body_bytes_sent }}","request_time":"","upstream_response_time":"","upstream_cache_status":"","http_referer":"{{ .referer }}","http_user_agent":"{{ .user_agent }}"}'

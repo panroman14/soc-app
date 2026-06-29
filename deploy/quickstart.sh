@@ -40,8 +40,19 @@ ensure_secret() {
 }
 compose_up() {
   [ "${SKIP_UP:-}" = "1" ] && { echo "[quickstart] SKIP_UP=1 — wrote config only"; return; }
-  have docker || die "docker not found — install Docker, or deploy via systemd (see deploy/README.md)"
-  ( cd "$HERE/compose" && docker compose "$@" up -d )
+  if ! have docker; then
+    if [ "${INSTALL_DOCKER:-}" = "1" ]; then
+      echo "[quickstart] Docker not found — installing via get.docker.com…"
+      curl -fsSL https://get.docker.com | sh || die "Docker install failed"
+      systemctl enable --now docker 2>/dev/null || true
+    else
+      die "docker not found — re-run with INSTALL_DOCKER=1 to auto-install it, or install Docker yourself / deploy via systemd (deploy/README.md)"
+    fi
+  fi
+  docker compose version >/dev/null 2>&1 || die "the 'docker compose' plugin is missing — install Docker Compose v2"
+  # --env-file: compose interpolates ${VARS} (e.g. PROMTAIL_CONFIG) from the file next
+  # to docker-compose.yml by default, NOT from our deploy/.env — point it here explicitly.
+  ( cd "$HERE/compose" && docker compose --env-file "$ENVF" "$@" up -d )
 }
 
 case "$ROLE" in
@@ -80,6 +91,11 @@ EOF
     set_env COMPOSE_PROFILES promtail
     set_env LOKI_PUSH_URL "http://$CENTRAL:3100/loki/api/v1/push"
     set_env VM_LABEL "$NODE"
+    # Default to reading the STOCK nginx combined log → works with zero nginx changes.
+    # (For richer fields — host, real client IP, timings — switch to soc_json: see the
+    #  note printed below, then set PROMTAIL_CONFIG=promtail.yml + the .json.log path.)
+    set_env PROMTAIL_CONFIG promtail-combined.yml
+    set_env NGINX_ACCESS_LOG /var/log/nginx/access.log
     compose_up --profile promtail
     echo "[quickstart] installing ban agent (self-enroll as '$NODE')…"
     if [ "${SKIP_UP:-}" != "1" ]; then
@@ -90,14 +106,15 @@ EOF
     cat <<EOF
 
 ────────────────────────────────────────────────────────────────────
-✅ '$NODE' shipping logs + enrolled. It should appear in the «Ноды» tab.
-   Two one-time nginx steps on this VM:
-     1) log JSON:  cp deploy/nginx/soc-logging.conf /etc/nginx/conf.d/ and add
-                   'access_log /var/log/nginx/access.json.log soc_json;'
-                   (or keep stock logs: set PROMTAIL_CONFIG=promtail-combined.yml
-                    + NGINX_ACCESS_LOG=/var/log/nginx/access.log in deploy/.env)
-     2) enable bans: add 'include /etc/nginx/soc-deny-server.conf;' inside server{}
-   then:  nginx -t && systemctl reload nginx
+✅ '$NODE' shipping logs (stock nginx combined — no nginx change), enrolled, and
+   bans auto-enabled (the installer added the deny include to your server block(s)
+   and reloaded nginx). Requests show on the dashboard shortly.
+   • If you DON'T want the installer touching nginx, re-run the agent install with
+     MANAGE_NGINX=0 and add 'include /etc/nginx/soc-deny-server.conf;' yourself.
+   • Optional richer data (host / real client IP / timings): cp
+     deploy/nginx/soc-logging.conf to /etc/nginx/conf.d/, add
+     'access_log /var/log/nginx/access.json.log soc_json;', and in deploy/.env set
+     PROMTAIL_CONFIG=promtail.yml + NGINX_ACCESS_LOG=/var/log/nginx/access.json.log.
 ────────────────────────────────────────────────────────────────────
 EOF
     ;;

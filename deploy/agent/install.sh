@@ -83,7 +83,51 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-# 4) enable + (re)start
+# 4) wire the deny include into nginx server blocks, so IP bans AND 403-path rules
+#    actually apply. Opt out with MANAGE_NGINX=0. Safe: ensures the included file
+#    exists, backs up each edited file, gates on `nginx -t`, and reverts on failure.
+if [ "${MANAGE_NGINX:-1}" != "0" ] && command -v nginx >/dev/null 2>&1; then
+  INC="include $SERVER_FILE;"
+  # The server snippet does `if ($soc_blocked) { return 403; }`. $soc_blocked is defined
+  # by the http-context geo the agent writes to HTTP_FILE — but at install time (before
+  # the agent's first poll) HTTP_FILE may be absent, so the variable would be undefined
+  # and `nginx -t` would fail (→ revert, no bans). Guarantee both files exist in a
+  # self-consistent minimal state; the agent overwrites them with the real render.
+  grep -qs soc_blocked "$HTTP_FILE" 2>/dev/null || \
+    printf '# soc placeholder — replaced on first agent poll\ngeo $remote_addr $soc_blocked { default 0; }\n' > "$HTTP_FILE"
+  [ -f "$SERVER_FILE" ] || printf '# managed by soc-nginx-agent — populated on first poll\n' > "$SERVER_FILE"
+  # Back up OUTSIDE /etc/nginx: nginx does `include sites-enabled/*` (no extension
+  # filter), so a backup left next to the file would load as a SECOND server block →
+  # "duplicate default server" → nginx -t fails. Keep backups in a temp dir.
+  BK="$(mktemp -d 2>/dev/null || echo /tmp/soc-nginx-bak.$$)"; mkdir -p "$BK"
+  bkname() { printf '%s' "$1" | tr '/' '_'; }
+  soc_changed=0
+  for f in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
+    [ -f "$f" ] || continue
+    grep -qF "$SERVER_FILE" "$f" && continue                       # already included
+    grep -qE '^[[:space:]]*server[[:space:]]*\{' "$f" || continue  # no server block here
+    cp "$f" "$BK/$(bkname "$f")"
+    sed -i -E "s|^([[:space:]]*)server([[:space:]]*)\{|\1server\2{\n\1    $INC|" "$f"
+    soc_changed=1
+  done
+  if [ "$soc_changed" = "1" ]; then
+    if nginx -t >/dev/null 2>&1; then
+      ( systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null ) || true
+      echo "[soc] bans enabled in nginx (added '$INC' to server block(s) + reloaded)"
+    else
+      for f in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
+        [ -f "$BK/$(bkname "$f")" ] && cp "$BK/$(bkname "$f")" "$f"
+      done
+      echo "[soc] WARN: 'nginx -t' failed after adding the include — reverted. Add it" >&2
+      echo "      manually inside your server{} block:  include $SERVER_FILE;" >&2
+    fi
+  else
+    echo "[soc] nginx deny-include already present (or no server{} found) — nothing to do"
+  fi
+  rm -rf "$BK"
+fi
+
+# 5) enable + (re)start the agent
 if command -v systemctl >/dev/null 2>&1; then
   systemctl daemon-reload
   systemctl enable --now soc-nginx-agent.service

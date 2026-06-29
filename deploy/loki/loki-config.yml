@@ -6,7 +6,9 @@ auth_enabled: false
 
 server:
   http_listen_port: ${LOKI_PORT:-3100}
-  grpc_listen_port: 0
+  # Must be a real port (NOT 0): the compactor's retention/delete path talks to itself
+  # over gRPC; with 0 it dials ":0" → connection refused. Internal to the binary.
+  grpc_listen_port: 9095
   log_level: ${LOKI_LOG_LEVEL:-warn}
 
 common:
