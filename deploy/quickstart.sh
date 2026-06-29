@@ -78,15 +78,16 @@ case "$ROLE" in
 ✅ Central up.  Dashboard:  http://$IP:8077   (login: admin / $PASS)
    Open firewall to nginx VMs:  3100 (Loki) and 8080 (blocklist).
 
-On EACH nginx VM run (repo cloned there):
-   ./deploy/quickstart.sh nginx $IP $ENROLL \$(hostname -s)
+On EACH nginx VM run (repo cloned there) — last arg is the env/pool (prod, dev…):
+   ./deploy/quickstart.sh nginx $IP $ENROLL \$(hostname -s) prod
+   (ноды одного env банятся вместе и используют его CF-токен / правила / уведомления)
 ────────────────────────────────────────────────────────────────────
 EOF
     ;;
 
   nginx|edge)
-    CENTRAL="${2:-}"; ENROLL="${3:-}"; NODE="${4:-$(hostname -s 2>/dev/null || hostname)}"
-    [ -n "$CENTRAL" ] && [ -n "$ENROLL" ] || die "usage: ./quickstart.sh nginx <CENTRAL_IP> <ENROLL_SECRET> [NODE_ID]"
+    CENTRAL="${2:-}"; ENROLL="${3:-}"; NODE="${4:-$(hostname -s 2>/dev/null || hostname)}"; ENV="${5:-}"
+    [ -n "$CENTRAL" ] && [ -n "$ENROLL" ] || die "usage: ./quickstart.sh nginx <CENTRAL_IP> <ENROLL_SECRET> [NODE_ID] [ENV]"
     [ -f "$ENVF" ] || cp "$HERE/.env.example" "$ENVF"
     set_env COMPOSE_PROFILES promtail
     set_env LOKI_PUSH_URL "http://$CENTRAL:3100/loki/api/v1/push"
@@ -101,7 +102,7 @@ EOF
     if [ "${SKIP_UP:-}" != "1" ]; then
       curl -fsSL "http://$CENTRAL:8080/install/soc-nginx-agent.sh" \
         | sudo INSECURE=1 BLOCKLIST_API_URL="http://$CENTRAL:8080" \
-               ENROLL_SECRET="$ENROLL" NODE_ID="$NODE" bash
+               ENROLL_SECRET="$ENROLL" NODE_ID="$NODE" GROUP="$ENV" bash
     fi
     cat <<EOF
 

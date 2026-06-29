@@ -13,6 +13,8 @@
 #   --ip <addr>     IP the nginx VM should use to reach the dashboard (default: the
 #                   host part of --dashboard). Use this if the VMs talk over a private IP.
 #   --node <name>   node id for the nginx VM (default: its hostname)
+#   --env <name>    environment/pool the nginx VM joins (prod, dev…) — its bans use
+#                   that env's CF token / rules / notification channels
 #   DRY_RUN=1       print the ssh/rsync commands instead of running them
 set -euo pipefail
 
@@ -21,7 +23,7 @@ REMOTE_DIR="soc"
 SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 RSYNC_EXCL=(--exclude '.git' --exclude '*.venv' --exclude '.venv' --exclude '__pycache__'
             --exclude 'deploy/.env' --exclude 'node_modules' --exclude '*.db*' --exclude '.DS_Store')
-DASH="" NGINX="" CENTRAL_IP="" NODE=""
+DASH="" NGINX="" CENTRAL_IP="" NODE="" ENV=""
 
 die() { echo "ERROR: $*" >&2; exit 2; }
 while [ $# -gt 0 ]; do
@@ -30,6 +32,7 @@ while [ $# -gt 0 ]; do
     --nginx)     NGINX="$2"; shift 2;;
     --ip)        CENTRAL_IP="$2"; shift 2;;
     --node)      NODE="$2"; shift 2;;
+    --env)       ENV="$2"; shift 2;;
     --install-docker) INSTALL_DOCKER=1; shift;;
     *) die "unknown arg: $1";;
   esac
@@ -57,7 +60,7 @@ fi
 
 echo "==> [3/3] nginx VM ($NGINX) — copy repo + ship logs + install agent"
 push "$NGINX"
-on "$NGINX" "cd $REMOTE_DIR && ${RENV}./deploy/quickstart.sh nginx $CENTRAL_IP $ENROLL ${NODE:-\$(hostname -s)}"
+on "$NGINX" "cd $REMOTE_DIR && ${RENV}./deploy/quickstart.sh nginx $CENTRAL_IP $ENROLL ${NODE:-\$(hostname -s)} ${ENV}"
 
 cat <<EOF
 
