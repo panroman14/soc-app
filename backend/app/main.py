@@ -137,10 +137,19 @@ def insight_loop():
             ts = int(time.time())
             db.save_insight(ts, insight["severity"], insight.get("headline", ""), insight)
             with _state_lock:
+                prev_sev = _state.get("last_severity")
                 _state["insight"] = {"ts": ts, **insight}
                 _state["llm_up"] = insight.get("llm_ok", True)
                 _state["llm_error"] = insight.get("llm_error")
                 _state["last_insight"] = ts
+                _state["last_severity"] = insight.get("severity")
+            # Notify only on the transition INTO critical (not every interval).
+            if insight.get("severity") == "critical" and prev_sev != "critical":
+                _notify({"type": "anomaly_critical", "env": "", "severity": "critical",
+                         "title": insight.get("headline", "Критическая аномалия трафика"),
+                         "text": insight.get("summary", ""),
+                         "fields": {"вредный_трафик": latest.get("malicious_ratio"),
+                                    "атакующих_подсетей": latest.get("distinct_attacker_ips")}})
             print("[insight] %s: %s (llm_ok=%s)" % (
                 insight["severity"], insight.get("headline"), insight.get("llm_ok")), flush=True)
         except Exception as e:
@@ -360,6 +369,60 @@ async def api_settings_save(request: Request):
             applied += (resp or {}).get("applied", [])
     return JSONResponse({"ok": err is None, "applied": applied, "error": err},
                         status_code=409 if err else 200)
+
+
+def _notify(event):
+    """Push an event into the blocklist-api notification engine (best-effort)."""
+    if not config.BLOCKLIST_API_URL:
+        return
+    try:
+        _blocklist_call("POST", "/notify", event)
+    except Exception:
+        pass
+
+
+@app.get("/api/environments")
+def api_environments():
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"enabled": False, "environments": []})
+    _, body = _blocklist_call("GET", "/environments")
+    return JSONResponse({"enabled": True, **(body or {})})
+
+
+@app.post("/api/environments")
+async def api_environments_save(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/environments", body)
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
+
+
+@app.post("/api/environments/delete")
+async def api_environments_delete(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/environments/delete", {"id": body.get("id", "")})
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
+
+
+@app.get("/api/notify_config")
+def api_notify_config():
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"enabled": False, "channels": [], "rules": []})
+    _, body = _blocklist_call("GET", "/notify_config")
+    return JSONResponse({"enabled": True, **(body or {})})
+
+
+@app.post("/api/notify_config")
+async def api_notify_config_save(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/notify_config", body)
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
+
+
+@app.post("/api/notify/test")
+async def api_notify_test(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/notify/test", {"channel": body.get("channel", "")})
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
 @app.get("/api/nodes")
