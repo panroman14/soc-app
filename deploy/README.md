@@ -15,6 +15,25 @@ nginx VM(s)                         central VM
 └───────────────────┘               └──────────────────────────────┘
 ```
 
+## Easiest: `quickstart.sh` (just give the IP)
+
+Clone the repo on both VMs, then:
+
+```bash
+# on the dashboard VM (central) — generates secrets + .env, brings it all up
+./deploy/quickstart.sh central <CENTRAL_IP>
+#   → prints the dashboard URL + login, and the exact line to run on nginx VMs:
+
+# on each nginx VM — ships logs + installs the ban agent (self-enroll)
+./deploy/quickstart.sh nginx <CENTRAL_IP> <ENROLL_SECRET> [NODE_ID]
+```
+
+Re-running is safe (keeps existing secrets). `SKIP_UP=1` writes config without
+starting containers. Bans default to local nginx; for Cloudflare set
+`DEPLOY_MODE=cloudflare` and add the token in **⚙️ Настройки**. The two one-time nginx
+steps (log format + `include`) are printed at the end. Everything below is the manual
+equivalent if you want finer control.
+
 ## 0. One-time: nginx logs
 
 **Recommended — soc_json** (full fields: host, XFF, CF client IP, timings):
