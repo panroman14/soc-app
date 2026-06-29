@@ -17,7 +17,7 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import config, enforce, nodes, safety, settings, store
+from . import config, enforce, nodes, notify, safety, settings, store
 
 app = FastAPI(title="blocklist-api", version="0.1.0")
 
@@ -224,6 +224,38 @@ async def post_settings(request: Request):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
+@app.get("/notify_config")
+def get_notify_config():
+    """Channels + rules for the dashboard (secrets redacted, last-send status)."""
+    return notify.public_view()
+
+
+@app.post("/notify_config")
+async def post_notify_config(request: Request):
+    body = await request.json()
+    try:
+        return {"ok": True, **notify.save_config(body.get("channels"), body.get("rules"))}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/notify/test")
+async def notify_test(request: Request):
+    body = await request.json()
+    return notify.test_channel(body.get("channel", ""))
+
+
+@app.post("/notify")
+async def notify_dispatch(request: Request):
+    """Admin endpoint for the soc backend to push events (autoban / anomaly) into the
+    same env-aware rule engine."""
+    body = await request.json()
+    notify.emit({"type": body.get("type", ""), "env": body.get("env", ""),
+                 "severity": body.get("severity", "info"), "title": body.get("title", ""),
+                 "text": body.get("text", ""), "fields": body.get("fields") or {}})
+    return {"ok": True}
+
+
 @app.get("/enroll_info")
 def enroll_info():
     """Admin-only: data the dashboard needs to render the «Add node» install
@@ -365,6 +397,32 @@ def _resync_loop():
             print("[resync] error:", e, flush=True)
 
 
+_node_state = {}  # node id → last-seen {offline, nginx_bad} to notify only on transitions
+
+
+def _node_watch_loop():
+    """Notify once when a node goes offline or its nginx -t starts failing."""
+    while True:
+        time.sleep(max(15, config.NODE_OFFLINE_AFTER // 2))
+        try:
+            for n in nodes.all_nodes():
+                st = _node_state.setdefault(n["id"], {"offline": False, "nginx_bad": False})
+                offline = not n.get("online")
+                if offline and not st["offline"] and n.get("last_seen"):
+                    notify.emit({"type": "node_offline", "env": n.get("group", ""),
+                                 "severity": "warning", "title": "Нода офлайн: " + n["id"],
+                                 "text": "", "fields": {"молчит_с": int(time.time()) - int(n.get("last_seen") or 0)}})
+                st["offline"] = offline
+                nb = (n.get("metrics") or {}).get("nginx_ok") is False
+                if nb and not st["nginx_bad"]:
+                    notify.emit({"type": "node_offline", "env": n.get("group", ""),
+                                 "severity": "warning", "title": "nginx -t упал на " + n["id"],
+                                 "text": "", "fields": {}})
+                st["nginx_bad"] = nb
+        except Exception as e:
+            print("[node-watch] error:", e, flush=True)
+
+
 @app.on_event("startup")
 def _startup():
     if not config.TOKEN:
@@ -377,3 +435,4 @@ def _startup():
               "Use HTTPS for any deployment crossing an untrusted network.", flush=True)
     threading.Thread(target=_prune_loop, daemon=True).start()
     threading.Thread(target=_resync_loop, daemon=True).start()
+    threading.Thread(target=_node_watch_loop, daemon=True).start()

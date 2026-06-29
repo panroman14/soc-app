@@ -9,7 +9,7 @@ import secrets
 import threading
 import time
 
-from . import config, enforce, safety, settings, storage
+from . import config, enforce, notify, safety, settings, storage
 
 _lock = threading.Lock()
 
@@ -107,6 +107,23 @@ def _audit(audit, action, cidr, who, extra=""):
     return ev
 
 
+def _emit_ban(cidr, env, who, reason, result):
+    """Fire a notification for a ban (best-effort, env-aware). Type/severity reflect
+    whether enforcement actually applied to the env's targets."""
+    failed = result and not result.get("ok")
+    etype = "ban_failed" if failed else ("autoban" if who == "autoban" else "ban")
+    fields = {"by": who}
+    if reason:
+        fields["причина"] = reason
+    if result and result.get("targets"):
+        fields["таргеты"] = ", ".join(result["targets"])
+    if failed:
+        fields["ошибка"] = "; ".join("%s: %s" % (t, e) for t, e in (result.get("failed") or {}).items())
+    notify.emit({"type": etype, "env": env, "severity": "warning" if failed else "notice",
+                 "title": ("Бан не применился" if failed else "IP забанен") + " " + cidr,
+                 "text": "", "fields": fields})
+
+
 def _enf_result(group=None):
     """Outcome of the LAST render for the relevant targets: did enforcement succeed
     everywhere, and if not, which target failed with what error. `group` limits it to
@@ -146,8 +163,10 @@ def block(cidr, reason="", added_by="dashboard", ttl=0, force=False, group=None)
         cidrs = _render(entries)
         ev["result"] = _enf_result(group)
         _save_raw(entries, audit)
-        return {"cidr": cidr, "active": len(cidrs), "group": group,
-                "targets": enforce.resolve_group(group), "result": ev["result"]}
+        out = {"cidr": cidr, "active": len(cidrs), "group": group,
+               "targets": enforce.resolve_group(group), "result": ev["result"]}
+    _emit_ban(cidr, group, added_by, reason, out["result"])   # outside lock (network)
+    return out
 
 
 def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, force=False, group=None):
@@ -182,13 +201,21 @@ def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, f
             evs.append(_audit(audit, "block", c, added_by, rs))
             added.append(c)
         active = _render(entries) if added else _active(entries)
+        res = {"ok": True, "targets": [], "failed": {}}
         if added:
             res = _enf_result()
             for ev in evs:
                 ev["result"] = res
             _save_raw(entries, audit)
-        return {"blocked": added, "skipped": skipped, "active": len(active),
-                "result": (_enf_result() if added else {"ok": True, "targets": [], "failed": {}})}
+        out = {"blocked": added, "skipped": skipped, "active": len(active), "result": res}
+    if added:
+        failed = not res.get("ok")
+        notify.emit({"type": "ban_failed" if failed else ("autoban" if added_by == "autoban" else "ban"),
+                     "env": dflt_group, "severity": "warning" if failed else "notice",
+                     "title": "Забанено %d IP%s" % (len(added), " (с ошибкой применения)" if failed else ""),
+                     "text": "", "fields": {"by": added_by, "пример": ", ".join(added[:5]),
+                                            **({"ошибка": "; ".join("%s: %s" % (t, e) for t, e in (res.get("failed") or {}).items())} if failed else {})}})
+    return out
 
 
 def unblock(cidr, by="dashboard"):
@@ -203,8 +230,13 @@ def unblock(cidr, by="dashboard"):
             cidrs = _render(entries)
             ev["result"] = _enf_result()
             _save_raw(entries, audit)
-            return {"cidr": cidr, "removed": removed, "active": len(cidrs), "result": ev["result"]}
-        return {"cidr": cidr, "removed": 0}
+            out = {"cidr": cidr, "removed": removed, "active": len(cidrs), "result": ev["result"]}
+        else:
+            out = {"cidr": cidr, "removed": 0}
+    if out.get("removed"):
+        notify.emit({"type": "unban", "env": "", "severity": "info",
+                     "title": "IP разбанен " + cidr, "text": "", "fields": {"by": by}})
+    return out
 
 
 def clear_all(by="dashboard"):
