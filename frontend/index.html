@@ -935,6 +935,7 @@ const RU2EN={
   "страны (опц.)":"countries (opt.)","CN, RU — пусто = любая":"CN, RU — empty = any",
   "сработок WAF":"WAF triggers","за CF":"behind CF","бан":"ban","чисто — срабатываний WAF нет за окно":"clean — no WAF triggers in window",
   "применяется к":"applies to","все таргеты":"all targets","группа":"group","нет таргетов":"no targets","нет nginx/ingress таргетов":"no nginx/ingress targets",
+  "не привязано — правило не действует":"not attached — rule does nothing","привязка":"attach","+ привязать…":"+ attach…","убрать":"remove","группы":"groups","таргеты":"targets","паттерн":"pattern",
   "подключённая нода":"connected node","Cloudflare окружения":"environment Cloudflare","ingress окружения":"environment ingress",
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
@@ -2436,6 +2437,69 @@ async function loadP403(){
 }
 // ── единый резолвер «правило → группа → конкретные таргеты» (для подписей) ──────
 let _targetsData=null;   // {targets, groups, default_group} из /api/ban_targets
+// привязка правила (groups[]+targets[]+all) → множество id таргетов (зеркало бэкенда)
+function _ruleTargetIds(r){
+  const d=_targetsData; if(!d||!d.targets) return null;
+  const all=d.targets.map(t=>t.id);
+  if(r.all) return new Set(all);
+  const ids=new Set(r.targets||[]);
+  (r.groups||[]).forEach(g=>{ ((d.groups&&d.groups[g])||[]).forEach(x=>ids.add(x)); });
+  return ids;
+}
+function _ruleTargets(r, pathOnly){
+  const ids=_ruleTargetIds(r); if(ids==null) return null;
+  const byId={}; (_targetsData.targets||[]).forEach(t=>byId[t.id]=t);
+  let list=[...ids].map(id=>byId[id]).filter(t=>t&&t.type!=="noop");
+  if(pathOnly) list=list.filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
+  return list;
+}
+// строка «↳ применяется к: <таргеты>» под правилом (по его привязке)
+function _appliesLineRule(r, pathOnly){
+  const list=_ruleTargets(r, pathOnly); if(list==null) return "";
+  const noAttach=!r.all && !(r.groups||[]).length && !(r.targets||[]).length;
+  if(noAttach) return `<div class="text-[10px] mt-1 text-amber-400/80">↳ ${_trText("не привязано — правило не действует")}</div>`;
+  if(!list.length) return `<div class="text-[10px] mt-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${pathOnly?_trText("нет nginx/ingress таргетов"):_trText("нет таргетов")}</div>`;
+  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${esc(t.id)}<span style="color:var(--faint)">·${esc(t.type)}</span></span>`).join(" ");
+  return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
+}
+// ── редактор привязки правила (группы + таргеты + «все») ───────────────────────
+function _attachOptions(r){
+  const d=_targetsData; if(!d) return `<option value="">${_trText('+ привязать…')}</option>`;
+  const gs=Object.keys(d.groups||{}).filter(g=>g&&!(r.groups||[]).includes(g));
+  const ts=(d.targets||[]).filter(t=>t.type!=="noop"&&!(r.targets||[]).includes(t.id));
+  let o=`<option value="">${_trText('+ привязать…')}</option>`;
+  if(gs.length) o+=`<optgroup label="${_trText('группы')}">`+gs.map(g=>`<option value="g:${esc(g)}">🗂 ${esc(g)}</option>`).join("")+`</optgroup>`;
+  if(ts.length) o+=`<optgroup label="${_trText('таргеты')}">`+ts.map(t=>`<option value="t:${esc(t.id)}">🎯 ${esc(t.id)} · ${esc(t.type)}</option>`).join("")+`</optgroup>`;
+  return o;
+}
+function _attachUI(r, kind){
+  const all=!!r.all;
+  const chip=(label,tok)=>`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${label}<button onclick="attachRemove('${kind}','${esc(r.id)}','${tok}')" class="text-slate-500 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`;
+  const gChips=(r.groups||[]).map(g=>chip("🗂 "+esc(g),"g:"+esc(g))).join(" ");
+  const tChips=(r.targets||[]).map(t=>chip("🎯 "+esc(t),"t:"+esc(t))).join(" ");
+  return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
+    <span style="color:var(--faint)">🎯 ${_trText('привязка')}:</span>
+    <button onclick="attachAll('${kind}','${esc(r.id)}',${!all})" class="px-1.5 py-0.5 rounded border ${all?'bg-emerald-600/30 border-emerald-500/40 text-emerald-200':'border-slate-700 text-slate-500 hover:text-slate-300'}">${_trText('все таргеты')}</button>
+    ${all?"":gChips+" "+tChips+`<select onchange="attachAdd('${kind}','${esc(r.id)}',this.value);this.value=''" class="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300">${_attachOptions(r)}</select>`}
+  </div>`;
+}
+function _attachRuleById(kind,id){ return kind==="p403"?(_p403.rules||[]).find(r=>String(r.id)===String(id)):(_abRules||[]).find(r=>String(r.id)===String(id)); }
+async function _attachSave(kind,r){
+  if(kind==="p403"){
+    const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:r.pattern,enabled:r.enabled!==false,
+      groups:r.groups||[],targets:r.targets||[],all:!!r.all});
+    if(res&&res.ok)loadP403(); else uiAlert("не удалось: "+((res&&res.error)||"?"));
+  }else{ if(typeof _abAttachSave==="function")_abAttachSave(r); }  // автобан — Фаза 2
+}
+function attachAll(kind,id,val){ const r=_attachRuleById(kind,id); if(!r)return; r.all=!!val; if(val){r.groups=[];r.targets=[];} _attachSave(kind,r); }
+function attachAdd(kind,id,tok){ if(!tok)return; const r=_attachRuleById(kind,id); if(!r)return; r.all=false;
+  if(tok.slice(0,2)==="g:")r.groups=[...new Set([...(r.groups||[]),tok.slice(2)])];
+  else if(tok.slice(0,2)==="t:")r.targets=[...new Set([...(r.targets||[]),tok.slice(2)])];
+  _attachSave(kind,r); }
+function attachRemove(kind,id,tok){ const r=_attachRuleById(kind,id); if(!r)return;
+  if(tok.slice(0,2)==="g:")r.groups=(r.groups||[]).filter(g=>g!==tok.slice(2));
+  else r.targets=(r.targets||[]).filter(t=>t!==tok.slice(2));
+  _attachSave(kind,r); }
 function _appliesTargets(group, pathOnly){
   const d=_targetsData; if(!d||!d.targets) return null;
   const byId={}; d.targets.forEach(t=>byId[t.id]=t);
@@ -2515,13 +2579,12 @@ function _p403RenderList(){
         <span class="text-sm text-slate-200 font-medium truncate">${esc(r.name||'(без имени)')}${isMain?' <span class="text-[10px] text-amber-400">основное</span>':''}</span>
         ${en?'':'<span class="text-[10px] text-amber-400 shrink-0">выкл</span>'}${by}${dt}
         <span class="text-[10px] text-slate-600 shrink-0 ml-auto">${plen}&nbsp;симв.</span>
-        <label class="flex items-center gap-1 shrink-0" title="${_trText('к какой таргет-группе применяется это правило')}"><span class="text-[10px] text-slate-500">🎯</span>
-          <select onchange="p403SetGroup('${esc(r.id)}',this.value)" class="text-[11px] bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-200 max-w-[130px]">${_groupOptions(r.group||"")}</select></label>
         <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0">паттерн&nbsp;▾</button>
         <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">✎&nbsp;ред.</button>
         <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20 shrink-0">удалить</button>
       </div>
-      ${_appliesLine(r.group||"", true)}
+      ${_attachUI(r,'p403')}
+      ${_appliesLineRule(r, true)}
       <div id="pat-${esc(r.id)}" class="hidden mono text-[11px] text-slate-400 break-all mt-1.5 bg-slate-950/60 rounded p-2 max-h-44 overflow-auto">${esc(r.pattern||"")}</div>
       <div id="ed-${esc(r.id)}" class="hidden mt-2 border-t border-slate-800 pt-2"></div>
     </div>`;}).join("");
@@ -2605,7 +2668,9 @@ async function p403EditSave(id){
   const parts=st.parts.map(p=>p.trim()).filter(Boolean);
   if(!parts.length){uiAlert("в правиле не осталось ни одного пути — тогда удали правило целиком.");return;}
   const pattern="("+parts.join("|")+")";
-  const res=await _post("/api/path_rule",{id,name:st.name,pattern,enabled:st.enabled});
+  const r=(_p403.rules||[]).find(x=>String(x.id)===String(id))||{};
+  const res=await _post("/api/path_rule",{id,name:st.name,pattern,enabled:st.enabled,
+    groups:r.groups||[],targets:r.targets||[],all:!!r.all});  // сохранить привязку
   if(res.ok)loadP403(); else uiAlert("не удалось: "+(res.error||"?"));
 }
 // ── генератор паттернов: человек пишет путь/wildcard → regex для nginx ~* ──────
@@ -2691,15 +2756,18 @@ async function p403Save(){
     const parts=_p403TopSplit(_p403Unwrap(r.pattern||""));
     if(parts.includes(pattern)){msg.textContent="• уже есть в «"+r.name+"»";msg.className="text-xs text-amber-300";return;}
     parts.push(pattern);
-    const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:"("+parts.join("|")+")",enabled:r.enabled!==false,force});
+    const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:"("+parts.join("|")+")",enabled:r.enabled!==false,force,
+      groups:r.groups||[],targets:r.targets||[],all:!!r.all});  // сохранить привязку
     if(res.ok){msg.textContent="✓ в «"+r.name+"»";msg.className="text-xs text-emerald-300";_clear();loadP403();}
     else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
     return;
   }
   // новое правило
   const name=document.getElementById("p403-name").value.trim();
+  // initial attachment from the form group picker: empty = all targets, else that group
   const group=(document.getElementById("p403-group")||{}).value||"";
-  const res=await _post("/api/path_rule",{name,pattern,force,group});
+  const attach=group?{groups:[group]}:{all:true};
+  const res=await _post("/api/path_rule",{name,pattern,force,...attach});
   if(res.ok&&res.duplicate){msg.textContent="• такое правило уже есть — не дублирую";msg.className="text-xs text-amber-300";loadP403();return;}
   if(res.ok){msg.textContent="✓ создано";msg.className="text-xs text-emerald-300";
     document.getElementById("p403-name").value="";_clear();loadP403();}

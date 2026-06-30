@@ -302,6 +302,18 @@ def _load_path():
         obj.setdefault("enabled", True)
         if not isinstance(obj.get("rules"), list):
             obj["rules"] = []
+        # migrate single `group` → attachment model {groups:[], targets:[], all:bool}.
+        # Legacy rule with an empty group used to mean "all targets" → keep that via all=True
+        # so an upgrade never silently drops existing path protection.
+        for r in obj["rules"]:
+            if "groups" not in r and "all" not in r:
+                g = (r.get("group") or "").strip()
+                r["groups"] = [g] if g else []
+                r["targets"] = []
+                r["all"] = not g          # old empty-group == applied everywhere
+            r.setdefault("groups", [])
+            r.setdefault("targets", [])
+            r.setdefault("all", False)
         return obj
     except Exception as e:
         # Fail-safe like the denylist: a corrupt file must NOT silently render an
@@ -326,37 +338,48 @@ def list_path_rules():
         return _load_path()
 
 
+def _rule_target_ids(r, gcache, all_ids):
+    """The set of target ids an enabled path rule applies to, from its attachment:
+    union of its groups' members + its individual targets. `all`=True → every target.
+    Empty attachment → NOTHING (a rule does nothing until it's attached)."""
+    if r.get("all"):
+        return all_ids
+    ids = set(r.get("targets") or [])
+    for g in (r.get("groups") or []):
+        if not g:
+            continue
+        if g not in gcache:
+            gcache[g] = set(enforce.resolve_group(g))
+        ids |= gcache[g]
+    return ids
+
+
 def _patterns_per_target(path, tids):
-    """{target_id: [pattern,...]} — each enabled path rule routed to its group's
-    targets. Empty/unknown group resolves to ALL targets (resolve_group), so a rule
-    with no group applies everywhere (back-compat)."""
+    """{target_id: [pattern,...]} — each enabled path rule routed to the targets it is
+    attached to (groups ∪ targets, or all). Unattached rules render nowhere."""
     out = {tid: [] for tid in tids}
-    cache = {}
+    gcache, all_ids = {}, set(tids)
     for r in path.get("rules", []):
         if not r.get("enabled"):
             continue
-        g = r.get("group") or ""
-        if g not in cache:
-            cache[g] = set(enforce.resolve_group(g))
+        rt = _rule_target_ids(r, gcache, all_ids)
         for tid in tids:
-            if tid in cache[g]:
+            if tid in rt:
                 out[tid].append(r["pattern"])
     return out
 
 
 def patterns_for_target(target_id, path=None):
     """Enabled 403 patterns that apply to ONE target (used by the nginx-file pull
-    agent's /nginx_snippet). Routed by each rule's group; empty group = all."""
+    agent's /nginx_snippet). Routed by each rule's attachment (groups ∪ targets/all)."""
     if path is None:
         path = _load_path()
-    pats, cache = [], {}
+    pats, gcache = [], {}
+    all_ids = set(enforce.all_target_ids())
     for r in path.get("rules", []):
         if not r.get("enabled"):
             continue
-        g = r.get("group") or ""
-        if g not in cache:
-            cache[g] = set(enforce.resolve_group(g))
-        if target_id in cache[g]:
+        if target_id in _rule_target_ids(r, gcache, all_ids):
             pats.append(r["pattern"])
     return pats
 
@@ -375,9 +398,17 @@ def path_render_status():
         return {"enabled": master, "count": len(rules), "enabled_count": enabled_n, **st}
 
 
-def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by="dashboard", group=None):
+def _norm_attach(groups, targets, all_):
+    """Normalize an attachment from the API into (groups[], targets[], all)."""
+    gl = [str(g).strip() for g in (groups or []) if str(g).strip()]
+    tl = [str(t).strip() for t in (targets or []) if str(t).strip()]
+    return gl, tl, bool(all_)
+
+
+def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by="dashboard",
+                     groups=None, targets=None, all=False):
     pattern = safety.validate_pattern(pattern, force=force)  # raises BlockError
-    group = (group or "").strip()       # "" = applies to ALL targets (back-compat)
+    gl, tl, al = _norm_attach(groups, targets, all)          # attachment ('' all = nothing)
     with _lock:
         entries, audit = _load_raw()
         path = _load_path()
@@ -386,16 +417,17 @@ def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by
             found = next((r for r in rules if r.get("id") == id), None)
             if not found:
                 raise safety.BlockError("правило не найдено: %s" % id)
-            found.update({"name": name or found.get("name", ""),
-                          "pattern": pattern, "enabled": bool(enabled), "group": group})
+            found.update({"name": name or found.get("name", ""), "pattern": pattern,
+                          "enabled": bool(enabled), "groups": gl, "targets": tl, "all": al})
+            found.pop("group", None)
         else:
             # dedup: identical pattern already exists → no-op, return it (no duplicate)
             dup = next((r for r in rules if r.get("pattern") == pattern), None)
             if dup:
                 return {"id": dup.get("id"), "rules": len(rules), "duplicate": True}
             id = _new_path_id(rules)
-            rules.append({"id": id, "name": name, "pattern": pattern,
-                          "enabled": bool(enabled), "group": group, "added_by": by, "ts": _now()})
+            rules.append({"id": id, "name": name, "pattern": pattern, "enabled": bool(enabled),
+                          "groups": gl, "targets": tl, "all": al, "added_by": by, "ts": _now()})
         ev = _audit(audit, "path_rule", id, by, (name or pattern)[:80])
         _render(entries, path)
         ev["result"] = _enf_result()

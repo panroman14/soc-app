@@ -1293,7 +1293,8 @@ async def api_path_rule(request: Request):
                "pattern": body.get("pattern", ""),
                "enabled": bool(body.get("enabled", True)),
                "force": bool(body.get("force", False)),
-               "group": body.get("group", "")}
+               "groups": body.get("groups"), "targets": body.get("targets"),
+               "all": bool(body.get("all", False)), "group": body.get("group", "")}
     status, resp = _blocklist_call("POST", "/path_rule", payload)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 

@@ -370,10 +370,15 @@ def path_status():
 async def path_rule(request: Request):
     body = await request.json()
     try:
+        # back-compat: a lone `group` string still works (→ groups=[group])
+        groups = body.get("groups")
+        if groups is None and body.get("group"):
+            groups = [body.get("group")]
         res = store.upsert_path_rule(
             id=body.get("id"), name=body.get("name", ""),
             pattern=body.get("pattern", ""), enabled=bool(body.get("enabled", True)),
-            force=bool(body.get("force", False)), group=body.get("group", ""))
+            force=bool(body.get("force", False)),
+            groups=groups, targets=body.get("targets"), all=bool(body.get("all", False)))
         return {"ok": True, **res}
     except safety.BlockError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
