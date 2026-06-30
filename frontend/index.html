@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,58 +7,104 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
-  :root { color-scheme: dark; }
-  body { background:#0a0c10; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .card { background:#11151c; border:1px solid #1e2530; border-radius:14px; }
-  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2a3340;border-radius:4px}
+  /* ── soc design system ─────────────────────────────────────────────────── */
+  :root{
+    color-scheme: dark;
+    --bg:#080a0f; --bg2:#0b0e14; --surface:#10141c; --surface2:#151b25;
+    --border:#1d2531; --border2:#283142; --text:#e6eaf2; --muted:#8893a7; --faint:#5b6577;
+    --accent:#6366f1; --accent2:#818cf8; --accent-weak:#6366f122;
+    --ok:#34d399; --warn:#fbbf24; --crit:#f87171; --info:#60a5fa;
+    --radius:14px; --radius-sm:9px;
+  }
+  *{scrollbar-width:thin;scrollbar-color:#2a3340 transparent}
+  body{background:
+      radial-gradient(1200px 600px at 80% -10%, #14203a55, transparent 60%),
+      radial-gradient(900px 500px at -10% 0%, #1b143a44, transparent 55%), var(--bg);
+    color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#2a3340;border-radius:6px}::-webkit-scrollbar-thumb:hover{background:#384357}
+
+  /* layout shell */
+  .app{display:flex;min-height:100vh;align-items:stretch}
+  .sidebar{width:230px;flex:0 0 230px;background:linear-gradient(180deg,var(--bg2),#0a0d13);
+    border-right:1px solid var(--border);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:16px 12px;gap:4px;z-index:20}
+  .main{flex:1;min-width:0;padding:18px 22px 48px;max-width:1480px}
+  .navitem{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;color:var(--muted);
+    font-size:13.5px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:.12s;width:100%;text-align:left}
+  .navitem:hover{background:#ffffff08;color:var(--text)}
+  .navitem.active{background:var(--accent-weak);color:var(--accent2);border-color:#6366f140}
+  .navitem .ic{width:18px;text-align:center;font-size:15px}
+
+  /* components */
+  .card{background:linear-gradient(180deg,var(--surface),var(--surface2));border:1px solid var(--border);
+    border-radius:var(--radius);box-shadow:0 1px 0 #ffffff06 inset, 0 8px 24px -16px #000}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--radius-sm);font-size:12.5px;
+    font-weight:600;border:1px solid var(--border2);background:#161c27;color:var(--text);cursor:pointer;transition:.12s;white-space:nowrap}
+  .btn:hover{background:#1d2535;border-color:#36425a}
+  .btn-primary{background:linear-gradient(180deg,var(--accent2),var(--accent));border-color:#4f46e5;color:#fff;box-shadow:0 6px 16px -8px #6366f1aa}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  .btn-ghost:hover{background:#ffffff0a;color:var(--text)}
+  .btn-danger{color:var(--crit);border-color:transparent;background:transparent}
+  .btn-danger:hover{background:#f8717115}
+  .btn-xs{padding:4px 9px;font-size:11.5px}
+  .input,select.input,textarea.input{width:100%;background:#0c1118;border:1px solid var(--border);border-radius:9px;
+    padding:7px 10px;font-size:12.5px;color:var(--text);outline:none;transition:.12s}
+  .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border2)}
   .pulse{animation:p 2s infinite}@keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
-  h2.sec{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:#64748b;font-weight:600;margin:1.5rem 0 .75rem}
+  h2.sec{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:1.4rem 0 .7rem}
   .bar-bg{height:6px;border-radius:3px;background:#1a212c}
-  /* «Кто и что» — карточки можно тянуть за угол (resize) */
+  .card-hidden{display:none!important}
   #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
   #whoswhat > .card::-webkit-resizer{background:#2a3340}
+  @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s}.sidebar.open{left:0}.main{padding:14px}}
 </style>
 </head>
-<body class="text-slate-200 min-h-screen">
-<div class="max-w-[1400px] mx-auto px-5 py-5">
-
-  <header class="flex items-center justify-between mb-5 flex-wrap gap-3">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 grid place-items-center text-indigo-300 font-bold">k</div>
-      <div>
-        <h1 class="text-lg font-semibold tracking-tight">SOC Dashboard</h1>
-        <p class="text-xs text-slate-500">мониторинг трафика и атак · все домены</p>
+<body class="min-h-screen">
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="flex items-center gap-2.5 px-1 pb-3 mb-2 border-b" style="border-color:var(--border)">
+      <div class="w-9 h-9 rounded-xl grid place-items-center font-bold" style="background:var(--accent-weak);border:1px solid #6366f140;color:var(--accent2)">◈</div>
+      <div><div class="font-semibold tracking-tight leading-none">SOC</div><div class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tagline">traffic & attack monitor</div></div>
+    </div>
+    <button id="navtab-dash" onclick="showView('dash')" class="navitem active"><span class="ic">▦</span><span data-i18n="nav.dash">Dashboard</span></button>
+    <button id="navtab-autoban" onclick="showView('autoban')" class="navitem"><span class="ic">⛔</span><span data-i18n="nav.autoban">Auto-ban</span></button>
+    <button id="navtab-p403" onclick="showView('p403')" class="navitem"><span class="ic">🚫</span><span data-i18n="nav.p403">403 rules</span></button>
+    <button id="navtab-nodes" onclick="showView('nodes')" class="navitem"><span class="ic">🖥️</span><span data-i18n="nav.nodes">Nodes</span></button>
+    <button id="navtab-journal" onclick="showView('journal')" class="navitem"><span class="ic">📋</span><span data-i18n="nav.journal">Journal</span></button>
+    <button id="navtab-logs" onclick="showView('logs')" class="navitem"><span class="ic">📜</span><span data-i18n="nav.logs">Logs</span></button>
+    <button id="navtab-settings" onclick="showView('settings')" class="navitem"><span class="ic">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
+    <div class="mt-auto pt-3 border-t space-y-2" style="border-color:var(--border)">
+      <div class="px-1">
+        <div class="text-[10px] uppercase tracking-wide mb-1" style="color:var(--faint)" data-i18n="env">Environment</div>
+        <select id="env-sw" onchange="setEnv(this.value)" class="input" style="padding:6px 8px"><option value="" data-i18n="env.all">all</option></select>
+      </div>
+      <div class="flex items-center gap-1.5 px-1">
+        <button id="lang-btn" onclick="toggleLang()" class="btn btn-ghost btn-xs" title="language">EN</button>
+        <button id="llm-toggle" onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
+        <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
       </div>
     </div>
-    <div class="flex items-center gap-4">
-      <button id="llm-toggle" onclick="toggleLLM()" class="px-2.5 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-400 hover:bg-slate-800" title="включить/выключить LLM">🤖 LLM: —</button>
-      <button id="pause-btn" onclick="togglePause()" class="px-2.5 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800" title="пауза авто-обновления">⏸</button>
-      <div id="status-badge" class="px-3 py-1.5 rounded-lg text-xs font-semibold border">—</div>
+  </aside>
+
+  <main class="main">
+  <header class="flex items-center justify-between mb-5 flex-wrap gap-3">
+    <div>
+      <h1 class="text-lg font-semibold tracking-tight" id="view-title" data-i18n="title">SOC Dashboard</h1>
+      <p class="text-xs" style="color:var(--faint)" data-i18n="subtitle">traffic & attack monitoring · all domains</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="status-badge" class="chip">—</div>
       <div class="text-right">
         <div class="flex items-center gap-1.5 justify-end text-xs">
-          <span id="live-dot" class="w-2 h-2 rounded-full bg-slate-600"></span>
-          <span id="live-text" class="text-slate-400">подключение…</span>
+          <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
+          <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
         </div>
-        <div id="updated" class="text-[11px] text-slate-600 mono mt-0.5">—</div>
+        <div id="updated" class="text-[11px] mono mt-0.5" style="color:var(--faint)">—</div>
       </div>
     </div>
   </header>
-
-  <nav class="flex items-center gap-1 mb-4 border-b border-slate-800">
-    <button id="navtab-dash" onclick="showView('dash')" class="px-3 py-2 text-sm border-b-2 -mb-px border-indigo-500 text-indigo-200 font-medium">Дашборд</button>
-    <button id="navtab-autoban" onclick="showView('autoban')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⛔ Автобан</button>
-    <button id="navtab-p403" onclick="showView('p403')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🚫 Правила 403</button>
-    <button id="navtab-nodes" onclick="showView('nodes')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">🖥️ Ноды</button>
-    <button id="navtab-journal" onclick="showView('journal')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">📋 Журнал</button>
-    <button id="navtab-settings" onclick="showView('settings')" class="px-3 py-2 text-sm border-b-2 -mb-px border-transparent text-slate-400 hover:text-slate-200">⚙️ Настройки</button>
-    <div class="ml-auto flex items-center gap-1.5 pb-1">
-      <span class="text-[11px] text-slate-500">env:</span>
-      <select id="env-sw" onchange="setEnv(this.value)" class="text-xs bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" title="Окружение — фильтрует трафик/аналитику/ноды">
-        <option value="">все</option>
-      </select>
-    </div>
-  </nav>
 
   <div id="view-dash">
   <div id="banner" class="hidden mb-4"></div>
@@ -514,7 +560,30 @@
     </section>
   </div><!-- /view-settings -->
 
-  <footer class="text-center text-[11px] text-slate-700 mb-6 mono">soc · обновление 15с</footer>
+  <div id="view-logs" class="hidden">
+    <section class="card p-4">
+      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div><h2 class="text-sm font-medium" data-i18n="logs.title">Live logs</h2>
+          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="logs.sub">Raw nginx lines from Loki, filtered by the current environment.</p></div>
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <input id="lg-q" class="input" style="width:190px" placeholder="filter text…" oninput="lgDebounced()">
+          <select id="lg-stream" class="input" style="width:auto" onchange="loadLogs()">
+            <option value="access" data-i18n="logs.access">access</option>
+            <option value="error" data-i18n="logs.error">error</option>
+          </select>
+          <select id="lg-mins" class="input" style="width:auto" onchange="loadLogs()">
+            <option value="15">15m</option><option value="60">1h</option><option value="360">6h</option>
+          </select>
+          <label class="btn btn-ghost btn-xs" style="gap:5px"><input type="checkbox" id="lg-follow" onchange="lgFollow()"><span data-i18n="logs.follow">follow</span></label>
+          <button onclick="loadLogs()" class="btn btn-xs" data-i18n="refresh">refresh</button>
+        </div>
+      </div>
+      <div id="lg-out" class="mono text-[11.5px] overflow-auto" style="background:#0a0e14;border:1px solid var(--border);border-radius:10px;padding:10px;max-height:70vh;white-space:pre-wrap;line-height:1.5">загрузка…</div>
+    </section>
+  </div><!-- /view-logs -->
+
+  <footer class="text-center text-[11px] mb-2 mono" style="color:var(--faint)">soc · auto-refresh 15s</footer>
+  </main>
 </div>
 
 <!-- IP drill-down modal -->
@@ -558,6 +627,50 @@ function setEnv(v){
   if(typeof renderBanCandidates==="function")renderBanCandidates();
   if(typeof renderSuspects==="function")renderSuspects();
   if(_view==="nodes"&&typeof loadNodes==="function")loadNodes();
+}
+
+// ── i18n (en default, ru toggle) ──────────────────────────────────────────────
+const I18N={en:{
+  "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
+  "nav.dash":"Dashboard","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
+  "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
+},ru:{
+  "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
+  "nav.dash":"Дашборд","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
+  "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
+  "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
+}};
+let _lang=localStorage.getItem("soc_lang")||"en";
+function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
+function applyI18n(){
+  document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent=t(el.getAttribute("data-i18n")); });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el=>{ el.placeholder=t(el.getAttribute("data-i18n-ph")); });
+  const lb=document.getElementById("lang-btn"); if(lb)lb.textContent=_lang.toUpperCase();
+  document.documentElement.lang=_lang;
+}
+function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_lang",_lang); applyI18n();
+  if(typeof showView==="function")showView(_view||"dash"); }
+
+// ── Logs viewer ───────────────────────────────────────────────────────────────
+let _lgTimer=null,_lgDeb=null;
+function lgDebounced(){ clearTimeout(_lgDeb); _lgDeb=setTimeout(loadLogs,400); }
+function lgFollow(){ loadLogs(); }
+async function loadLogs(){
+  const out=document.getElementById("lg-out"); if(!out)return;
+  const stream=document.getElementById("lg-stream").value,mins=document.getElementById("lg-mins").value,q=document.getElementById("lg-q").value;
+  try{
+    const d=await (await fetch(_withEnv(`/api/logs?stream=${encodeURIComponent(stream)}&minutes=${mins}&q=${encodeURIComponent(q)}`))).json();
+    if(d.enabled===false){ out.textContent=t("logs.off"); return; }
+    const lines=d.lines||[];
+    out.innerHTML=lines.length?lines.map(l=>{
+      const s=+l.status||0,c=s>=500?"#f87171":s>=400?"#fbbf24":s>=300?"#60a5fa":"#9aa4b6";
+      return `<div><span style="color:#5b6577">${esc(l.time||"")}</span> <span style="color:${c}">${esc(l.line||"")}</span></div>`;
+    }).join(""):`<span style="color:var(--faint)">${t("logs.empty")}</span>`;
+    if(document.getElementById("lg-follow").checked)out.scrollTop=out.scrollHeight;
+  }catch(e){ out.textContent="error: "+e.message; }
+  clearTimeout(_lgTimer);
+  if(_view==="logs"&&document.getElementById("lg-follow")&&document.getElementById("lg-follow").checked)_lgTimer=setTimeout(loadLogs,5000);
 }
 const CNAMES={US:"США",UA:"Украина",RU:"Россия",GB:"Великобритания",DE:"Германия",FR:"Франция",NL:"Нидерланды",IE:"Ирландия",PL:"Польша",CA:"Канада",IN:"Индия",CN:"Китай",SG:"Сингапур",IT:"Италия",ES:"Испания",SE:"Швеция",FI:"Финляндия",CZ:"Чехия",RO:"Румыния",LV:"Латвия",LT:"Литва",EE:"Эстония",BY:"Беларусь",KZ:"Казахстан",TR:"Турция",BR:"Бразилия",JP:"Япония",KR:"Корея",AU:"Австралия",CH:"Швейцария",AT:"Австрия",BE:"Бельгия",DK:"Дания",NO:"Норвегия",PT:"Португалия",MD:"Молдова",GE:"Грузия",AM:"Армения",AZ:"Азербайджан",IL:"Израиль",AE:"ОАЭ",HK:"Гонконг",VN:"Вьетнам",ID:"Индонезия",MX:"Мексика",ZA:"ЮАР",BG:"Болгария",HU:"Венгрия",GR:"Греция"};
 function flag(cc){if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc))return"🏳️";return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));}
@@ -1382,21 +1495,24 @@ let _abLoaded=false, _abWindows=["1m","5m","10m","1h","8h"], _abFamilies=[], _ab
 let _abInterval=60, _abMaxTick=20, _abLastRun=null, _abRules=null, _abIgnore=[];
 let _abLogRows=[], _abLogPage=0; const _AB_LOG_PER=10;
 let _view="dash";
+const _VIEWS=["dash","autoban","p403","nodes","journal","logs","settings"];
 function showView(name){
-  const views=["dash","autoban","p403","nodes","journal","settings"];
-  if(!views.includes(name))name="dash";
+  if(!_VIEWS.includes(name))name="dash";
   _view=name;
-  const on="border-indigo-500 text-indigo-200 font-medium", off="border-transparent text-slate-400 hover:text-slate-200";
-  views.forEach(v=>{
+  _VIEWS.forEach(v=>{
     document.getElementById("view-"+v).classList.toggle("hidden",v!==name);
-    document.getElementById("navtab-"+v).className="px-3 py-2 text-sm border-b-2 -mb-px "+(v===name?on:off);
+    document.getElementById("navtab-"+v).classList.toggle("active",v===name);
   });
   location.hash=name==="dash"?"":("#"+name);
+  const tEl=document.getElementById("view-title");
+  if(tEl)tEl.textContent=name==="dash"?t("title"):t("nav."+name);
+  const sb=document.getElementById("sidebar"); if(sb)sb.classList.remove("open");
   if(name==="autoban")loadAutoban();
   if(name==="p403")loadP403();
   if(name==="nodes")loadNodes();
   if(name==="settings")loadSettings();
   if(name==="journal")loadJournal();
+  if(name==="logs")loadLogs();
 }
 
 // ── Журнал действий (audit blocklist-api + исход применения) ───────────────────
@@ -2601,7 +2717,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
+applyI18n();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);

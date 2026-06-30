@@ -111,6 +111,36 @@ def _get(path, params, _retries=2):
             raise
 
 
+def _fmt_ns(ns):
+    import datetime
+    try:
+        return datetime.datetime.fromtimestamp(ns / 1e9).strftime("%H:%M:%S")
+    except Exception:
+        return ""
+
+
+def recent_logs(stream="access", minutes=15, q="", limit=300):
+    """Raw recent log lines for the Logs viewer. `stream` = access|error (a Promtail
+    label). Env scoping is applied by _get. Returns newest-first {time,line,status}."""
+    import time as _t
+    base = SEL[:-1] + ("," if SEL.strip() not in ("{}", "") else "") + 'stream="%s"}' % stream
+    expr = base + (" |~ `%s`" % q.replace("`", "")) if q else base
+    end = int(_t.time() * 1e9)
+    start = end - int(minutes) * 60 * 10**9
+    res = _get("/loki/api/v1/query_range", {"query": expr, "start": str(start),
+               "end": str(end), "limit": str(min(int(limit), 500)), "direction": "backward"})
+    rows = []
+    for s in res:
+        for v in s.get("values", []):
+            rows.append((int(v[0]), v[1]))
+    rows.sort(key=lambda x: -x[0])
+    out = []
+    for ts_ns, line in rows[:limit]:
+        m = re.search(r'"status":"?(\d{3})', line) or re.search(r'"\s(\d{3})\s', line)
+        out.append({"time": _fmt_ns(ts_ns), "line": line, "status": m.group(1) if m else ""})
+    return out
+
+
 def scalar(expr):
     """Instant query returning a single number (0 if empty)."""
     res = _get("/loki/api/v1/query", {"query": "sum(count_over_time(" + expr + " [" + W + "]))"})

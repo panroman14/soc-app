@@ -208,6 +208,20 @@ def api_summary(env: str = ""):
         })
 
 
+@app.get("/api/logs")
+def api_logs(stream: str = "access", minutes: int = 15, q: str = "", env: str = ""):
+    """Raw nginx log lines from Loki for the Logs viewer (env-scoped)."""
+    if not config.LOKI_URL:
+        return JSONResponse({"enabled": False, "lines": []})
+    st = "error" if stream == "error" else "access"
+    try:
+        with loki.scope(env, _env_loki_url(env)):
+            lines = loki.recent_logs(st, min(max(int(minutes), 1), 1440), q, 300)
+        return JSONResponse({"enabled": True, "lines": lines})
+    except Exception as e:
+        return JSONResponse({"enabled": True, "lines": [], "error": str(e)})
+
+
 @app.get("/api/history")
 def api_history(limit: int = 240):
     snaps = db.recent_snapshots(limit)
