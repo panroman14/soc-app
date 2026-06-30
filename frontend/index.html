@@ -160,7 +160,6 @@
   <main class="main">
   <header class="topbar">
     <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')" title="menu">☰</button>
-    <select id="env-sw" onchange="setEnv(this.value)" class="input" style="width:auto;padding:7px 10px" title="Environment — scopes the console"><option value="" data-i18n="env.all">all environments</option></select>
     <label class="search"><span style="color:var(--faint)">⌕</span><input id="topsearch" onkeydown="if(event.key==='Enter')quickSearch(this.value)" placeholder="Search IP → profile" data-i18n-ph="search.ph"></label>
     <div style="flex:1"></div>
     <button class="btn btn-primary" onclick="quickBan()" title="Ban an IP / CIDR"><span>＋</span><span data-i18n="ban.quick">Ban IP</span></button>
@@ -349,8 +348,8 @@
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
           <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
-          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx-file — это подключённые ноды, cloudflare и ingress-cm — из настроек окружения.</div>
-          <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">Ноды</a> · <a onclick="showView('settings');setSub('env')" class="text-indigo-300 cursor-pointer">Настройки → Окружения</a></div>
+          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx-file — это подключённые ноды, cloudflare — из реестра CF-таргетов.</div>
+          <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">Ноды</a> · <a onclick="showView('settings');setSub('cf')" class="text-indigo-300 cursor-pointer">Настройки → CF-таргеты</a></div>
         </div>
         <div class="flex items-center gap-2">
           <label class="text-[11px] text-slate-500">ручной бан в группу:</label>
@@ -667,25 +666,14 @@
   <div id="view-settings" class="hidden">
     <div class="setwrap">
     <div class="setnav">
-      <button id="ssub-env" onclick="setSub('env')" class="setnav-btn"><span>🌐</span><span data-i18n="set.env">Environments</span></button>
       <button id="ssub-cf" onclick="setSub('cf')" class="setnav-btn"><span>☁️</span><span data-i18n="set.cf">CF targets</span></button>
       <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span>🔔</span><span data-i18n="set.notify">Notifications</span></button>
       <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span>⚙️</span><span data-i18n="set.global">Global</span></button>
     </div>
     <div>
 
-    <!-- ── Окружения ── -->
-    <section id="ssec-env" class="card p-4">
-      <div class="flex items-center justify-between mb-1">
-        <div><h2 class="text-sm font-medium text-slate-200">🌐 <span data-i18n="env.h">Environments</span></h2>
-          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="env.sub">Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join an environment at install (<span class="mono">--env</span>).</p></div>
-        <button onclick="envNew()" class="btn btn-primary btn-xs shrink-0"><span>＋</span><span data-i18n="env.new">New environment</span></button>
-      </div>
-      <div id="env-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
-    </section>
-
     <!-- ── CF-таргеты (именованный реестр) ── -->
-    <section id="ssec-cf" class="hidden card p-4">
+    <section id="ssec-cf" class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <div><h2 class="text-sm font-medium text-slate-200">☁️ <span data-i18n="cft.h">Cloudflare targets</span></h2>
           <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="cft.sub">A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).</p></div>
@@ -837,26 +825,9 @@ const pct=n=>n==null?"—":(n*100).toFixed(1)+"%";
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000-ts);return s<60?s+"с":Math.floor(s/60)+"м";};
 const dt=ts=>{if(!ts)return"—";const d=new Date(ts*1000);const p=n=>String(n).padStart(2,"0");return `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;};
 const esc=s=>String(s==null?"":s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
-// ── окружение (env) фильтр для анализа логов ──
-let _env=localStorage.getItem("soc_env")||"";
-function _withEnv(url){ return _env?url+(url.includes("?")?"&":"?")+"env="+encodeURIComponent(_env):url; }
-async function loadEnvSwitcher(){
-  try{
-    const d=await (await fetch("/api/environments")).json();
-    const sel=document.getElementById("env-sw"); if(!sel)return;
-    const envs=(d.environments||[]);
-    sel.innerHTML='<option value="">'+(_lang==="ru"?"все окружения":"all environments")+'</option>'+envs.map(e=>`<option value="${esc(e.id)}" ${e.id===_env?'selected':''}>${esc(e.name||e.id)}</option>`).join("");
-    if(_env&&!envs.some(e=>e.id===_env)){ _env=""; localStorage.removeItem("soc_env"); sel.value=""; }
-  }catch(e){}
-}
-function setEnv(v){
-  _env=v||""; if(_env)localStorage.setItem("soc_env",_env); else localStorage.removeItem("soc_env");
-  if(typeof refresh==="function")refresh();
-  if(typeof renderBanCandidates==="function")renderBanCandidates();
-  if(typeof renderSuspects==="function")renderSuspects();
-  if(typeof renderCrs==="function")renderCrs();
-  if(_view==="nodes"&&typeof loadNodes==="function")loadNodes();
-}
+// окружения убраны из UI — env-скоупинг логов оставлен инертным (всегда пустой env).
+const _env="";
+function _withEnv(url){ return url; }
 
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
@@ -969,9 +940,10 @@ const RU2EN={
   "применяется к":"applies to","все таргеты":"all targets","группа":"group","нет таргетов":"no targets","нет nginx/ingress таргетов":"no nginx/ingress targets",
   "не привязано — правило не действует":"not attached — rule does nothing","привязка":"attach","+ привязать…":"+ attach…","убрать":"remove","группы":"groups","таргеты":"targets","паттерн":"pattern",
   "подключённая нода":"connected node","Cloudflare окружения":"environment Cloudflare","ingress окружения":"environment ingress",
+  "Cloudflare-таргет":"Cloudflare target","Настройки → CF-таргеты":"Settings → CF targets","ingress-cm таргет":"ingress-cm target",
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
-  "нет бэкендов":"no backends","Cloudflare WAF — 403 по пути на edge":"Cloudflare WAF — path-403 at the edge","через какие бэкенды эта группа применяет баны/403":"which backends this group enforces bans/403 through",
+  "нет бэкендов":"no backends","таргетов":"targets","Cloudflare WAF — 403 по пути на edge":"Cloudflare WAF — path-403 at the edge","через какие бэкенды эта группа применяет баны/403":"which backends this group enforces bans/403 through",
   "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
   "осталось до авто-разбана":"time left until auto-unban","истекает…":"expiring…",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
@@ -2092,110 +2064,16 @@ function renderJournal(){
 }
 
 // ── Настройки: суб-вкладки (Окружения / Уведомления / Глобальные) ─────────────
-let _sub="env";
+let _sub="cf";
 function setSub(name){
   _sub=name;
-  [["env","ssec-env"],["cf","ssec-cf"],["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
+  [["cf","ssec-cf"],["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
     document.getElementById(sec).classList.toggle("hidden",n!==name);
     document.getElementById("ssub-"+n).className="setnav-btn"+(n===name?" on":"");
   });
-  if(name==="env")loadEnvs(); if(name==="cf")loadCfTargets(); if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
+  if(name==="cf")loadCfTargets(); if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
 }
 function loadSettings(){ setSub(_sub); }
-
-// ── Окружения ──
-let _envs=[];
-async function loadEnvs(){
-  const el=document.getElementById("env-list");
-  try{ const d=await (await fetch("/api/environments")).json();
-    if(d.enabled===false){ el.innerHTML='<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>'; return; }
-    _envs=d.environments||[]; renderEnvs();
-  }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
-}
-function renderEnvs(){
-  const el=document.getElementById("env-list");
-  el.innerHTML=_envs.map(envCard).join("")||'<div class="text-slate-500 text-xs">пока нет окружений. Нажми «+ Окружение».</div>';
-  if(typeof applyI18n==="function")applyI18n();
-}
-const _envOpen=new Set();   // which env cards are expanded for editing
-function envCard(e){
-  const cf=e.cloudflare||{}, ing=e.ingress||{}, id=esc(e.id), open=_envOpen.has(e.id);
-  // compact summary chips shown when collapsed
-  const chips=[
-    e.loki_url?`<span class="chip">Loki</span>`:`<span class="chip" style="opacity:.5">Loki: shared</span>`,
-    cf.enabled?`<span class="chip">☁️ CF</span>`:"",
-    ing.enabled?`<span class="chip">☸️ ingress</span>`:"",
-  ].filter(Boolean).join(" ");
-  return `<div class="card p-3" data-env="${id}">
-    <div class="env-row" style="cursor:pointer" onclick="envToggle('${id}')">
-      <div class="flex items-center gap-2 min-w-0 flex-wrap">
-        <span id="envchev-${id}" style="color:var(--faint)">${open?'▾':'▸'}</span>
-        <span class="text-sm font-medium">${esc(e.name||e.id)}</span>
-        <span class="mono text-[11px]" style="color:var(--faint)">${id}</span>
-        <span class="flex gap-1">${chips}</span>
-      </div>
-      <button onclick="event.stopPropagation();envToggle('${id}')" class="btn btn-ghost btn-xs shrink-0"><span data-i18n="edit">Edit</span></button>
-    </div>
-    <div id="envbody-${id}" class="${open?'':'hidden'} mt-3">
-    <div class="grid sm:grid-cols-2 gap-3 text-[11px]" style="color:var(--muted)">
-      <label class="block"><span data-i18n="env.name">Name</span><input data-f="name" value="${esc(e.name||'')}" class="input mt-1"></label>
-      <label class="block"><span data-i18n="env.loki">Loki URL</span> <span style="color:var(--faint)" data-i18n="env.loki.hint">(blank = shared Loki + env label)</span><input data-f="loki_url" value="${esc(e.loki_url||'')}" placeholder="http://loki:3100" class="input mono mt-1"></label>
-    </div>
-    <div class="mt-3 pt-3" style="border-top:1px solid var(--border)">
-      <div class="env-row"><span class="text-[12px]">☁️ <span data-i18n="env.cf">Cloudflare for this environment</span></span>
-        <button type="button" class="sw${cf.enabled?' on':''}" data-f="cf_enabled" onclick="envSw(this,'cfblk-${id}')" aria-label="toggle Cloudflare"><i></i></button></div>
-      <div id="cfblk-${id}" class="env-sec grid sm:grid-cols-2 gap-2${cf.enabled?'':' hidden'}">
-        <input data-f="cf_token" type="password" placeholder="${cf.token_set?'•••• token set (type to replace)':'CF API token'}" class="input mono">
-        <select data-f="cf_mode" class="input"><option ${cf.mode==='ip-list'?'selected':''}>ip-list</option><option ${cf.mode==='access-rules'?'selected':''}>access-rules</option></select>
-      </div>
-    </div>
-    <div class="mt-3 pt-3" style="border-top:1px solid var(--border)">
-      <div class="env-row"><span class="text-[12px]">☸️ <span data-i18n="env.ing">ingress-nginx (k8s) for this environment</span></span>
-        <button type="button" class="sw${ing.enabled?' on':''}" data-f="ing_enabled" onclick="envSw(this,'ingblk-${id}')" aria-label="toggle ingress"><i></i></button></div>
-      <div id="ingblk-${id}" class="env-sec${ing.enabled?'':' hidden'}">
-        <div class="grid sm:grid-cols-2 gap-2">
-          <input data-f="ing_ns" value="${esc(ing.ns||'')}" placeholder="namespace" class="input mono">
-          <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="input mono">
-        </div>
-        <p class="text-[10px] mt-1.5 leading-snug" style="color:var(--faint)" data-i18n="env.ing.hint">No cluster endpoint here: blocklist-api runs inside the cluster and patches this ConfigMap via its ServiceAccount. The dashboard only talks to blocklist-api (set by BLOCKLIST_API_URL at deploy).</p>
-      </div>
-    </div>
-    <div class="env-row mt-3 pt-3" style="border-top:1px solid var(--border)">
-      <span class="text-[11px]" style="color:var(--faint)"></span>
-      <div class="flex gap-1">
-        <button onclick="envSave('${id}')" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
-        <button onclick="envDelete('${id}')" class="btn btn-danger btn-xs" data-i18n="delete">Delete</button></div>
-    </div>
-    </div>
-  </div>`;
-}
-function envToggle(id){
-  const open=_envOpen.has(id); if(open)_envOpen.delete(id); else _envOpen.add(id);
-  const body=document.getElementById("envbody-"+CSS.escape(id)), chev=document.getElementById("envchev-"+CSS.escape(id));
-  if(body)body.classList.toggle("hidden",open); if(chev)chev.textContent=open?"▸":"▾";
-}
-function envSw(btn,blockId){ btn.classList.toggle("on"); const b=document.getElementById(blockId); if(b)b.classList.toggle("hidden",!btn.classList.contains("on")); }
-async function envNew(){
-  const id=await uiPrompt(_lang==="ru"?"ID окружения (латиница, напр. prod / dev):":"Environment ID (latin, e.g. prod / dev):");
-  if(!id||!id.trim())return;
-  const newId=id.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-');
-  _envs.push({id:newId,name:id.trim(),cloudflare:{},ingress:{}}); _envOpen.add(newId); renderEnvs(); applyI18n();
-}
-function _envField(id,f){ const c=document.querySelector(`[data-env="${id}"]`),el=c&&c.querySelector(`[data-f="${f}"]`);
-  if(!el)return undefined;
-  if(el.classList.contains("sw"))return el.classList.contains("on");
-  return el.type==="checkbox"?el.checked:el.value; }
-async function envSave(id){
-  const body={id,name:_envField(id,"name"),loki_url:_envField(id,"loki_url"),
-    cloudflare:{enabled:_envField(id,"cf_enabled"),token:_envField(id,"cf_token"),mode:_envField(id,"cf_mode")},
-    ingress:{enabled:_envField(id,"ing_enabled"),ns:_envField(id,"ing_ns"),cm:_envField(id,"ing_cm")}};
-  const d=await (await fetch("/api/environments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
-  if(d.ok)loadEnvs(); else uiAlert("не сохранилось: "+(d.error||"ошибка"));
-}
-async function envDelete(id){
-  if(!await uiConfirm("Удалить окружение «"+id+"»? Ноды/баны останутся, но потеряют его CF/Loki-конфиг."))return;
-  await fetch("/api/environments/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); loadEnvs();
-}
 
 // ── CF-таргеты (именованный реестр) ──
 let _cfTargets=[];
@@ -2590,19 +2468,29 @@ function _appliesLineRule(r, pathOnly){
   return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
 }
 // ── редактор привязки правила (группы + таргеты + «все») ───────────────────────
+// во что группа резолвится → короткая подпись «→ test-1» / «→ все» / «→ 3 таргета»
+function _grpResolve(g){
+  const d=_targetsData; if(!d) return "";
+  const ids=(d.groups&&d.groups[g])||[];
+  const allReal=(d.targets||[]).filter(t=>t.type!=="noop").map(t=>t.id);
+  if(!ids.length) return _trText("пусто");
+  if(allReal.length&&ids.length>=allReal.length&&allReal.every(id=>ids.includes(id))) return _trText("все");
+  if(ids.length<=2) return ids.join(", ");
+  return ids.length+" "+_trText("таргетов");
+}
 function _attachOptions(r){
   const d=_targetsData; if(!d) return `<option value="">${_trText('+ привязать…')}</option>`;
   const gs=Object.keys(d.groups||{}).filter(g=>g&&!(r.groups||[]).includes(g));
   const ts=(d.targets||[]).filter(t=>t.type!=="noop"&&!(r.targets||[]).includes(t.id));
   let o=`<option value="">${_trText('+ привязать…')}</option>`;
-  if(gs.length) o+=`<optgroup label="${_trText('группы')}">`+gs.map(g=>`<option value="g:${esc(g)}">🗂 ${esc(g)}</option>`).join("")+`</optgroup>`;
+  if(gs.length) o+=`<optgroup label="${_trText('группы')}">`+gs.map(g=>`<option value="g:${esc(g)}">🗂 ${esc(g)} → ${esc(_grpResolve(g))}</option>`).join("")+`</optgroup>`;
   if(ts.length) o+=`<optgroup label="${_trText('таргеты')}">`+ts.map(t=>`<option value="t:${esc(t.id)}">🎯 ${esc(t.id)} · ${esc(t.type)}</option>`).join("")+`</optgroup>`;
   return o;
 }
 function _attachUI(r, kind){
   const all=!!r.all;
   const chip=(label,tok)=>`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${label}<button onclick="attachRemove('${kind}','${esc(r.id)}','${tok}')" class="text-slate-500 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`;
-  const gChips=(r.groups||[]).map(g=>chip("🗂 "+esc(g),"g:"+esc(g))).join(" ");
+  const gChips=(r.groups||[]).map(g=>chip("🗂 "+esc(g)+' <span style="color:var(--faint)">→ '+esc(_grpResolve(g))+'</span>',"g:"+esc(g))).join(" ");
   const tChips=(r.targets||[]).map(t=>chip("🎯 "+esc(t),"t:"+esc(t))).join(" ");
   return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
     <span style="color:var(--faint)">🎯 ${_trText('привязка')}:</span>
@@ -2670,8 +2558,8 @@ async function renderP403Applies(){
     let html=enf.length
       ? enf.map(t=>{const node=t.type==="nginx-file"&&t.enrolled!==false;
           const cf=t.type==="cloudflare";
-          const tip=cf?_trText('Cloudflare WAF — 403 по пути на edge'):(node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress окружения'));
-          const go=cf?"showView('settings');setSub('cf')":(node?"showView('nodes')":"showView('settings');setSub('env')");
+          const tip=cf?_trText('Cloudflare WAF — 403 по пути на edge'):(node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress-cm таргет'));
+          const go=cf?"showView('settings');setSub('cf')":(node?"showView('nodes')":"showView('settings');setSub('global')");
           return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${cf?'cf':esc(t.type)}</span> ↗</span>`;}).join("")
       : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
     if(cfIpOnly.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cfIpOnly.map(t=>esc(t.id)).join(", ")}</span>`;
@@ -3493,9 +3381,9 @@ function _targetSource(t){
   if(t.type==="nginx-file"&&t.enrolled!==false)
     return _trText("подключённая нода")+` → <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">${_trText("Ноды")}</a>`+env;
   if(t.type==="cloudflare")
-    return _trText("Cloudflare окружения")+` → <a onclick="showView('settings');setSub('env')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Окружения")}</a>`+env;
+    return _trText("Cloudflare-таргет")+` → <a onclick="showView('settings');setSub('cf')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → CF-таргеты")}</a>`+env;
   if(t.type==="ingress-cm")
-    return _trText("ingress окружения")+` → <a onclick="showView('settings');setSub('env')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Окружения")}</a>`+env;
+    return _trText("ingress-cm таргет")+` → <a onclick="showView('settings');setSub('global')" class="text-indigo-300 cursor-pointer">${_trText("задан в BAN_TARGETS")}</a>`+env;
   return _trText("задан в BAN_TARGETS")+` → <a onclick="showView('settings');setSub('global')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Глобальные")}</a>`;
 }
 async function loadBanTargets(){
@@ -3743,7 +3631,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();initCards();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();loadBranding();
+applyI18n();initCards();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();loadBranding();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
