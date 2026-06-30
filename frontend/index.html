@@ -474,7 +474,7 @@
   </div><!-- /view-p403 -->
 
   <div id="view-nodes" class="hidden">
-    <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+    <section class="card p-4">
       <div class="flex items-center justify-between mb-3">
         <div>
           <h2 class="text-sm font-medium text-slate-200">🖥️ Подключённые ноды</h2>
@@ -482,7 +482,7 @@
         </div>
         <button onclick="showAddNode()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">+ Добавить ноду</button>
       </div>
-      <div id="nodes-add" class="hidden mb-3 bg-slate-950/70 border border-slate-800 rounded-lg p-3">
+      <div id="nodes-add" class="hidden mb-3 card p-3">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-xs font-medium text-slate-300">Установка агента на nginx-VM</h3>
           <button onclick="document.getElementById('nodes-add').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
@@ -499,7 +499,7 @@
   </div><!-- /view-nodes -->
 
   <div id="view-journal" class="hidden">
-    <section class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+    <section class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <div>
           <h2 class="text-sm font-medium text-slate-200">📋 Журнал действий</h2>
@@ -529,7 +529,7 @@
     </div>
 
     <!-- ── Окружения ── -->
-    <section id="ssec-env" class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+    <section id="ssec-env" class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <div><h2 class="text-sm font-medium text-slate-200">🌐 Окружения (env / пул / проект)</h2>
           <p class="text-[11px] text-slate-500 mt-0.5">Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают в env при установке (<span class="mono">--env</span>).</p></div>
@@ -539,7 +539,7 @@
     </section>
 
     <!-- ── Уведомления ── -->
-    <section id="ssec-notify" class="hidden bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+    <section id="ssec-notify" class="hidden card p-4">
       <div class="flex items-center justify-between mb-1">
         <h2 class="text-sm font-medium text-slate-200">🔔 Уведомления — Slack / Telegram</h2>
         <button onclick="saveNotify()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
@@ -556,14 +556,14 @@
     </section>
 
     <!-- ── Глобальные ── -->
-    <section id="ssec-global" class="hidden bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+    <section id="ssec-global" class="hidden card p-4">
       <div class="flex items-center justify-between mb-1">
         <h2 class="text-sm font-medium text-slate-200">⚙️ Глобальные настройки</h2>
         <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
       </div>
       <p class="text-[11px] text-slate-500 mb-3">LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), группа по умолчанию. ENV — дефолты, тут переопределяются.</p>
       <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">🔒 CONFIG_LOCK=env — конфиг только из переменных окружения, редактирование через GUI отключено.</div>
-      <div class="bg-slate-950/40 border border-slate-800 rounded-lg p-3 mb-4 flex items-center justify-between">
+      <div class="card p-3 mb-4 flex items-center justify-between">
         <div><div class="text-xs font-medium text-slate-300" data-i18n="llm.label">LLM analysis</div>
           <div class="text-[11px]" style="color:var(--faint)" data-i18n="llm.hint">When off, all AI mentions disappear from the dashboard.</div></div>
         <button id="set-llm-toggle" onclick="toggleLLM()" class="btn btn-xs">🤖 —</button>
@@ -1740,7 +1740,7 @@ function renderEnvs(){
 }
 function envCard(e){
   const cf=e.cloudflare||{}, ing=e.ingress||{}, id=esc(e.id);
-  return `<div class="bg-slate-950/40 border border-slate-800 rounded-lg p-3" data-env="${id}">
+  return `<div class="card p-3" data-env="${id}">
     <div class="flex items-center justify-between mb-2">
       <div class="text-sm text-slate-200 font-medium">${esc(e.name||e.id)} <span class="mono text-[11px] text-slate-500">${id}</span></div>
       <div class="flex gap-1">
@@ -1797,7 +1797,7 @@ function renderNotify(){
 }
 function nfChannelRow(c,i){
   const tg=c.type==="telegram";
-  return `<div class="bg-slate-950/40 border border-slate-800 rounded p-2 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}">
+  return `<div class="card p-2 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}">
     <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">${tg?'Telegram':'Slack'}</span>
     <input data-cf="id" value="${esc(c.id||'')}" placeholder="id" class="w-24 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
     <input data-cf="label" value="${esc(c.label||'')}" placeholder="метка" class="w-28 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
@@ -1813,7 +1813,7 @@ function nfRuleRow(r,i){
   const sevs=_nf.severities||["info","notice","warning","critical"];
   const chOpts=(_nf.channels||[]).map(c=>`<option value="${esc(c.id)}" ${r.channel===c.id?'selected':''}>${esc(c.label||c.id)}</option>`).join("");
   const evChecks=evs.map(e=>`<label class="inline-flex items-center gap-1 mr-2"><input type="checkbox" data-ev="${e}" ${(r.events||[]).includes(e)?'checked':''}> ${e}</label>`).join("");
-  return `<div class="bg-slate-950/40 border border-slate-800 rounded p-2 text-[11px]" data-rule="${i}">
+  return `<div class="card p-2 text-[11px]" data-rule="${i}">
     <div class="flex flex-wrap items-center gap-2 mb-1">
       <label class="inline-flex items-center gap-1"><input type="checkbox" data-rf="enabled" ${r.enabled!==false?'checked':''}> вкл</label>
       <span class="text-slate-500">env:</span><input data-rf="env" value="${esc(r.env||'')}" placeholder="(любой)" class="w-20 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
@@ -1864,7 +1864,7 @@ async function loadGlobal(){
     wrap.innerHTML=groups.map(g=>{
       const rows=byGroup[g].map(k=>settingRow(k,s[k])).join("");
       const extra=g==="cloudflare"?`<button onclick="checkCF()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 mt-1">Проверить подключение</button><div id="set-cf-check" class="text-[11px] mt-1"></div>`:"";
-      return `<div class="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+      return `<div class="card p-3">
         <h3 class="text-xs font-medium text-slate-300 mb-2">${_setGroupMeta[g]||g}</h3>
         <div class="space-y-2">${rows}</div>${extra}</div>`;
     }).join("");
