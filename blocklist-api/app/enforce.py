@@ -269,6 +269,11 @@ def render_status(per_target_patterns, master):
     {tid:[pat]} or a flat list (same patterns for every target)."""
     detail = {}
     for t in targets():
+        # A not-configured target (e.g. a Cloudflare target without a token) is
+        # dormant — don't probe it or fold its "not rendered" into 403 health, or
+        # the dashboard reports a drift problem for a target that does nothing.
+        if not _target_ready(t):
+            continue
         detail[t["id"]] = {"type": t["type"], **_adapter(t)[1](t, _patterns_for(per_target_patterns, t["id"]), master)}
     vals = list(detail.values()) or [{"controller_reachable": True,
                                       "rendered_present": True, "rendered_ok": True}]

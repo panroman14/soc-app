@@ -673,8 +673,9 @@
         <div class="text-sm font-medium text-slate-200">🗂 <span data-i18n="tg.groups">Target groups</span></div>
         <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl" data-i18n="tg.sub">A group bundles several targets (nginx nodes + Cloudflare). 403 &amp; auto-ban rules attach to a group and apply to all its targets at once.</div>
       </div>
-      <!-- создание новой группы -->
-      <div class="flex items-center gap-2 mb-3 p-2.5 rounded-lg" style="background:#0f0d08;border:1px dashed #3a311e">
+      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
+      <!-- создание новой группы — под списком существующих -->
+      <div class="flex items-center gap-2 mt-3 p-2.5 rounded-lg" style="background:#0f0d08;border:1px dashed #3a311e">
         <span class="text-[11px] shrink-0" style="color:#d6a35c" data-i18n="tg.newname">New group:</span>
         <input id="grp-new" placeholder="nginx-aaa" class="flex-1 max-w-xs bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 mono" onkeydown="if(event.key==='Enter')grpNew()">
         <button onclick="grpNew()" class="btn btn-ghost btn-xs shrink-0">＋ <span data-i18n="tg.create">Create</span></button>
@@ -682,7 +683,6 @@
         <span id="grp-msg" class="text-[11px]"></span>
         <button onclick="grpSave()" class="btn btn-primary btn-xs shrink-0">💾 <span data-i18n="save">Save</span></button>
       </div>
-      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
     </section>
 
     <!-- ── ingress-cm таргеты + Setup cluster ── -->
