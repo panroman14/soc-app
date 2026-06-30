@@ -850,6 +850,7 @@
       <div class="flex items-center gap-2 flex-wrap">
         <select id="db-pick" class="input" style="width:auto" onchange="dbSelect(this.value)"></select>
         <button onclick="dbNewDash()" class="btn btn-ghost btn-xs">＋ <span data-i18n="db.new">dashboard</span></button>
+        <select class="input" style="width:auto" onchange="if(this.value){dbNewFromPreset(this.value);this.value='';}"><option value="" data-i18n="db.preset">+ preset…</option><option value="attacks">Attacks</option><option value="performance">Performance</option></select>
         <button onclick="dbRenameDash()" class="btn btn-ghost btn-xs" id="db-edit-controls">✎</button>
         <button onclick="dbDeleteDash()" class="btn btn-ghost btn-xs text-rose-300">🗑</button>
       </div>
@@ -1072,7 +1073,7 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","db.preset":"+ preset…","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets",
   "ing.setup":"Setup cluster","ing.setup.h":"Connect a cluster","ing.setup.sub":"Three steps: deploy blocklist-api into the cluster, wire logs into Loki, and make sure the values target points at your ingress-nginx.",
   "ing.s1":"Install blocklist-api (Helm)","ing.s1.sub":"The chart carries the RBAC to patch the ingress-nginx ConfigMap — a web form can't, Helm can. Run it with cluster-admin.","ing.s1.after":"After install, point the dashboard at the API: BLOCKLIST_API_URL=https://<hostname>",
   "ing.connect":"After install — verify the dashboard can reach this API:","ing.connect.hint":"Host and token are taken from the fields above. Save registers this connection in the list below — it becomes active immediately.",
@@ -1100,7 +1101,7 @@ const I18N={en:{
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","db.preset":"+ пресет…","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.",
   "ing.setup":"Подключить кластер","ing.setup.h":"Подключить кластер","ing.setup.sub":"Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.",
   "ing.s1":"Установить blocklist-api (Helm)","ing.s1.sub":"Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.","ing.s1.after":"После установки укажи дашборду адрес API: BLOCKLIST_API_URL=https://<хостнейм>",
   "ing.connect":"После установки — проверь, что дашборд достучится до этого API:","ing.connect.hint":"Хост и токен берутся из полей выше. Save регистрирует это подключение в списке ниже — активным становится сразу.",
@@ -1646,7 +1647,11 @@ function dbRender(){
   if(!dash.panels.length){ grid.innerHTML=`<div class="text-slate-600 text-xs" style="grid-column:span 12">${_trText("пусто — добавь панель")}</div>`; return; }
   grid.innerHTML=dash.panels.map(p=>`<div class="db-panel" style="grid-column:span ${Math.max(2,Math.min(12,p.span||4))}">
     <div class="db-head"><span class="db-title">${esc(p.title||p.type)}</span>
-      <span class="db-tools"><button onclick="dbEditPanel('${esc(p.id)}')" class="text-[11px] text-indigo-300">✎</button>
+      <span class="db-tools">
+        <button onclick="dbMovePanel('${esc(p.id)}',-1)" class="text-[11px] text-slate-400" title="←">◄</button>
+        <button onclick="dbMovePanel('${esc(p.id)}',1)" class="text-[11px] text-slate-400" title="→">►</button>
+        <button onclick="dbDupPanel('${esc(p.id)}')" class="text-[11px] text-slate-300" title="duplicate">⧉</button>
+        <button onclick="dbEditPanel('${esc(p.id)}')" class="text-[11px] text-indigo-300">✎</button>
         <button onclick="dbDelPanel('${esc(p.id)}')" class="text-[11px] text-rose-300">✕</button></span></div>
     <div class="db-body flex-1" id="dbp-${esc(p.id)}"></div></div>`).join("");
   dash.panels.forEach(dbFillPanel);
@@ -1729,6 +1734,11 @@ async function _dbLogsPanel(p,el){
 }
 function dbToggleEdit(){ _db.editing=!_db.editing; document.getElementById("db-editmode").classList.toggle("btn-primary",_db.editing); dbRender(); }
 function dbDelPanel(id){ const d=dbCur(); d.panels=d.panels.filter(p=>p.id!==id); dbPersist(); dbRender(); }
+function dbDupPanel(id){ const d=dbCur(),p=d.panels.find(x=>x.id===id); if(!p)return;
+  const c=JSON.parse(JSON.stringify(p)); c.id="p"+Date.now(); c.title=(p.title||"")+" copy";
+  const ix=d.panels.findIndex(x=>x.id===id); d.panels.splice(ix+1,0,c); dbPersist(); dbRender(); }
+function dbMovePanel(id,dir){ const d=dbCur(),ix=d.panels.findIndex(x=>x.id===id),j=ix+dir;
+  if(ix<0||j<0||j>=d.panels.length)return; const a=d.panels; [a[ix],a[j]]=[a[j],a[ix]]; dbPersist(); dbRender(); }
 function dbAddPanel(){ dbEditPanel(null); }
 async function dbEditPanel(id){
   const d=dbCur(),src=id?d.panels.find(x=>x.id===id):null;
@@ -1771,6 +1781,32 @@ function dbSavePanel(id){
   }
   const ix=id?d.panels.findIndex(x=>x.id===id):-1; if(ix>=0)d.panels[ix]=p; else d.panels.push(p);
   dbPersist(); dbRender();
+}
+const _DB_PRESETS={
+  attacks:{name:"Attacks",panels:[
+    {type:"stat",metric:"crs_detections",span:3,title:"CRS payloads"},
+    {type:"stat",metric:"distinct_attacker_ips",span:3,title:"Attacker IPs"},
+    {type:"gauge",metric:"malicious_ratio",span:3,title:"Malicious %"},
+    {type:"stat",metric:"forbidden_new",span:3,title:"New blocks"},
+    {type:"timeseries",metrics:["forbidden_new","crs_detections"],span:8,title:"Blocks over time"},
+    {type:"pie",key:"attack_types",span:4,title:"Attack types"},
+    {type:"table",key:"top_talkers",span:6,title:"Top talkers (IPs)"},
+    {type:"geo",key:"geo",span:6,title:"Countries"}]},
+  performance:{name:"Performance",panels:[
+    {type:"stat",metric:"latency_p95",span:3,title:"Latency p95"},
+    {type:"gauge",metric:"availability",span:3,title:"Availability"},
+    {type:"stat",metric:"requests_total",span:3,title:"Requests"},
+    {type:"stat",metric:"bytes_mb",span:3,title:"Traffic MB"},
+    {type:"timeseries",metrics:["requests_total","requests_real"],span:8,title:"Traffic over time"},
+    {type:"bar",key:"slow_endpoints",span:4,title:"Slow endpoints"},
+    {type:"table",key:"top_paths",span:6,title:"Top paths"},
+    {type:"bar",key:"methods",span:6,title:"Methods"}]}};
+async function dbNewFromPreset(key){
+  const pre=_DB_PRESETS[key]; if(!pre)return;
+  const id="d"+Date.now();
+  const panels=pre.panels.map((p,i)=>Object.assign({id:"p"+Date.now()+i,source:p.metrics?"history":(p.metric?"summary":"analytics")},p));
+  _db.list.push({id,name:pre.name,panels,vars:{},range:""}); _db.curId=id;
+  await dbPersist(); dbFillPicker(); dbSyncVars(); dbLoad(true);
 }
 async function dbNewDash(){
   const name=await uiPrompt(_trText("Имя дашборда:")); if(!name)return;
@@ -2860,7 +2896,13 @@ async function ingBackendActivate(id){
 }
 async function ingBackendDelete(id){
   if(!await uiConfirm(_trText("Удалить это подключение?")))return;
-  try{ await fetch("/api/ingress_apis/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); loadIngBackends(); loadIngress(); }
+  try{
+    const r=await fetch("/api/ingress_apis/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}).then(x=>x.json());
+    // deleting the active backend reset the dashboard to the env-default one —
+    // reload so nodes/CF/all views repopulate from the restored source.
+    if(r&&r.reset_to_default){ location.reload(); return; }
+    loadIngBackends(); loadIngress();
+  }
   catch(e){ uiAlert("не удалось: "+(e.message||e)); }
 }
 function ingGenToken(){ const t=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join(""); document.getElementById("ing-token").value=t; ingCmd(); }
