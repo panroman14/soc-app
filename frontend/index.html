@@ -581,13 +581,19 @@
           </select></div>
         <div class="flex-1 min-w-[200px]"><label id="p403-raw-lbl" class="text-[11px] text-slate-500 block mb-1">Путь</label>
           <input id="p403-raw" oninput="p403Preview()" placeholder="/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono w-full"/></div>
-        <div><label class="text-[11px] text-slate-500 block mb-1" title="В какое правило дописать паттерн (одно правило = группа путей)">В правило</label>
-          <select id="p403-target" onchange="p403TargetChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[170px]"></select></div>
-        <div><label class="text-[11px] text-slate-500 block mb-1" title="Куда применять (таргет-группа). Только для нового правила.">🎯 Таргет-группа</label>
-          <select id="p403-group" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[150px]"></select></div>
+        <div><label class="text-[11px] text-slate-500 block mb-1" title="Куда применять: к какой группе таргетов (нод/ingress). Пусто = все.">🎯 Группа таргетов</label>
+          <select id="p403-group" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[160px]"></select></div>
         <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="добавить, даже если апка считает паттерн слишком широким"><input type="checkbox" id="p403-force"/> force</label>
         <button onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600">Добавить</button>
         <span id="p403-msg" class="text-xs"></span>
+      </div>
+      <!-- продвинутое: вместо нового правила дописать паттерн в существующее (группировка путей) -->
+      <div class="mt-1.5 text-[11px]">
+        <button type="button" onclick="document.getElementById('p403-adv').classList.toggle('hidden')" class="text-slate-500 hover:text-slate-300">⚙ дополнительно ▾</button>
+        <div id="p403-adv" class="hidden mt-1.5 flex items-center gap-2">
+          <label class="text-slate-500" title="Вместо создания нового правила дописать паттерн в существующее (одно правило = пачка путей)">дописать в правило:</label>
+          <select id="p403-target" onchange="p403TargetChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[12px] text-slate-200 max-w-[200px]"></select>
+        </div>
       </div>
       <div class="mt-2 grid md:grid-cols-2 gap-2 text-[11px]">
         <div class="bg-slate-900/40 border border-slate-800 rounded px-2 py-1.5">
@@ -928,6 +934,7 @@ const RU2EN={
   "частота: любой путь":"rate: any path","нет фидов — добавь свой или возьми из пресетов ниже.":"no feeds — add your own or pick a preset below.",
   "страны (опц.)":"countries (opt.)","CN, RU — пусто = любая":"CN, RU — empty = any",
   "сработок WAF":"WAF triggers","за CF":"behind CF","бан":"ban","чисто — срабатываний WAF нет за окно":"clean — no WAF triggers in window",
+  "применяется к":"applies to","все таргеты":"all targets","группа":"group","нет таргетов":"no targets","нет nginx/ingress таргетов":"no nginx/ingress targets",
   "подключённая нода":"connected node","Cloudflare окружения":"environment Cloudflare","ingress окружения":"environment ingress",
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
@@ -2427,10 +2434,31 @@ async function loadP403(){
     renderP403Applies();
   }catch(e){document.getElementById("p403-list").innerHTML='<div class="text-rose-400 text-xs">не удалось загрузить: '+esc(e.message||e)+'</div>';}
 }
+// ── единый резолвер «правило → группа → конкретные таргеты» (для подписей) ──────
+let _targetsData=null;   // {targets, groups, default_group} из /api/ban_targets
+function _appliesTargets(group, pathOnly){
+  const d=_targetsData; if(!d||!d.targets) return null;
+  const byId={}; d.targets.forEach(t=>byId[t.id]=t);
+  const g=group||d.default_group||"";
+  const ids=(g&&d.groups&&d.groups[g])?d.groups[g]:d.targets.map(t=>t.id); // нет/неизв. группа → все
+  let list=ids.map(id=>byId[id]).filter(t=>t&&t.type!=="noop");
+  if(pathOnly) list=list.filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
+  return list;
+}
+// строка «→ применяется к: <таргеты>» под правилом
+function _appliesLine(group, pathOnly){
+  const list=_appliesTargets(group, pathOnly);
+  if(list==null) return "";
+  const lbl=group?(_trText("группа")+" «"+esc(group)+"»"):_trText("все таргеты");
+  if(!list.length) return `<div class="text-[10px] mt-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${lbl} — ${pathOnly?_trText("нет nginx/ingress таргетов"):_trText("нет таргетов")}</div>`;
+  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${esc(t.id)}<span style="color:var(--faint)">·${esc(t.type)}</span></span>`).join(" ");
+  return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
+}
 async function renderP403Applies(){
   const el=document.getElementById("p403-applies");if(!el)return;
   try{
     const d=await fetch("/api/ban_targets").then(r=>r.json());
+    _targetsData=d; _p403RenderList();   // пере-рендер списка с подписями «применяется к»
     if(d.enabled===false){ el.innerHTML=`<span class="text-slate-500">${_trText('blocklist-api не настроен.')}</span>`; return; }
     const path=(d.targets||[]).filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
     const cf=(d.targets||[]).filter(t=>t.type==="cloudflare");
@@ -2493,6 +2521,7 @@ function _p403RenderList(){
         <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">✎&nbsp;ред.</button>
         <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20 shrink-0">удалить</button>
       </div>
+      ${_appliesLine(r.group||"", true)}
       <div id="pat-${esc(r.id)}" class="hidden mono text-[11px] text-slate-400 break-all mt-1.5 bg-slate-950/60 rounded p-2 max-h-44 overflow-auto">${esc(r.pattern||"")}</div>
       <div id="ed-${esc(r.id)}" class="hidden mt-2 border-t border-slate-800 pt-2"></div>
     </div>`;}).join("");
@@ -2624,7 +2653,7 @@ function p403FillTarget(){
   opts+=`<option value="__new__">＋ новое правило</option>`;
   sel.innerHTML=opts;
   if(prev&&Array.from(sel.options).some(o=>o.value===prev))sel.value=prev;
-  else sel.value=main?String(main.id):"__new__";
+  else sel.value="__new__";   // по умолчанию — НОВОЕ правило (дописать в существующее — в «дополнительно»)
   p403TargetChange();
 }
 function p403FormToggle(force){
@@ -3233,6 +3262,7 @@ async function loadBanTargets(){
   const el=document.getElementById("ban-targets");if(!el)return;
   try{
     const d=await fetch("/api/ban_targets").then(r=>r.json());
+    _targetsData=d; if(_view==="autoban"&&Array.isArray(_abRules))renderAbRules(_abRules); // подписи «применяется к»
     if(d.enabled===false){el.innerHTML=`<span class="text-slate-500">blocklist-api не настроен — баны отключены.</span>`;return;}
     const tg=(d.targets||[]).filter(t=>t.type!=="noop"), groups=d.groups||{}, errs=d.last_errors||{};
     fillBanGroupSelect(groups,d.default_group||"");
@@ -3402,6 +3432,7 @@ function renderAbRules(rules){
     <div class="flex-1 min-w-[200px]">
       <div class="text-sm text-slate-200 font-medium">${esc(r.name)} ${String(_mainRules.autoban_id)===String(r.id)?'<span class="text-[10px] text-amber-400">основное</span>':''} ${r.enabled?'<span class="text-[10px] text-emerald-400">активно</span>':'<span class="text-[10px] text-slate-600">выкл</span>'}</div>
       <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${(r.match_type==="family"||r.match_type==="rate")?"":(r.combine===0?" (по 1 пути)":" (∑ путей)")}${r.status?" · код "+esc(r.status):""}${ccBadge(r)} · бан ${ttlL(r.ttl)} · 🎯 ${esc(r.group||"группа по умолч.")}</div>
+      ${_appliesLine(r.group||"", false)}
     </div>
     <button onclick='abPreview(${JSON.stringify({id:r.id})})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">🔍 превью</button>
     <button onclick='abEditRule(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">ред.</button>
