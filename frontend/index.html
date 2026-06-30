@@ -173,6 +173,25 @@
   .lg-detail{background:#070b11;border-bottom:1px solid #131a26;padding:8px 10px}
   .lg-raw-line{padding:3px 8px;border-bottom:1px solid #131a26;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;line-height:1.5}
   @media(max-width:820px){.lg-explorer{flex-direction:column}.lg-aside{width:100%;max-height:none}}
+  /* Custom dashboards grid */
+  .db-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+  .db-panel{background:var(--card,#0f1623);border:1px solid var(--border);border-radius:12px;padding:12px;min-height:120px;display:flex;flex-direction:column;overflow:hidden}
+  .db-panel .db-head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .db-panel .db-title{font-size:12px;font-weight:600;color:#cbd5e1;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .db-panel .db-tools{display:none;gap:4px}
+  .db-editing .db-panel .db-tools{display:flex}
+  .db-editing .db-panel{border-style:dashed;border-color:#3b4860}
+  .db-stat-val{font-size:30px;font-weight:700;color:#e7ecf4;line-height:1.1}
+  .db-stat-sub{font-size:11px;color:#64748b}
+  .db-bar-row{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px}
+  .db-bar-row .db-bar-k{width:42%;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,monospace}
+  .db-bar-row .db-bar-track{flex:1;height:12px;background:#1e293b;border-radius:3px;overflow:hidden}
+  .db-bar-row .db-bar-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+  .db-bar-row .db-bar-n{width:46px;text-align:right;color:#cbd5e1;font-variant-numeric:tabular-nums}
+  .db-tbl{width:100%;font-size:11px;border-collapse:collapse}
+  .db-tbl td,.db-tbl th{padding:3px 6px;border-bottom:1px solid #15202e;text-align:left}
+  .db-tbl th{color:#64748b;font-weight:500;text-transform:uppercase;font-size:9px}
+  @media(max-width:760px){.db-grid{grid-template-columns:repeat(2,1fr)}.db-panel{grid-column:span 2!important}}
 </style>
 </head>
 <body class="min-h-screen">
@@ -187,6 +206,7 @@
     <div class="nav-grp" data-i18n="grp.monitor">Monitor</div>
     <button id="navtab-dash" onclick="showView('dash')" class="navitem active"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span><span data-i18n="nav.dash">Overview</span></button>
     <button id="navtab-logs" onclick="showView('logs')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 13h6"/><path d="M9 17h4"/></svg></span><span data-i18n="nav.logs">Logs</span></button>
+    <button id="navtab-dashboards" onclick="showView('dashboards')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3z"/><path d="M13 21h8V11h-8z"/><path d="M13 3v6h8V3z"/><path d="M3 17h8v4H3z"/></svg></span><span data-i18n="nav.dashboards">Dashboards</span></button>
     <button id="navtab-journal" onclick="showView('journal')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h4"/></svg></span><span data-i18n="nav.journal">Journal</span></button>
     <div class="nav-grp" data-i18n="grp.defend">Defend</div>
     <button id="navtab-autoban" onclick="showView('autoban')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9.5 9 5 5"/><path d="m14.5 9-5 5"/></svg></span><span data-i18n="nav.autoban">Auto-ban</span></button>
@@ -825,6 +845,23 @@
     </section>
   </div><!-- /view-journal -->
 
+  <div id="view-dashboards" class="hidden">
+    <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
+        <select id="db-pick" class="input" style="width:auto" onchange="dbSelect(this.value)"></select>
+        <button onclick="dbNewDash()" class="btn btn-ghost btn-xs">＋ <span data-i18n="db.new">dashboard</span></button>
+        <button onclick="dbRenameDash()" class="btn btn-ghost btn-xs" id="db-edit-controls">✎</button>
+        <button onclick="dbDeleteDash()" class="btn btn-ghost btn-xs text-rose-300">🗑</button>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <button onclick="dbAddPanel()" class="btn btn-ghost btn-xs">＋ <span data-i18n="db.panel">panel</span></button>
+        <button id="db-editmode" onclick="dbToggleEdit()" class="btn btn-ghost btn-xs">✎ <span data-i18n="db.edit">edit</span></button>
+        <button onclick="dbLoad(true)" class="btn btn-xs" data-i18n="refresh">refresh</button>
+      </div>
+    </div>
+    <div id="db-grid" class="db-grid"><div class="text-slate-600 text-xs">загрузка…</div></div>
+  </div><!-- /view-dashboards -->
+
   <div id="view-settings" class="hidden">
     <div class="setwrap">
     <div class="setnav">
@@ -1030,7 +1067,7 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets",
   "ing.setup":"Setup cluster","ing.setup.h":"Connect a cluster","ing.setup.sub":"Three steps: deploy blocklist-api into the cluster, wire logs into Loki, and make sure the values target points at your ingress-nginx.",
   "ing.s1":"Install blocklist-api (Helm)","ing.s1.sub":"The chart carries the RBAC to patch the ingress-nginx ConfigMap — a web form can't, Helm can. Run it with cluster-admin.","ing.s1.after":"After install, point the dashboard at the API: BLOCKLIST_API_URL=https://<hostname>",
   "ing.connect":"After install — verify the dashboard can reach this API:","ing.connect.hint":"Host and token are taken from the fields above. Save registers this connection in the list below — it becomes active immediately.",
@@ -1058,7 +1095,7 @@ const I18N={en:{
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.",
   "ing.setup":"Подключить кластер","ing.setup.h":"Подключить кластер","ing.setup.sub":"Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.",
   "ing.s1":"Установить blocklist-api (Helm)","ing.s1.sub":"Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.","ing.s1.after":"После установки укажи дашборду адрес API: BLOCKLIST_API_URL=https://<хостнейм>",
   "ing.connect":"После установки — проверь, что дашборд достучится до этого API:","ing.connect.hint":"Хост и токен берутся из полей выше. Save регистрирует это подключение в списке ниже — активным становится сразу.",
@@ -1097,6 +1134,7 @@ function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_l
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
   "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
+  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Источник (топ)":"Source (top-list)","Ширина":"Width","не удалось сохранить: ":"save failed: ",
   // _trText-consumed strings mistakenly added only to I18N (leaked Russian in EN) — now in RU2EN
   "Удалить это подключение?":"Delete this connection?","доступен, токен принят":"reachable, token accepted","нет ingress-таргетов":"no ingress targets","нет данных о хосте":"no host data","нет связи":"no connection","нет токена":"no token","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","проверяю":"checking","сделать активным":"make active","сохранено и активно":"saved and active","таргет":"target","токен задан":"token set","токен не принят":"token rejected","укажи hostname выше":"enter a hostname above",
   "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
@@ -1541,6 +1579,145 @@ function lgViewApply(i){
   lgRenderChips(); _lg.treeLoaded=false; lgLoadTree(); lgRun();
 }
 async function lgViewDel(i){ _lgViews.splice(i,1); await fetch("/api/log_views",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({views:_lgViews})}); lgLoadViews(); }
+
+// ── Custom dashboards (Grafana-style) ─────────────────────────────────────────
+const _db={list:[],def:"",curId:"",editing:false};
+let _dbData=null,_dbTimer=null,_dbEdit=null;
+const _DB_METRICS={
+  requests_total:{l:"Requests",f:v=>_dbNum(v)}, requests_real:{l:"Real requests",f:v=>_dbNum(v)},
+  forbidden_new:{l:"New blocks",f:v=>_dbNum(v)}, crs_detections:{l:"CRS payloads",f:v=>_dbNum(v)},
+  distinct_attacker_ips:{l:"Attacker IPs",f:v=>_dbNum(v)}, unique_visitors:{l:"Unique IPs",f:v=>_dbNum(v)},
+  latency_p95:{l:"Latency p95",f:v=>v==null?"—":(+v).toFixed(2)+"s"},
+  availability:{l:"Availability",f:v=>v==null?"—":(v*100).toFixed(2)+"%"},
+  bytes_mb:{l:"Traffic MB",f:v=>v==null?"—":Math.round(v)}, malicious_ratio:{l:"Malicious %",f:v=>v==null?"—":(v*100).toFixed(1)+"%"}};
+const _DB_ANALYTICS={top_paths:"Top paths",top_talkers:"Top talkers (IPs)",top_user_agents:"Top UA",
+  top_domains:"Top domains",attack_types:"Attack types",methods:"Methods",crs_rules:"CRS rules",
+  geo:"Countries",slow_endpoints:"Slow endpoints"};
+function _dbNum(v){ v=+v||0; return v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(1)+"k":String(v); }
+function dbCur(){ return _db.list.find(d=>d.id===_db.curId)||_db.list[0]; }
+async function loadDashboards(){
+  try{
+    const d=await fetch("/api/dashboards").then(r=>r.json());
+    _db.list=d.list||[]; _db.def=d.default||""; if(!_db.curId)_db.curId=_db.def||(_db.list[0]||{}).id;
+    dbFillPicker(); dbLoad(true);
+  }catch(e){ document.getElementById("db-grid").innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+}
+function dbFillPicker(){ const sel=document.getElementById("db-pick"); if(!sel)return;
+  sel.innerHTML=_db.list.map(d=>`<option value="${esc(d.id)}" ${d.id===_db.curId?"selected":""}>${esc(d.name)}</option>`).join(""); }
+function dbSelect(id){ _db.curId=id; dbLoad(true); }
+async function dbLoad(refetch){
+  const grid=document.getElementById("db-grid"); if(!grid)return;
+  if(!dbCur()){ grid.innerHTML=`<div class="text-slate-600 text-xs">${_trText("нет дашбордов")}</div>`; return; }
+  if(refetch||!_dbData){
+    try{
+      const [s,h,a]=await Promise.all([
+        fetch(_withEnv("/api/summary")).then(r=>r.json()).catch(()=>({})),
+        fetch("/api/history?limit=240").then(r=>r.json()).catch(()=>({snapshots:[]})),
+        fetch(_withEnv("/api/analytics")).then(r=>r.json()).catch(()=>({}))]);
+      _dbData={summary:s.summary||s||{}, history:h.snapshots||[], analytics:(a.analytics||a||{})};
+    }catch(e){ _dbData={summary:{},history:[],analytics:{}}; }
+  }
+  dbRender();
+  clearTimeout(_dbTimer); if(_view==="dashboards"&&!_db.editing)_dbTimer=setTimeout(()=>dbLoad(true),30000);
+}
+function dbRender(){
+  const grid=document.getElementById("db-grid"),dash=dbCur(); if(!grid||!dash)return;
+  grid.classList.toggle("db-editing",_db.editing);
+  if(!dash.panels.length){ grid.innerHTML=`<div class="text-slate-600 text-xs" style="grid-column:span 12">${_trText("пусто — добавь панель")}</div>`; return; }
+  grid.innerHTML=dash.panels.map(p=>`<div class="db-panel" style="grid-column:span ${Math.max(2,Math.min(12,p.span||4))}">
+    <div class="db-head"><span class="db-title">${esc(p.title||p.type)}</span>
+      <span class="db-tools"><button onclick="dbEditPanel('${esc(p.id)}')" class="text-[11px] text-indigo-300">✎</button>
+        <button onclick="dbDelPanel('${esc(p.id)}')" class="text-[11px] text-rose-300">✕</button></span></div>
+    <div class="db-body flex-1" id="dbp-${esc(p.id)}"></div></div>`).join("");
+  dash.panels.forEach(dbFillPanel);
+}
+function dbFillPanel(p){
+  const el=document.getElementById("dbp-"+p.id); if(!el)return;
+  try{
+    if(p.type==="stat")el.innerHTML=_dbStat(p);
+    else if(p.type==="timeseries")el.innerHTML=_dbTimeseries(p);
+    else if(p.type==="bar")el.innerHTML=_dbBar(p);
+    else if(p.type==="table")el.innerHTML=_dbTable(p);
+    else el.innerHTML=`<span class="text-slate-600 text-xs">${esc(p.type)}?</span>`;
+  }catch(e){ el.innerHTML=`<span class="text-rose-400 text-xs">${esc(e.message)}</span>`; }
+}
+function _dbStat(p){
+  const m=p.metric,meta=_DB_METRICS[m]||{l:m,f:v=>v},v=(_dbData.summary||{})[m];
+  const spark=(_dbData.history||[]).map(s=>+s[m]||0);
+  return `<div class="db-stat-val">${v==null?"—":esc(String(meta.f(v)))}</div><div class="db-stat-sub">${esc(meta.l)}</div>${spark.length>1?_dbSpark(spark):""}`;
+}
+function _dbSpark(vals){
+  const w=160,h=28,max=Math.max(...vals,1),min=Math.min(...vals,0),rng=(max-min)||1;
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-((v-min)/rng)*h).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:28px;margin-top:6px"><polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="1.5"/></svg>`;
+}
+const _DB_COLORS=["#60a5fa","#34d399","#fbbf24","#f87171","#a78bfa","#22d3ee"];
+function _dbTimeseries(p){
+  const snaps=_dbData.history||[],metrics=p.metrics||[p.metric].filter(Boolean);
+  if(snaps.length<2)return `<span class="text-slate-600 text-xs">${_trText("мало точек")}</span>`;
+  const w=600,h=160,pad=4; let max=1; snaps.forEach(s=>metrics.forEach(m=>{max=Math.max(max,+s[m]||0);}));
+  const X=i=>(i/(snaps.length-1))*(w-pad*2)+pad,Y=v=>h-pad-((+v||0)/max)*(h-pad*2);
+  const lines=metrics.map((m,mi)=>`<polyline points="${snaps.map((s,i)=>X(i).toFixed(1)+","+Y(s[m]).toFixed(1)).join(" ")}" fill="none" stroke="${_DB_COLORS[mi%_DB_COLORS.length]}" stroke-width="1.5"/>`).join("");
+  const legend=metrics.map((m,mi)=>`<span style="color:${_DB_COLORS[mi%_DB_COLORS.length]}">● ${esc((_DB_METRICS[m]||{l:m}).l)}</span>`).join(" ");
+  return `<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:160px">${lines}</svg>`;
+}
+function _dbList(key){ let v=(_dbData.analytics||{})[key]; if(!Array.isArray(v))v=[];
+  return v.map(it=>({k:it.key!=null?it.key:(it.name||it.label||it.uri||it.cc||"—"),n:+it.count||+it.n||+it.hits||0})); }
+function _dbBar(p){
+  const rows=_dbList(p.key).slice(0,8); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  const max=Math.max(...rows.map(r=>r.n),1);
+  return rows.map(r=>`<div class="db-bar-row"><span class="db-bar-k" title="${esc(String(r.k))}">${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${Math.round(r.n/max*100)}%"></span></span><span class="db-bar-n">${_dbNum(r.n)}</span></div>`).join("");
+}
+function _dbTable(p){
+  const rows=_dbList(p.key).slice(0,12); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  return `<table class="db-tbl"><thead><tr><th>${esc(_DB_ANALYTICS[p.key]||p.key)}</th><th style="text-align:right">#</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(String(r.k))}</td><td style="text-align:right">${_dbNum(r.n)}</td></tr>`).join("")}</tbody></table>`;
+}
+function dbToggleEdit(){ _db.editing=!_db.editing; document.getElementById("db-editmode").classList.toggle("btn-primary",_db.editing); dbRender(); }
+function dbDelPanel(id){ const d=dbCur(); d.panels=d.panels.filter(p=>p.id!==id); dbPersist(); dbRender(); }
+function dbAddPanel(){ dbEditPanel(null); }
+async function dbEditPanel(id){
+  const d=dbCur(),src=id?d.panels.find(x=>x.id===id):null;
+  _dbEdit=src?JSON.parse(JSON.stringify(src)):{id:"p"+Date.now(),type:"stat",span:4};
+  if(!_dbEdit.metric)_dbEdit.metric="requests_total"; if(!_dbEdit.key)_dbEdit.key="top_paths";
+  const mo=Object.keys(_DB_METRICS).map(k=>`<option value="${k}" ${_dbEdit.metric===k?"selected":""}>${esc(_DB_METRICS[k].l)}</option>`).join("");
+  const ao=Object.keys(_DB_ANALYTICS).map(k=>`<option value="${k}" ${_dbEdit.key===k?"selected":""}>${esc(_DB_ANALYTICS[k])}</option>`).join("");
+  const to=t=>`<option value="${t}" ${_dbEdit.type===t?"selected":""}>${t==="timeseries"?"time-series":t}</option>`;
+  const body=`<div class="space-y-2 text-[12px]" style="color:var(--muted)">
+    <label class="block">${_trText("Заголовок")}<input class="input mt-1" oninput="_dbEdit.title=this.value" value="${esc(_dbEdit.title||"")}"></label>
+    <label class="block">${_trText("Тип")}<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${["stat","timeseries","bar","table"].map(to).join("")}</select></label>
+    <label class="block" id="dbe-metric-wrap">${_trText("Метрика")}<select class="input mt-1" onchange="_dbEdit.metric=this.value">${mo}</select></label>
+    <label class="block" id="dbe-ana-wrap">${_trText("Источник (топ)")}<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
+    <label class="block">${_trText("Ширина")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.span=+this.value" value="${_dbEdit.span||4}"></label></div>`;
+  setTimeout(dbeTypeChange,0);
+  const r=await _showModal({title:_trText(id?"Панель":"Новая панель"),body,
+    buttons:[{label:_CANCEL(),value:null,esc:true},{label:_trText("Сохранить"),kind:"primary",value:"save",enter:true}]});
+  if(r==="save")dbSavePanel(id);
+}
+function dbeTypeChange(){
+  const t=_dbEdit.type,mw=document.getElementById("dbe-metric-wrap"),aw=document.getElementById("dbe-ana-wrap");
+  if(mw)mw.classList.toggle("hidden",!(t==="stat"||t==="timeseries"));
+  if(aw)aw.classList.toggle("hidden",!(t==="bar"||t==="table"));
+}
+function dbSavePanel(id){
+  const d=dbCur(),e=_dbEdit,t=e.type;
+  const p={id:e.id,type:t,title:(e.title||"").trim(),span:Math.max(2,Math.min(12,+e.span||4))};
+  if(t==="stat"){p.source="summary";p.metric=e.metric;}
+  else if(t==="timeseries"){p.source="history";p.metrics=[e.metric];}
+  else{p.source="analytics";p.key=e.key;}
+  if(!p.title)p.title=(t==="bar"||t==="table")?(_DB_ANALYTICS[p.key]||p.key):(_DB_METRICS[p.metric]||{l:p.metric}).l;
+  const ix=id?d.panels.findIndex(x=>x.id===id):-1; if(ix>=0)d.panels[ix]=p; else d.panels.push(p);
+  dbPersist(); dbRender();
+}
+async function dbNewDash(){
+  const name=await uiPrompt(_trText("Имя дашборда:")); if(!name)return;
+  const id="d"+Date.now(); _db.list.push({id,name:name.trim(),panels:[],vars:{},range:""}); _db.curId=id;
+  await dbPersist(); dbFillPicker(); _db.editing=true; document.getElementById("db-editmode").classList.add("btn-primary"); dbLoad(false);
+}
+async function dbRenameDash(){ const d=dbCur(); if(!d)return; const n=await uiPrompt(_trText("Имя дашборда:"),"",d.name); if(!n)return; d.name=n.trim(); await dbPersist(); dbFillPicker(); }
+async function dbDeleteDash(){ const d=dbCur(); if(!d)return; if(!await uiConfirm(_trText("Удалить дашборд?")+" «"+d.name+"»"))return;
+  _db.list=_db.list.filter(x=>x.id!==d.id); _db.curId=(_db.list[0]||{}).id||""; await dbPersist(); dbFillPicker(); dbLoad(false); }
+async function dbPersist(){ try{ await fetch("/api/dashboards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({list:_db.list,default:_db.def||_db.curId})}); }catch(e){ uiAlert("не удалось сохранить: "+(e.message||e)); } }
+
 const CNAMES={US:"США",UA:"Украина",RU:"Россия",GB:"Великобритания",DE:"Германия",FR:"Франция",NL:"Нидерланды",IE:"Ирландия",PL:"Польша",CA:"Канада",IN:"Индия",CN:"Китай",SG:"Сингапур",IT:"Италия",ES:"Испания",SE:"Швеция",FI:"Финляндия",CZ:"Чехия",RO:"Румыния",LV:"Латвия",LT:"Литва",EE:"Эстония",BY:"Беларусь",KZ:"Казахстан",TR:"Турция",BR:"Бразилия",JP:"Япония",KR:"Корея",AU:"Австралия",CH:"Швейцария",AT:"Австрия",BE:"Бельгия",DK:"Дания",NO:"Норвегия",PT:"Португалия",MD:"Молдова",GE:"Грузия",AM:"Армения",AZ:"Азербайджан",IL:"Израиль",AE:"ОАЭ",HK:"Гонконг",VN:"Вьетнам",ID:"Индонезия",MX:"Мексика",ZA:"ЮАР",BG:"Болгария",HU:"Венгрия",GR:"Греция"};
 function flag(cc){if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc))return"🏳️";return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));}
 function countryLabel(cc){if(!cc)return"— не определено";return flag(cc)+" "+(CNAMES[cc.toUpperCase()]||cc.toUpperCase());}
@@ -2451,7 +2628,7 @@ let _abLoaded=false, _abWindows=["1m","5m","10m","1h","8h"], _abFamilies=[], _ab
 let _abInterval=60, _abMaxTick=20, _abLastRun=null, _abRules=null, _abIgnore=[];
 let _abLogRows=[], _abLogPage=0; const _AB_LOG_PER=10;
 let _view="dash";
-const _VIEWS=["dash","autoban","p403","targets","journal","logs","settings"];
+const _VIEWS=["dash","autoban","p403","targets","dashboards","journal","logs","settings"];
 function showView(name){
   if(!_VIEWS.includes(name))name="dash";
   _view=name;
@@ -2467,6 +2644,7 @@ function showView(name){
   if(name==="p403")loadP403();
   if(name==="targets")loadTargets();
   if(name==="settings")loadSettings();
+  if(name==="dashboards")loadDashboards();
   if(name==="journal")loadJournal();
   if(name==="logs")loadLogs();
 }
@@ -2555,7 +2733,12 @@ async function loadIngress(){
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
 // ── Ingress: «Подключить кластер» (генератор helm-команды + promtail + values) ──
-function ingSetupToggle(){ const b=document.getElementById("ing-setup"); b.classList.toggle("hidden"); if(!b.classList.contains("hidden")){ if(!document.getElementById("ing-token").value)ingGenToken(); else ingCmd(); bcReset(); loadIngBackends(); } }
+function ingSetupToggle(){ const b=document.getElementById("ing-setup"); b.classList.toggle("hidden"); if(!b.classList.contains("hidden")){ _ingRestore(); if(!document.getElementById("ing-token").value)ingGenToken(); else ingCmd(); bcReset(); loadIngBackends(); } }
+// persist the Setup form (esp. the token) — a fresh random token on every reload
+// would never match what you helm-installed → 401 on Test. Restore keeps them equal.
+const _ING_FORM=["ing-ns","ing-host","ing-cns","ing-ccm","ing-ip","ing-token","ing-loki"];
+function _ingPersist(){ try{ const f={}; _ING_FORM.forEach(id=>{const e=document.getElementById(id); if(e)f[id]=e.value;}); localStorage.setItem("soc_ing_form",JSON.stringify(f)); }catch(e){} }
+function _ingRestore(){ try{ const f=JSON.parse(localStorage.getItem("soc_ing_form")||"{}"); _ING_FORM.forEach(id=>{const e=document.getElementById(id); if(e&&f[id])e.value=f[id];}); }catch(e){} }
 function _bcUrl(){ const h=_ingVal("ing-host",""); return h?(h.startsWith("http")?h.replace(/\/$/,""):"https://"+h.replace(/\/$/,"")):""; }
 function bcReset(){
   document.getElementById("bc-result").textContent="";
@@ -2617,11 +2800,13 @@ async function ingBackendDelete(id){
   catch(e){ uiAlert("не удалось: "+(e.message||e)); }
 }
 function ingGenToken(){ const t=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join(""); document.getElementById("ing-token").value=t; ingCmd(); }
+// note: ingCmd() runs on every field edit and persists the form (token included).
 function _ingVal(id,dflt){ const el=document.getElementById(id); return ((el&&el.value)||dflt||"").trim(); }
 function ingCmd(){
   const ns=_ingVal("ing-ns","soc"), host=_ingVal("ing-host","block-api.example.com"),
         cns=_ingVal("ing-cns","ingress-nginx"), ccm=_ingVal("ing-ccm","ingress-nginx-controller"),
         ip=_ingVal("ing-ip",""), tok=_ingVal("ing-token","<token>"), loki=_ingVal("ing-loki","");
+  _ingPersist();
   const wl=ip?`${ip}/32`:"";
   // helm-команда — реальные ключи чарта blocklist-api
   const cmd=[`helm upgrade --install blocklist-api ./blocklist-api \\`,
@@ -2651,7 +2836,21 @@ ingress:
   enabled: true
   host: ${host}${wl?`\n  whitelistSourceRange: "${wl}"`:""}`;
 }
-function ingCopyCmd(id){ const t=document.getElementById(id); if(t&&navigator.clipboard)navigator.clipboard.writeText(t.textContent); }
+// Clipboard API only exists in a secure context (HTTPS/localhost). This dashboard
+// is usually served over plain HTTP on an internal IP, where navigator.clipboard is
+// undefined — so fall back to a hidden-textarea execCommand copy, and flash the btn.
+function _copyFallback(text){
+  try{ const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.top="-1000px"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.focus(); ta.select(); const ok=document.execCommand("copy"); document.body.removeChild(ta); return ok; }
+  catch(e){ return false; }
+}
+function _copyFlash(btn,ok){ if(!btn)return; const o=btn.dataset._o||btn.textContent; btn.dataset._o=o; btn.textContent=ok?"✓":"⚠"; setTimeout(()=>{btn.textContent=o;},1200); }
+function _copyText(text,btn){
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(text).then(()=>_copyFlash(btn,true),()=>_copyFlash(btn,_copyFallback(text)));
+  } else { _copyFlash(btn,_copyFallback(text)); }
+}
+function ingCopyCmd(id){ const t=document.getElementById(id); if(t)_copyText(t.textContent, typeof event!=="undefined"&&event&&event.currentTarget); }
 function loadTargets(){ setTsub(_tsub); }
 function loadSettings(){ setSub(_sub); }
 
@@ -2978,7 +3177,7 @@ async function showAddNode(){
 }
 function copyInstallCmd(){
   const t=document.getElementById("nodes-install-cmd").textContent;
-  navigator.clipboard&&navigator.clipboard.writeText(t);
+  _copyText(t, typeof event!=="undefined"&&event&&event.currentTarget);
 }
 async function deleteNode(id){
   if(!await uiConfirm("Отозвать токен ноды «"+id+"»? Агент перестанет получать баны, пока не перерегистрируется."))return;

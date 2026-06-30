@@ -312,6 +312,41 @@ async def api_log_views_set(request: Request):
     return {"ok": True, "views": views[:50]}
 
 
+# ── Custom dashboards (Grafana-style; panels bind to existing /api/* data) ──────
+_DASH_DEFAULTS = [{
+    "id": "overview", "name": "Overview", "vars": {}, "range": "",
+    "panels": [
+        {"id": "p1", "type": "stat", "title": "Requests/win", "source": "summary", "metric": "requests_total", "span": 3},
+        {"id": "p2", "type": "stat", "title": "Attacker IPs", "source": "summary", "metric": "distinct_attacker_ips", "span": 3},
+        {"id": "p3", "type": "stat", "title": "New blocks", "source": "summary", "metric": "forbidden_new", "span": 3},
+        {"id": "p4", "type": "stat", "title": "Malicious %", "source": "summary", "metric": "malicious_ratio", "span": 3},
+        {"id": "p5", "type": "timeseries", "title": "Traffic over time", "source": "history", "metrics": ["requests_total", "requests_real", "forbidden_new"], "span": 8},
+        {"id": "p6", "type": "bar", "title": "Attack types", "source": "analytics", "key": "attack_types", "span": 4},
+        {"id": "p7", "type": "table", "title": "Top paths", "source": "analytics", "key": "top_paths", "span": 6},
+        {"id": "p8", "type": "bar", "title": "Top talkers (IPs)", "source": "analytics", "key": "top_talkers", "span": 6},
+    ],
+}]
+
+
+@app.get("/api/dashboards")
+def api_dashboards_get():
+    """Custom dashboards (list + default id). Seeds a built-in Overview if empty."""
+    d = db.setting_get("dashboards", None)
+    if not d or not d.get("list"):
+        d = {"list": _DASH_DEFAULTS, "default": "overview"}
+    return d
+
+
+@app.post("/api/dashboards")
+async def api_dashboards_set(request: Request):
+    body = await request.json()
+    lst = body.get("list")
+    if not isinstance(lst, list):
+        return JSONResponse({"ok": False, "error": "ожидается {list:[…], default}"}, status_code=400)
+    db.setting_set("dashboards", {"list": lst[:50], "default": body.get("default", "")})
+    return {"ok": True}
+
+
 @app.get("/api/history")
 def api_history(limit: int = 240):
     snaps = db.recent_snapshots(limit)
