@@ -323,7 +323,8 @@ async def block_bulk(request: Request):
             cidrs=body.get("cidrs"), items=body.get("items"),
             reason=body.get("reason", ""), added_by=body.get("added_by", "dashboard"),
             ttl=body.get("ttl", 0), force=bool(body.get("force", False)),
-            group=body.get("group"))
+            group=body.get("group"), groups=body.get("groups"),
+            targets=body.get("targets"), all=bool(body.get("all", False)))
         return {"ok": True, **res}
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -412,6 +413,15 @@ async def path_master(request: Request):
     body = await request.json()
     try:
         return {"ok": True, **store.set_path_master(bool(body.get("enabled", True)))}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/path_type")
+async def path_type(request: Request):
+    body = await request.json()
+    try:
+        return {"ok": True, **store.set_path_type(body.get("type"), bool(body.get("enabled", True)))}
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 

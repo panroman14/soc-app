@@ -663,14 +663,26 @@ def _clean_rule(body):
         path = "\n".join(p.strip() for p in path.split("\n") if p.strip())[:1000]
     # combine: 1 = sum requests across all paths (default), 0 = each path counted alone
     combine = 0 if body.get("combine") in (0, "0", False, "false") else 1
-    # ban group → enforcement targets ('' = blocklist-api default group)
+    # LEGACY single group field, kept so old clients still work ('' = default)
     grp = (body.get("group") or "").strip()[:64]
     # optional country scope: comma/space-separated ISO codes, e.g. "CN,RU" ('' = any)
     country = ",".join(re.findall(r"[A-Za-z]{2}", (body.get("country") or "").upper()))[:64]
-    return {"name": name[:80], "match_type": mt, "path": path,
-            "status": (body.get("status") or "").strip()[:20], "threshold": thr,
-            "window": win, "ttl": ttl, "enabled": 1 if body.get("enabled") else 0,
-            "combine": combine, "grp": grp, "country": country}
+    out = {"name": name[:80], "match_type": mt, "path": path,
+           "status": (body.get("status") or "").strip()[:20], "threshold": thr,
+           "window": win, "ttl": ttl, "enabled": 1 if body.get("enabled") else 0,
+           "combine": combine, "grp": grp, "country": country}
+    # many-to-many attachment (Phase 2). Only include a key if the client sent it, so a
+    # partial update (e.g. just renaming) never wipes the attachment.
+    if any(k in body for k in ("groups", "targets", "all")):
+        out["groups"] = [str(g).strip() for g in (body.get("groups") or []) if str(g).strip()]
+        out["targets"] = [str(t).strip() for t in (body.get("targets") or []) if str(t).strip()]
+        out["all"] = bool(body.get("all"))
+    elif grp:
+        # back-compat: a lone legacy `group` seeds the attachment as one group
+        out["groups"] = [grp]
+        out["targets"] = []
+        out["all"] = False
+    return out
 
 
 def _ban_groups():
@@ -951,7 +963,13 @@ def autoban_run_once():
             seen[ip] = {"ip": ip, "cidr": _autoban_host_cidr(ip),
                         "reason": "автобан · %s · ≥%s/%s" % (
                             r.get("name", "?"), r.get("threshold"), r.get("window")),
-                        "ttl": int(r.get("ttl") or 0), "grp": (r.get("group") or ""),
+                        "ttl": int(r.get("ttl") or 0),
+                        # attachment (Phase 2): where this ban enforces. Falls back to the
+                        # legacy single group for rules not yet migrated.
+                        "groups": list(r.get("groups") or []),
+                        "targets": list(r.get("targets") or []),
+                        "all": bool(r.get("all")),
+                        "grp": (r.get("group") or ""),
                         "_rule": r}
     items = list(seen.values())
     cap = config.AUTOBAN_MAX_PER_TICK
@@ -966,26 +984,38 @@ def autoban_run_once():
             if n > 1:                                   # first offense keeps the rule TTL
                 it["ttl"] = ladder[min(n - 1, len(ladder) - 1)]
                 it["reason"] += " · рецидив #%d" % n
-    # BATCH: /block_bulk does ONE reload per call. Group by (ttl, group) — block_bulk
-    # takes a single shared ttl + group → one bulk call per distinct (ttl, group)
-    # combo, so each enforcement target reloads at most once per tick.
+    # BATCH: /block_bulk does ONE reload per call. Group by (ttl, attachment) so each
+    # distinct (ttl, where-it-enforces) combo is a single bulk call → each enforcement
+    # target reloads at most once per tick. The attachment key is a stable signature of
+    # the rule's groups/targets/all (or the legacy single group).
+    def _attach_key(it):
+        if it.get("all"):
+            return ("all",)
+        if it.get("groups") or it.get("targets"):
+            return ("attach", tuple(sorted(it.get("groups") or [])), tuple(sorted(it.get("targets") or [])))
+        return ("grp", it.get("grp") or "")
     by_key = {}
     for it in todo:
-        by_key.setdefault((int(it.get("ttl") or 0), it.get("grp") or ""), []).append(it)
+        by_key.setdefault((int(it.get("ttl") or 0), _attach_key(it)), []).append(it)
     banned_cidrs = []
-    for (ttl, grp), grp_items in by_key.items():
+    for (ttl, akey), grp_items in by_key.items():
         payload = {"items": [{"cidr": it["cidr"], "reason": it["reason"]} for it in grp_items],
                    "ttl": ttl, "added_by": "autoban", "force": False}
-        if grp:
-            payload["group"] = grp
+        if akey[0] == "all":
+            payload["all"] = True
+        elif akey[0] == "attach":
+            payload["groups"] = list(akey[1])
+            payload["targets"] = list(akey[2])
+        elif akey[1]:                     # legacy single group
+            payload["group"] = akey[1]
         try:
             _, resp = _blocklist_call("POST", "/block_bulk", payload)
             if resp and resp.get("ok"):
                 banned_cidrs.extend(resp.get("blocked") or [])
             else:
-                print("[autoban] block_bulk failed (ttl=%s grp=%s): %s" % (ttl, grp, resp), flush=True)
+                print("[autoban] block_bulk failed (ttl=%s attach=%s): %s" % (ttl, akey, resp), flush=True)
         except Exception as e:
-            print("[autoban] block_bulk error (ttl=%s grp=%s): %s" % (ttl, grp, e), flush=True)
+            print("[autoban] block_bulk error (ttl=%s attach=%s): %s" % (ttl, akey, e), flush=True)
     banned = len(banned_cidrs)
     # capture matched paths for the IPs we actually banned (cheap Loki queries — NOT
     # ingress reloads, so they don't add churn) for the "why banned" view
@@ -1318,6 +1348,14 @@ async def api_path_rule_toggle(request: Request):
 async def api_path_master(request: Request):
     body = await request.json()
     status, resp = _blocklist_call("POST", "/path_master", {"enabled": bool(body.get("enabled", True))})
+    return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.post("/api/path_type")
+async def api_path_type(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/path_type",
+                                   {"type": body.get("type"), "enabled": bool(body.get("enabled", True))})
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 

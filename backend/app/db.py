@@ -53,8 +53,11 @@ def init():
                 ttl        INTEGER NOT NULL DEFAULT 86400,     -- ban TTL seconds (0 = forever)
                 enabled    INTEGER NOT NULL DEFAULT 0,         -- per-rule on/off toggle
                 combine    INTEGER NOT NULL DEFAULT 1,         -- 1=sum across all paths, 0=per-path
-                grp        TEXT DEFAULT '',                    -- ban group → enforcement targets ('' = default)
+                grp        TEXT DEFAULT '',                    -- LEGACY single group (migrated → groups/targets/all_targets)
                 country    TEXT DEFAULT '',                    -- optional country filter (e.g. "CN,RU") via geoip
+                groups       TEXT DEFAULT '[]',                -- attach: ban groups (JSON list of names)
+                targets      TEXT DEFAULT '[]',                -- attach: explicit target ids (JSON list)
+                all_targets  INTEGER NOT NULL DEFAULT 0,       -- attach: 1 = enforce on ALL targets
                 created    INTEGER, updated INTEGER
             )""")
         # migrate older autoban_rules tables that predate added columns
@@ -65,6 +68,24 @@ def init():
             c.execute("ALTER TABLE autoban_rules ADD COLUMN grp TEXT DEFAULT ''")
         if "country" not in cols:
             c.execute("ALTER TABLE autoban_rules ADD COLUMN country TEXT DEFAULT ''")
+        # many-to-many attachment (Phase 2): groups[]/targets[]/all_targets — same model as 403 rules
+        newattach = "groups" not in cols
+        if "groups" not in cols:
+            c.execute("ALTER TABLE autoban_rules ADD COLUMN groups TEXT DEFAULT '[]'")
+        if "targets" not in cols:
+            c.execute("ALTER TABLE autoban_rules ADD COLUMN targets TEXT DEFAULT '[]'")
+        if "all_targets" not in cols:
+            c.execute("ALTER TABLE autoban_rules ADD COLUMN all_targets INTEGER NOT NULL DEFAULT 0")
+        if newattach:
+            # migrate legacy single `grp`: a named group → groups=[grp]; empty group
+            # (historically "default" = ALL via resolve_group) → all_targets=1.
+            for r in c.execute("SELECT id, grp FROM autoban_rules").fetchall():
+                g = (r["grp"] or "").strip()
+                if g:
+                    c.execute("UPDATE autoban_rules SET groups=? WHERE id=?",
+                              (json.dumps([g]), r["id"]))
+                else:
+                    c.execute("UPDATE autoban_rules SET all_targets=1 WHERE id=?", (r["id"],))
         # small key/value settings (e.g. the global auto-ban kill-switch)
         c.execute("CREATE TABLE IF NOT EXISTS app_settings (k TEXT PRIMARY KEY, v TEXT)")
         # repeat-offender ledger for the escalation ladder (#9): how many times an IP
@@ -134,6 +155,18 @@ def setting_set(key, value):
 # --- auto-ban rules CRUD ---
 # Column names (DB uses `grp`; the API/UI field is `group` — translated in main.py).
 _RULE_COLS = ("name", "match_type", "path", "status", "threshold", "window", "ttl", "enabled", "combine", "grp", "country")
+# attachment columns are JSON/bool — handled separately from the scalar _RULE_COLS
+_ATTACH_COLS = ("groups", "targets", "all_targets")
+
+
+def _json_list(v):
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    try:
+        d = json.loads(v or "[]")
+        return [str(x).strip() for x in d if str(x).strip()] if isinstance(d, list) else []
+    except Exception:
+        return []
 
 
 def _rule_row(r):
@@ -141,8 +174,24 @@ def _rule_row(r):
     out = {k: r[k] for k in ("id", "name", "match_type", "path", "status",
                              "threshold", "window", "ttl", "enabled", "created", "updated")}
     out["combine"] = r["combine"] if "combine" in keys else 1
-    out["group"] = (r["grp"] if "grp" in keys else "") or ""
+    out["group"] = (r["grp"] if "grp" in keys else "") or ""   # legacy, kept for back-compat
     out["country"] = (r["country"] if "country" in keys else "") or ""
+    out["groups"] = _json_list(r["groups"]) if "groups" in keys else []
+    out["targets"] = _json_list(r["targets"]) if "targets" in keys else []
+    out["all"] = bool(r["all_targets"]) if "all_targets" in keys else False
+    return out
+
+
+def _attach_vals(fields):
+    """Pull attachment fields out of an API payload → (col, value) pairs for SQL.
+    Only includes a column if the caller actually provided it (partial update safe)."""
+    out = {}
+    if "groups" in fields:
+        out["groups"] = json.dumps(_json_list(fields.get("groups")))
+    if "targets" in fields:
+        out["targets"] = json.dumps(_json_list(fields.get("targets")))
+    if "all" in fields:
+        out["all_targets"] = 1 if fields.get("all") else 0
     return out
 
 
@@ -161,21 +210,29 @@ def autoban_rule(rule_id):
 def autoban_create(fields):
     now = int(time.time())
     vals = [fields.get(k) for k in _RULE_COLS]
+    att = _attach_vals(fields)
+    cols = list(_ATTACH_COLS)
+    attvals = [att.get("groups", "[]"), att.get("targets", "[]"), att.get("all_targets", 0)]
     with _lock, _conn() as c:
         cur = c.execute(
-            "INSERT INTO autoban_rules (name, match_type, path, status, threshold, window, ttl, enabled, combine, grp, country, created, updated) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (*vals, now, now))
+            "INSERT INTO autoban_rules (name, match_type, path, status, threshold, window, ttl, enabled, combine, grp, country, %s, created, updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % ", ".join(cols),
+            (*vals, *attvals, now, now))
         return cur.lastrowid
 
 
 def autoban_update(rule_id, fields):
     sets = [k for k in _RULE_COLS if k in fields]
+    vals = [fields[k] for k in sets]
+    for col, v in _attach_vals(fields).items():   # groups/targets/all_targets
+        sets.append(col)
+        vals.append(v)
     if not sets:
         return
     with _lock, _conn() as c:
         c.execute("UPDATE autoban_rules SET %s, updated=? WHERE id=?" %
                   ", ".join("%s=?" % k for k in sets),
-                  (*[fields[k] for k in sets], int(time.time()), rule_id))
+                  (*vals, int(time.time()), rule_id))
 
 
 def autoban_delete(rule_id):

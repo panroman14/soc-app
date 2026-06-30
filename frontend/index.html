@@ -497,7 +497,7 @@
             </select>
           </div>
           <div>
-            <label class="text-[11px] text-slate-500 block mb-1">Группа (куда банить)</label>
+            <label class="text-[11px] text-slate-500 block mb-1">Стартовая привязка (можно менять потом у правила)</label>
             <select id="ab-group" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200"></select>
           </div>
           <div class="flex items-center gap-2 pt-1">
@@ -551,11 +551,7 @@
           <h2 class="text-base font-semibold text-slate-200">🚫 Правила 403 — блокировка по пути</h2>
           <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span> (сканеры/эксплойты: <span class="mono">/.env</span>, <span class="mono">/wp-login</span>, jndi…). Это <b>не бан IP</b> — режется сам путь, на всех доменах окружения.</p>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <span id="p403-render" class="text-[12px]"></span>
-          <span id="p403-master-lbl" class="text-[12px] text-slate-400">секция:</span>
-          <button id="p403-master" onclick="p403Master()" class="text-sm px-3 py-1.5 rounded bg-slate-700 text-slate-200">…</button>
-        </div>
+        <div id="p403-types" class="flex items-center gap-1.5 flex-wrap shrink-0"></div>
       </div>
     </section>
 
@@ -2427,7 +2423,7 @@ async function loadP403(){
       fetch("/api/ban_targets").then(r=>r.json()).catch(()=>null)]);
     if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||""};
     await loadMainRules();
-    renderP403(d);renderP403Status(st);p403ModeChange();renderP403Protected(pp.paths||[]);
+    renderP403(d);renderP403Types(st);p403ModeChange();renderP403Protected(pp.paths||[]);
     if(typeof renderP403Applies==="function"){_targetsData=bt||_targetsData;_p403RenderList();}
   }catch(e){document.getElementById("p403-list").innerHTML='<div class="text-rose-400 text-xs">не удалось загрузить: '+esc(e.message||e)+'</div>';}
 }
@@ -2485,7 +2481,18 @@ async function _attachSave(kind,r){
     const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:r.pattern,enabled:r.enabled!==false,
       groups:r.groups||[],targets:r.targets||[],all:!!r.all});
     if(res&&res.ok)loadP403(); else uiAlert("не удалось: "+((res&&res.error)||"?"));
-  }else{ if(typeof _abAttachSave==="function")_abAttachSave(r); }  // автобан — Фаза 2
+  }else{ _abAttachSave(r); }  // автобан — Фаза 2
+}
+// сохранить привязку автобан-правила, не затирая остальные поля
+async function _abAttachSave(r){
+  const body={id:r.id, name:r.name, match_type:r.match_type, path:r.path||"",
+    status:r.status||"", threshold:r.threshold, window:r.window, ttl:r.ttl,
+    enabled:r.enabled?1:0, combine:r.combine, country:r.country||"",
+    groups:r.groups||[], targets:r.targets||[], all:!!r.all};
+  try{
+    const res=await fetch("/api/autoban/rule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(x=>x.json());
+    if(res&&(res.ok||res.id))loadAutoban(); else uiAlert("не удалось: "+((res&&res.error)||"?"));
+  }catch(e){ uiAlert("не удалось: "+(e.message||e)); }
 }
 function attachAll(kind,id,val){ const r=_attachRuleById(kind,id); if(!r)return; r.all=!!val; if(val){r.groups=[];r.targets=[];} _attachSave(kind,r); }
 function attachAdd(kind,id,tok){ if(!tok)return; const r=_attachRuleById(kind,id); if(!r)return; r.all=false;
@@ -2537,34 +2544,33 @@ function renderP403Protected(paths){
   el.innerHTML='🛡️ защищённые (в 403 добавить нельзя, общий список с автобаном): '+paths.map(p=>`<span class="mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(p)}</span>`).join(" ")+' <span class="text-slate-600">— меняются в <a onclick="showView(\'autoban\')" class="text-indigo-300 cursor-pointer">Автобане</a></span>';
 }
 const _P403_BK={"nginx-file":"nginx","ingress-cm":"ingress","cloudflare":"CF","noop":"noop"};
-function renderP403Status(st){
-  const el=document.getElementById("p403-render");if(!el)return;
-  if(!st||st.rendered_ok===undefined){el.textContent="";return;}
-  const det=st.targets&&typeof st.targets==="object"?st.targets:null;
-  // показываем по одному чипу на каждый реальный бэкенд (nginx / cf / ingress), а не выдуманный ingress
-  if(det&&Object.keys(det).length){
-    const chips=Object.entries(det).map(([id,t])=>{
-      const bk=_P403_BK[t.type]||t.type;
-      if(!t.controller_reachable)return `<span class="text-amber-300" title="${esc(id)}: нет связи">⚠ ${esc(bk)}: нет связи</span>`;
-      return t.rendered_ok
-        ? `<span class="text-emerald-300" title="${esc(id)}">✓ ${esc(bk)} OK</span>`
-        : `<span class="text-rose-300" title="${esc(id)}: дрейф — нажми ↻ ресинк">✗ ${esc(bk)}: дрейф</span>`;
-    });
-    el.innerHTML=chips.join(' <span class="text-slate-700">·</span> ');
-    return;
-  }
-  // фолбэк, если бэкенд не отдал детализацию по таргетам
-  if(!st.controller_reachable){el.innerHTML='<span class="text-amber-300">⚠ нет связи с бэкендом</span>';return;}
-  el.innerHTML=st.rendered_ok
-    ? '<span class="text-emerald-300">✓ рендер OK</span>'
-    : '<span class="text-rose-300">✗ не отрендерено — нажми ↻ ресинк в Денлисте</span>';
+// маленькие пиллы вкл/выкл по каждому реальному бэкенду (nginx / cf / ingress);
+// типов без активного таргета — не показываем. Клик переключает 403 для всего типа.
+function renderP403Types(st){
+  const el=document.getElementById("p403-types");if(!el)return;
+  if(!st||!st.targets||typeof st.targets!=="object"){el.innerHTML="";return;}
+  const off=new Set(st.off_types||[]);
+  const byType={};
+  Object.values(st.targets).forEach(t=>{if(t.type==="noop")return;(byType[t.type]=byType[t.type]||[]).push(t);});
+  const types=Object.keys(byType);
+  if(!types.length){el.innerHTML='<span class="text-[11px] text-amber-300/80">'+_trText("нет бэкендов")+'</span>';return;}
+  el.innerHTML=types.map(ty=>{
+    const bk=_P403_BK[ty]||ty, on=!off.has(ty), arr=byType[ty];
+    const reachable=arr.every(t=>t.controller_reachable), ok=arr.every(t=>t.rendered_ok);
+    let dot,cls,state,tip;
+    if(!on){dot="bg-slate-500";cls="border-slate-700 bg-slate-800/60 text-slate-400 hover:border-slate-600";state=_trText("выкл");tip=bk+": 403 выключен — включить";}
+    else if(!reachable){dot="bg-amber-400";cls="border-amber-600/40 bg-amber-900/20 text-amber-300 hover:border-amber-500";state=_trText("нет связи");tip=bk+": нет связи с бэкендом";}
+    else if(!ok){dot="bg-amber-400";cls="border-amber-600/40 bg-amber-900/20 text-amber-300 hover:border-amber-500";state=_trText("дрейф");tip=bk+": дрейф рендера — нажми ↻ ресинк в Денлисте";}
+    else{dot="bg-emerald-400";cls="border-emerald-600/40 bg-emerald-900/30 text-emerald-300 hover:border-emerald-500";state=_trText("вкл");tip=bk+": 403 активен — выключить";}
+    return `<button onclick="p403TypeToggle('${ty}',${!on})" title="${esc(tip)}" class="text-[11px] leading-none px-2.5 py-1.5 rounded-full border flex items-center gap-1.5 transition ${cls}"><span class="w-1.5 h-1.5 rounded-full ${dot} shrink-0"></span><span class="font-semibold">${esc(bk)}</span><span class="opacity-60">${state}</span></button>`;
+  }).join("");
+}
+async function p403TypeToggle(type,enabled){
+  try{const r=await _post("/api/path_type",{type,enabled});if(r&&r.ok===false)throw new Error(r.error||"ошибка");}catch(e){}
+  loadP403();
 }
 function renderP403(d){
   _p403=d||{enabled:true,rules:[]};
-  const on=_p403.enabled!==false;
-  const mb=document.getElementById("p403-master");
-  mb.textContent=on?"🟢 включена":"⚪ выключена";
-  mb.className="text-sm px-3 py-1.5 rounded "+(on?"bg-emerald-600/80 text-white hover:bg-emerald-600":"bg-slate-700 text-slate-300 hover:bg-slate-600");
   _p403RenderList();
   p403FillTarget();
 }
@@ -3510,8 +3516,9 @@ function renderAbRules(rules){
     ${r.match_type!=="family"?`<button onclick="setMainRule('autoban',${r.id})" title="${String(_mainRules.autoban_id)===String(r.id)?'основное автобан-правило':'сделать основным'}" class="text-base shrink-0 ${String(_mainRules.autoban_id)===String(r.id)?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>`:''}
     <div class="flex-1 min-w-[200px]">
       <div class="text-sm text-slate-200 font-medium">${esc(r.name)} ${String(_mainRules.autoban_id)===String(r.id)?'<span class="text-[10px] text-amber-400">основное</span>':''} ${r.enabled?'<span class="text-[10px] text-emerald-400">активно</span>':'<span class="text-[10px] text-slate-600">выкл</span>'}</div>
-      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${(r.match_type==="family"||r.match_type==="rate")?"":(r.combine===0?" (по 1 пути)":" (∑ путей)")}${r.status?" · код "+esc(r.status):""}${ccBadge(r)} · бан ${ttlL(r.ttl)} · 🎯 ${esc(r.group||"группа по умолч.")}</div>
-      ${_appliesLine(r.group||"", false)}
+      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${(r.match_type==="family"||r.match_type==="rate")?"":(r.combine===0?" (по 1 пути)":" (∑ путей)")}${r.status?" · код "+esc(r.status):""}${ccBadge(r)} · бан ${ttlL(r.ttl)}</div>
+      ${_attachUI(r,'autoban')}
+      ${_appliesLineRule(r, false)}
     </div>
     <button onclick='abPreview(${JSON.stringify({id:r.id})})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">🔍 превью</button>
     <button onclick='abEditRule(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">ред.</button>

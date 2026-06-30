@@ -60,15 +60,29 @@ def _active(entries, now=None):
     return [e for e in entries if not e.get("ttl") or e["ts"] + e["ttl"] > now]
 
 
-def _cidrs_for_target(active, target_id, resolved=None):
-    """Collapsed CIDR set routed to one target: every active entry whose group
-    resolves to include this target. `resolved` is an optional {group: set(target_ids)}
-    memo (resolve_group is O(targets+nodes); reuse it across targets in one render)."""
-    if resolved is None:
-        member = lambda g: target_id in enforce.resolve_group(g)
-    else:
-        member = lambda g: target_id in resolved.get(g, ())
-    return safety.collapse([e["cidr"] for e in active if member(e.get("group"))])
+def _entry_target_ids(e, gcache, all_ids):
+    """Target ids a denylist ENTRY enforces on. New attachment model (groups[]/
+    targets[]/all) mirrors the 403 path rules; falls back to the legacy single
+    `group`. `gcache` memoizes resolve_group across entries in one render."""
+    def _grp(g):
+        if g not in gcache:
+            gcache[g] = set(enforce.resolve_group(g))
+        return gcache[g]
+    if e.get("all"):
+        return set(all_ids)
+    if "groups" in e or "targets" in e:
+        ids = set(e.get("targets") or [])
+        for g in (e.get("groups") or []):
+            ids |= _grp(g)
+        return ids & set(all_ids)
+    return set(_grp(e.get("group")))   # legacy single-group entry
+
+
+def _cidrs_for_target(active, target_id, ent_ids):
+    """Collapsed CIDR set routed to one target: every active entry whose resolved
+    target set includes this target. `ent_ids` is the {id(entry): set(target_ids)}
+    memo computed once per render."""
+    return safety.collapse([e["cidr"] for e in active if target_id in ent_ids.get(id(e), ())])
 
 
 def _render(entries, path=None):
@@ -84,16 +98,14 @@ def _render(entries, path=None):
             print("[render] path_rules load failed, rendering without path-403:", e, flush=True)
             path = {"enabled": True, "rules": []}
     active = _active(entries)
-    # Resolve each DISTINCT group once (not per entry × per target) — big saving when
-    # many bans share a group, since resolve_group walks targets + enrolled nodes.
-    resolved = {}
-    for e in active:
-        g = e.get("group")
-        if g not in resolved:
-            resolved[g] = set(enforce.resolve_group(g))
     tids = enforce.all_target_ids()
-    # per-target desired CIDR sets (routed by each ban's group)
-    per_target = {tid: _cidrs_for_target(active, tid, resolved) for tid in tids}
+    all_ids = set(tids)
+    # Resolve each entry's target set ONCE (group memo shared across entries — a big
+    # saving when many bans share a group, since resolve_group walks targets+nodes).
+    gcache = {}
+    ent_ids = {id(e): _entry_target_ids(e, gcache, all_ids) for e in active}
+    # per-target desired CIDR sets (routed by each ban's attachment)
+    per_target = {tid: _cidrs_for_target(active, tid, ent_ids) for tid in tids}
     # per-target 403 patterns: a path rule renders only to targets in its group
     # (empty/unknown group → ALL, via resolve_group — keeps prior global behaviour).
     per_target_patterns = _patterns_per_target(path, tids)
@@ -144,7 +156,8 @@ def list_active(target=None):
         entries, _ = _load_raw()
         act = _active(entries)
     if target:
-        act = [e for e in act if target in enforce.resolve_group(e.get("group"))]
+        gcache, all_ids = {}, set(enforce.all_target_ids())
+        act = [e for e in act if target in _entry_target_ids(e, gcache, all_ids)]
     return act
 
 
@@ -172,35 +185,55 @@ def block(cidr, reason="", added_by="dashboard", ttl=0, force=False, group=None)
     return out
 
 
-def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, force=False, group=None):
+def _attach_for(src, dflt_group, has_attach):
+    """Build the routing field(s) stored on an entry from a call/item dict `src`.
+    New model (groups/targets/all) when any attachment key is present anywhere;
+    otherwise the legacy single `group`."""
+    if has_attach and any(k in src for k in ("groups", "targets", "all")):
+        return {"groups": [str(g).strip() for g in (src.get("groups") or []) if str(g).strip()],
+                "targets": [str(t).strip() for t in (src.get("targets") or []) if str(t).strip()],
+                "all": bool(src.get("all"))}
+    return {"group": src.get("group", dflt_group)}
+
+
+def block_many(cidrs=None, items=None, reason="", added_by="dashboard", ttl=0, force=False,
+               group=None, groups=None, targets=None, all=False):
     """Block several CIDRs with a SINGLE render/reload. Invalid ones are skipped.
 
     Either `cidrs` (list, shared `reason`) or `items` ([{cidr, reason}], per-CIDR reason).
-    An item may carry its own `group`; otherwise the call's `group` (or default).
+    Attachment (where the ban enforces) is the call-level groups/targets/all, overridable
+    per item; falls back to the legacy single `group` when no attachment is supplied.
     """
     dflt_group = group or settings.get("BAN_GROUP_DEFAULT")
-    pairs = []
+    call_attach = {"groups": groups, "targets": targets, "all": all}
+    has_attach = bool(groups or targets or all) or bool(items and any(
+        k in it for it in items for k in ("groups", "targets", "all")))
+    pairs = []   # (cidr, reason, attach_dict)
     if items:
-        pairs = [(it.get("cidr", ""), it.get("reason", reason), it.get("group", dflt_group)) for it in items]
+        for it in items:
+            src = {**call_attach, **{k: it[k] for k in ("groups", "targets", "all", "group") if k in it}}
+            pairs.append((it.get("cidr", ""), it.get("reason", reason),
+                          _attach_for(src, dflt_group, has_attach)))
     else:
-        pairs = [(c, reason, dflt_group) for c in (cidrs or [])]
+        att = _attach_for(call_attach, dflt_group, has_attach)
+        pairs = [(c, reason, att) for c in (cidrs or [])]
     valid, skipped = [], []
-    for c, rs, g in pairs:
+    for c, rs, att in pairs:
         try:
-            valid.append((safety.validate(c, force=force), rs, g))
+            valid.append((safety.validate(c, force=force), rs, att))
         except safety.BlockError as e:
             skipped.append({"cidr": c, "error": str(e)})
     with _lock:
         entries, audit = _load_raw()
         now = _now()
         added, seen, evs = [], set(), []
-        for c, rs, g in valid:
+        for c, rs, att in valid:
             if c in seen:
                 continue
             seen.add(c)
             entries = [e for e in entries if e["cidr"] != c]
             entries.append({"cidr": c, "reason": rs, "added_by": added_by,
-                            "ts": now, "ttl": int(ttl or 0), "group": g})
+                            "ts": now, "ttl": int(ttl or 0), **att})
             evs.append(_audit(audit, "block", c, added_by, rs))
             added.append(c)
         active = _render(entries) if added else _active(entries)
@@ -294,12 +327,15 @@ PATH_KEY = "path_rules.json"
 def _load_path():
     raw = _st().load([PATH_KEY]).get(PATH_KEY)
     if not raw:
-        return {"enabled": True, "rules": []}
+        return {"enabled": True, "rules": [], "off_types": []}
     try:
         obj = json.loads(raw)
         if not isinstance(obj, dict):
             raise ValueError("path_rules.json is not an object")
         obj.setdefault("enabled", True)
+        # backend types where 403 enforcement is switched off (per-type kill switch)
+        if not isinstance(obj.get("off_types"), list):
+            obj["off_types"] = []
         if not isinstance(obj.get("rules"), list):
             obj["rules"] = []
         # migrate single `group` → attachment model {groups:[], targets:[], all:bool}.
@@ -354,17 +390,26 @@ def _rule_target_ids(r, gcache, all_ids):
     return ids
 
 
+def _type_of(tids):
+    """{target_id: type} for the given ids (used to honour the per-type kill switch)."""
+    by = {t["id"]: t.get("type") for t in enforce.targets()}
+    return {tid: by.get(tid) for tid in tids}
+
+
 def _patterns_per_target(path, tids):
     """{target_id: [pattern,...]} — each enabled path rule routed to the targets it is
-    attached to (groups ∪ targets, or all). Unattached rules render nowhere."""
+    attached to (groups ∪ targets, or all). Unattached rules render nowhere. Targets
+    whose backend type is in `off_types` get no patterns (per-type kill switch)."""
     out = {tid: [] for tid in tids}
     gcache, all_ids = {}, set(tids)
+    off = set(path.get("off_types") or [])
+    types = _type_of(tids) if off else {}
     for r in path.get("rules", []):
         if not r.get("enabled"):
             continue
         rt = _rule_target_ids(r, gcache, all_ids)
         for tid in tids:
-            if tid in rt:
+            if tid in rt and types.get(tid) not in off:
                 out[tid].append(r["pattern"])
     return out
 
@@ -374,6 +419,10 @@ def patterns_for_target(target_id, path=None):
     agent's /nginx_snippet). Routed by each rule's attachment (groups ∪ targets/all)."""
     if path is None:
         path = _load_path()
+    # per-type kill switch: if this target's backend type is off, render nothing
+    off = set(path.get("off_types") or [])
+    if off and _type_of([target_id]).get(target_id) in off:
+        return []
     pats, gcache = [], {}
     all_ids = set(enforce.all_target_ids())
     for r in path.get("rules", []):
@@ -395,7 +444,33 @@ def path_render_status():
         master = bool(path.get("enabled", True))
         per_target_patterns = _patterns_per_target(path, enforce.all_target_ids())
         st = enforce.render_status(per_target_patterns, master)
-        return {"enabled": master, "count": len(rules), "enabled_count": enabled_n, **st}
+        return {"enabled": master, "off_types": list(path.get("off_types") or []),
+                "count": len(rules), "enabled_count": enabled_n, **st}
+
+
+def set_path_type(type_, enabled, by="dashboard"):
+    """Per-backend-type 403 kill switch: turn 403 enforcement on/off for ALL targets
+    of a given type (nginx-file / ingress-cm / cloudflare). Enabling a type also lifts
+    the global section kill switch so the toggle does what the operator expects."""
+    type_ = str(type_ or "").strip()
+    if not type_:
+        raise safety.BlockError("пустой тип таргета")
+    with _lock:
+        entries, audit = _load_raw()
+        path = _load_path()
+        off = set(path.get("off_types") or [])
+        if enabled:
+            off.discard(type_)
+            path["enabled"] = True
+        else:
+            off.add(type_)
+        path["off_types"] = sorted(off)
+        ev = _audit(audit, "path_type", type_, by, "on" if enabled else "off")
+        _render(entries, path)
+        ev["result"] = _enf_result()
+        _save_path(path)
+        _save_raw(entries, audit)
+        return {"off_types": path["off_types"], "enabled": path["enabled"]}
 
 
 def _norm_attach(groups, targets, all_):
