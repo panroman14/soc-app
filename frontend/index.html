@@ -971,6 +971,7 @@ const RU2EN={
   "подключённая нода":"connected node","Cloudflare окружения":"environment Cloudflare","ingress окружения":"environment ingress",
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
+  "нет бэкендов":"no backends","Cloudflare WAF — 403 по пути на edge":"Cloudflare WAF — path-403 at the edge","через какие бэкенды эта группа применяет баны/403":"which backends this group enforces bans/403 through",
   "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
   "осталось до авто-разбана":"time left until auto-unban","истекает…":"expiring…",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
@@ -2551,14 +2552,18 @@ async function loadP403(){
       fetch("/api/path_status").then(r=>r.json()).catch(()=>null),
       fetch("/api/protected_paths").then(r=>r.json()).catch(()=>({paths:[]})),
       fetch("/api/ban_targets").then(r=>r.json()).catch(()=>null)]);
-    if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||""};
+    if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||"",cf_edge_paths:!!bt.cf_edge_paths};
     await loadMainRules();
     renderP403(d);renderP403Types(st);p403ModeChange();renderP403Protected(pp.paths||[]);
     if(typeof renderP403Applies==="function"){_targetsData=bt||_targetsData;_p403RenderList();}
   }catch(e){document.getElementById("p403-list").innerHTML='<div class="text-rose-400 text-xs">не удалось загрузить: '+esc(e.message||e)+'</div>';}
 }
 // ── единый резолвер «правило → группа → конкретные таргеты» (для подписей) ──────
-let _targetsData=null;   // {targets, groups, default_group} из /api/ban_targets
+let _targetsData=null;   // {targets, groups, default_group, cf_edge_paths} из /api/ban_targets
+// применяет ли Cloudflare 403 по пути на edge (WAF). Off → CF блокирует только IP.
+function _cfEdgeOn(){return !!((_targetsData&&_targetsData.cf_edge_paths)||(_banGroupInfo&&_banGroupInfo.cf_edge_paths));}
+// таргеты, реально применяющие 403 по пути: nginx/ingress всегда, cloudflare — если edge включён
+function _pathEnforcers(list){return list.filter(t=>t.type==="nginx-file"||t.type==="ingress-cm"||(t.type==="cloudflare"&&_cfEdgeOn()));}
 // привязка правила (groups[]+targets[]+all) → множество id таргетов (зеркало бэкенда)
 function _ruleTargetIds(r){
   const d=_targetsData; if(!d||!d.targets) return null;
@@ -2572,7 +2577,7 @@ function _ruleTargets(r, pathOnly){
   const ids=_ruleTargetIds(r); if(ids==null) return null;
   const byId={}; (_targetsData.targets||[]).forEach(t=>byId[t.id]=t);
   let list=[...ids].map(id=>byId[id]).filter(t=>t&&t.type!=="noop");
-  if(pathOnly) list=list.filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
+  if(pathOnly) list=_pathEnforcers(list);
   return list;
 }
 // строка «↳ применяется к: <таргеты>» под правилом (по его привязке)
@@ -2639,7 +2644,7 @@ function _appliesTargets(group, pathOnly){
   const g=group||d.default_group||"";
   const ids=(g&&d.groups&&d.groups[g])?d.groups[g]:d.targets.map(t=>t.id); // нет/неизв. группа → все
   let list=ids.map(id=>byId[id]).filter(t=>t&&t.type!=="noop");
-  if(pathOnly) list=list.filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
+  if(pathOnly) list=_pathEnforcers(list);
   return list;
 }
 // строка «→ применяется к: <таргеты>» под правилом
@@ -2657,14 +2662,19 @@ async function renderP403Applies(){
     const d=await fetch("/api/ban_targets").then(r=>r.json());
     _targetsData=d; _p403RenderList();   // пере-рендер списка с подписями «применяется к»
     if(d.enabled===false){ el.innerHTML=`<span class="text-slate-500">${_trText('blocklist-api не настроен.')}</span>`; return; }
+    const edge=_cfEdgeOn();
     const path=(d.targets||[]).filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
-    const cf=(d.targets||[]).filter(t=>t.type==="cloudflare");
-    let html=path.length
-      ? path.map(t=>{const node=t.type==="nginx-file"&&t.enrolled!==false;
-          const tip=node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress окружения');
-          return `<span onclick="${node?"showView('nodes')":"showView('settings');setSub('env')"}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${esc(t.type)}</span> ↗</span>`;}).join("")
+    const cfAll=(d.targets||[]).filter(t=>t.type==="cloudflare");
+    const cfPath=edge?cfAll:[], cfIpOnly=edge?[]:cfAll;   // edge вкл → CF тоже 403'ит по пути
+    const enf=path.concat(cfPath);
+    let html=enf.length
+      ? enf.map(t=>{const node=t.type==="nginx-file"&&t.enrolled!==false;
+          const cf=t.type==="cloudflare";
+          const tip=cf?_trText('Cloudflare WAF — 403 по пути на edge'):(node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress окружения'));
+          const go=cf?"showView('settings');setSub('cf')":(node?"showView('nodes')":"showView('settings');setSub('env')");
+          return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${cf?'cf':esc(t.type)}</span> ↗</span>`;}).join("")
       : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
-    if(cf.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cf.map(t=>esc(t.id)).join(", ")}</span>`;
+    if(cfIpOnly.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cfIpOnly.map(t=>esc(t.id)).join(", ")}</span>`;
     el.innerHTML=html;
   }catch(e){ el.innerHTML=`<span class="text-slate-500">—</span>`; }
 }
@@ -3413,13 +3423,27 @@ async function loadGroups(){
     const [st,bt]=await Promise.all([
       fetch("/api/settings").then(r=>r.json()).catch(()=>null),
       fetch("/api/ban_targets").then(r=>r.json()).catch(()=>null)]);
-    if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||""};
+    if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||"",cf_edge_paths:!!bt.cf_edge_paths};
     const raw=st&&st.settings&&st.settings.BAN_GROUPS&&st.settings.BAN_GROUPS.value;
     _grpDraft=(raw&&typeof raw==="object")?JSON.parse(JSON.stringify(raw)):{};
     renderGroups();
   }catch(e){ el.innerHTML=`<span class="text-rose-300">ошибка: ${esc(e.message||e)}</span>`; }
 }
 function _targetType(tid){const t=(_banGroupInfo.targets||[]).find(x=>x.id===tid);return t?t.type:"";}
+// плашки «через что группа реально применяет баны»: nginx / ingress / CF (по типам её таргетов)
+function _levelBadges(memberIds){
+  const kinds={};   // type → count
+  (memberIds||[]).forEach(tid=>{const ty=_targetType(tid); if(ty&&ty!=="noop")kinds[ty]=(kinds[ty]||0)+1;});
+  const order=["nginx-file","ingress-cm","cloudflare"];
+  const meta={"nginx-file":["nginx","bg-emerald-900/40 text-emerald-300/90"],
+              "ingress-cm":["ingress","bg-sky-900/40 text-sky-300/90"],
+              "cloudflare":["CF","bg-orange-900/40 text-orange-300/90"]};
+  const ks=Object.keys(kinds).sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
+  if(!ks.length)return `<span class="text-[10px]" style="color:var(--faint)">${_trText('нет бэкендов')}</span>`;
+  return ks.map(ty=>{const m=meta[ty]||[ty,"bg-slate-800 text-slate-300"];
+    const note=(ty==="cloudflare"&&!_cfEdgeOn())?` <span class="opacity-60">${_trText('только IP')}</span>`:"";
+    return `<span class="text-[10px] px-1.5 py-0.5 rounded ${m[1]}">${m[0]} <span class="opacity-60">×${kinds[ty]}</span>${note}</span>`;}).join(" ");
+}
 function renderGroups(){
   const el=document.getElementById("grp-list");if(!el)return;
   if(!_grpDraft){el.textContent="—";return;}
@@ -3435,8 +3459,9 @@ function renderGroups(){
     const avail=allTargets.filter(t=>!members.includes(t.id));
     const opts=avail.map(t=>`<option value="${esc(t.id)}">${esc(t.id)} · ${esc(t.type)}</option>`).join("");
     return `<div class="bg-slate-900/40 border border-slate-800 rounded p-2">
-      <div class="flex items-center gap-2 mb-1.5">
+      <div class="flex items-center gap-2 mb-1.5 flex-wrap">
         <span class="mono text-slate-200 text-[13px]">${esc(g)}</span>
+        <span class="flex items-center gap-1" title="${_trText('через какие бэкенды эта группа применяет баны/403')}">${_levelBadges(members)}</span>
         <button onclick="grpDelete('${esc(g)}')" class="ml-auto text-[11px] text-rose-300 hover:bg-rose-500/10 rounded px-1.5 py-0.5">${_trText('удалить группу')}</button>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">${chips}

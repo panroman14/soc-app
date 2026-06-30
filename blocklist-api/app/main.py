@@ -102,8 +102,11 @@ def list_blocks(target: str = ""):
 @app.get("/targets")
 def list_targets():
     """Configured enforcement targets + groups (for the dashboard + agents)."""
+    from . import settings
+    edge = str(settings.get("CF_EDGE_PATHS") or "").lower() in ("on", "1", "true", "yes")
     return {"targets": enforce.targets(), "groups": enforce.groups(),
             "default_group": config.BAN_GROUP_DEFAULT,
+            "cf_edge_paths": edge,
             "last_errors": enforce.last_errors()}
 
 
