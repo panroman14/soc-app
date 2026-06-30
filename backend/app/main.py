@@ -586,7 +586,7 @@ async def api_review(request: Request):
 #     kill-switch is stored but defaults OFF and is purely informational for now. ---
 _AB_WINDOWS = {"1m", "5m", "10m", "15m", "30m", "1h", "8h"}
 _AB_WIN_ORDER = ["1m", "5m", "10m", "15m", "30m", "1h", "8h"]
-_AB_MATCH = {"substring", "regex", "family"}
+_AB_MATCH = {"substring", "regex", "family", "rate"}
 
 
 def _autoban_ignore():
@@ -647,7 +647,7 @@ def _clean_rule(body):
     if mt not in _AB_MATCH:
         raise ValueError("неизвестный тип условия")
     path = (body.get("path") or "").strip()
-    if mt != "family" and not path:
+    if mt not in ("family", "rate") and not path:
         raise ValueError("укажите путь/паттерн")
     win = body.get("window") or "10m"
     if win not in _AB_WINDOWS:

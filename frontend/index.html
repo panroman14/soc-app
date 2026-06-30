@@ -407,7 +407,9 @@
               <option value="substring">путь содержит</option>
               <option value="regex">путь по regex</option>
               <option value="family">семейство сигнатур</option>
+              <option value="rate">частота: любой путь</option>
             </select>
+            <p id="ab-rate-hint" class="hidden text-[11px] text-slate-500 leading-snug mb-1.5">Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.</p>
             <select id="ab-family" class="hidden w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200"></select>
             <div id="ab-paths" class="space-y-1.5"></div>
             <button id="ab-add-or" type="button" onclick="abAddPath()" class="mt-1.5 text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ ИЛИ ещё путь</button>
@@ -858,6 +860,8 @@ const RU2EN={
   "blocklist-api не настроен — баны отключены.":"blocklist-api not configured — bans disabled.",
   "таргеты не заданы — забань ноду в окружение или включи Cloudflare у env.":"no targets — assign a node to an environment or enable Cloudflare for the env.",
   "дефолтная группа:":"default group:","Превью":"Preview",
+  "частота: любой путь":"rate: any path",
+  "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
   "Исполнитель не подключён — реального бана нет.":"Executor not wired — no real ban.","Заполни условие и нажми «Превью».":"Fill the condition and hit “Preview”.",
   "Журнал действий":"Action journal","все действия":"all actions","баны":"bans","разбаны":"unbans","истёкшие (TTL)":"expired (TTL)",
@@ -2576,11 +2580,13 @@ async function p403AddPath(path,el){
   if(!res.ok)uiAlert("не удалось добавить в 403: "+(res.error||"?"));
 }
 function abMtypeChange(){
-  const mt=document.getElementById("ab-mtype").value, fam=mt==="family";
+  const mt=document.getElementById("ab-mtype").value, fam=mt==="family", rate=mt==="rate";
   document.getElementById("ab-family").classList.toggle("hidden",!fam);
-  document.getElementById("ab-paths").classList.toggle("hidden",fam);
-  document.getElementById("ab-add-or").classList.toggle("hidden",fam);
-  document.getElementById("ab-combine-wrap").classList.toggle("hidden",fam);
+  // rate has no path/family at all: hide path inputs, the "+ OR" button, the combine box
+  document.getElementById("ab-paths").classList.toggle("hidden",fam||rate);
+  document.getElementById("ab-add-or").classList.toggle("hidden",fam||rate);
+  document.getElementById("ab-combine-wrap").classList.toggle("hidden",fam||rate);
+  document.getElementById("ab-rate-hint").classList.toggle("hidden",!rate);
 }
 function abPathRow(value){
   const wrap=document.createElement("div");wrap.className="flex gap-1.5 ab-path-row";
@@ -3092,7 +3098,7 @@ async function toggleArm(){
 function abFormPayload(){
   const mt=document.getElementById("ab-mtype").value;
   return {id:_abEditId||undefined, name:document.getElementById("ab-name").value.trim(), match_type:mt,
-    path:mt==="family"?document.getElementById("ab-family").value:abPathValues().join("\n"),
+    path:mt==="family"?document.getElementById("ab-family").value:(mt==="rate"?"":abPathValues().join("\n")),
     status:document.getElementById("ab-status").value.trim(),
     threshold:parseInt(document.getElementById("ab-threshold").value)||1,
     window:document.getElementById("ab-window").value, ttl:parseInt(document.getElementById("ab-ttl").value)||0,
@@ -3103,7 +3109,7 @@ function abFormPayload(){
 async function abSaveRule(){
   const p=abFormPayload(), msg=document.getElementById("ab-form-msg");
   if(!p.name){msg.textContent="нужно имя";return;}
-  if(p.match_type!=="family"&&!p.path){msg.textContent="укажи путь";return;}
+  if(p.match_type!=="family"&&p.match_type!=="rate"&&!p.path){msg.textContent="укажи путь";return;}
   msg.textContent="сохраняю…";
   try{const d=await fetch("/api/autoban/rule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}).then(r=>r.json());
     if(!d.ok){msg.textContent="ошибка: "+(d.error||"?");return;}

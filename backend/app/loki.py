@@ -483,6 +483,12 @@ def _re2_escape(s):
 
 def _autoban_base(match_type, path, host=""):
     """Build the LogQL stream selector + ip/uri extraction for a rule."""
+    if match_type == "rate":
+        # pure rate rule: count EVERY request per IP (no path filter). The optional
+        # status filter is appended by autoban_eval. No uri label match here.
+        return (SEL + ' |= "remote_addr" ' + _hostf(host) +
+                ' | json ra="remote_addr", rip="real_ip_cloudflare", uri="request_uri", '
+                'args="args", ref="http_referer", cc="geoip_country_code", st="status"')
     if match_type == "family" and path == "payload":
         line = PAYLOAD_LINE_CS
         label = ('(ref=~`' + PAYLOAD_RE + '` or uri=~`' + PAYLOAD_RE +
@@ -547,7 +553,7 @@ def autoban_eval(rule, w=None, host="", k=300, ignore_paths=None, with_paths=Tru
     is still required (the threshold is per-path), so it's fetched regardless."""
     mt = (rule.get("match_type") or "substring")
     path = (rule.get("path") or "").strip()
-    if mt != "family" and not path:
+    if mt not in ("family", "rate") and not path:
         return {"window": w or rule.get("window"), "threshold": rule.get("threshold"),
                 "matches": [], "total_ips": 0, "error": "пустой путь/паттерн"}
     w = w or rule.get("window") or "10m"
