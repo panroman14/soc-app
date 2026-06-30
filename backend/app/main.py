@@ -1963,8 +1963,18 @@ def api_status():
         problems.append({"component": "AI-разбор", "msg": "разбор устарел (%sс)" % insight_age})
     p403 = s.get("path403")
     if p403 and not p403.get("rendered_ok"):
-        problems.append({"component": "Правила 403",
-                         "msg": "managed-секция не отрендерена в ingress (дрейф/перетёрто) — нужен ресинк"})
+        # name the actual target(s) that aren't rendered — not a hardcoded "ingress"
+        # (a deployment may have only nginx and/or Cloudflare and no ingress at all).
+        _lbl = {"nginx-file": "nginx", "ingress-cm": "ingress", "cloudflare": "Cloudflare"}
+        bad = [(tid, d) for tid, d in (p403.get("targets") or {}).items()
+               if not d.get("rendered_ok")]
+        if bad:
+            who = ", ".join("%s (%s)" % (tid, _lbl.get(d.get("type"), d.get("type") or "?"))
+                            for tid, d in bad)
+            msg = "403-правила не применены на: %s — нужен ресинк" % who
+        else:
+            msg = "403-правила не отрендерены — нужен ресинк"
+        problems.append({"component": "Правила 403", "msg": msg})
     return JSONResponse({
         "ok": len(problems) == 0,
         "loki_up": s["loki_up"], "loki_error": s.get("loki_error"),
