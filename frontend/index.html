@@ -454,6 +454,10 @@
             </div>
           </div>
           <div>
+            <label class="text-[11px] text-slate-500 block mb-1">страны (опц.)</label>
+            <input id="ab-country" placeholder="CN, RU — пусто = любая" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono">
+          </div>
+          <div>
             <label class="text-[11px] text-slate-500 block mb-1">TTL бана</label>
             <select id="ab-ttl" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200">
               <option value="2592000" selected>30 дней</option>
@@ -884,6 +888,7 @@ const RU2EN={
   "таргеты не заданы — забань ноду в окружение или включи Cloudflare у env.":"no targets — assign a node to an environment or enable Cloudflare for the env.",
   "дефолтная группа:":"default group:","Превью":"Preview",
   "частота: любой путь":"rate: any path","нет фидов — добавь свой или возьми из пресетов ниже.":"no feeds — add your own or pick a preset below.",
+  "страны (опц.)":"countries (opt.)","CN, RU — пусто = любая":"CN, RU — empty = any",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
@@ -3176,6 +3181,7 @@ function abFormPayload(){
     window:document.getElementById("ab-window").value, ttl:parseInt(document.getElementById("ab-ttl").value)||0,
     combine:document.getElementById("ab-combine").checked?1:0,
     group:document.getElementById("ab-group").value||"",
+    country:document.getElementById("ab-country").value||"",
     enabled:_abEditId?undefined:0};
 }
 async function abSaveRule(){
@@ -3195,7 +3201,7 @@ function abResetForm(){
   document.getElementById("ab-status").value="";document.getElementById("ab-threshold").value="5";
   document.getElementById("ab-mtype").value="substring";document.getElementById("ab-window").value="10m";
   document.getElementById("ab-ttl").value="2592000";document.getElementById("ab-combine").checked=true;abMtypeChange();
-  document.getElementById("ab-group").value="";
+  document.getElementById("ab-group").value="";document.getElementById("ab-country").value="";
   document.getElementById("ab-cancel").classList.add("hidden");
   document.getElementById("ab-form-msg").textContent="";
 }
@@ -3213,6 +3219,7 @@ function abEditRule(r){
   document.getElementById("ab-ttl").value=String(r.ttl||0);
   document.getElementById("ab-combine").checked=(r.combine!==0);
   abFillGroups();document.getElementById("ab-group").value=r.group||"";
+  document.getElementById("ab-country").value=r.country||"";
   document.getElementById("ab-cancel").classList.remove("hidden");
   window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -3239,8 +3246,10 @@ async function abPreview(rule){
 function renderAbRules(rules){
   const el=document.getElementById("ab-rules");
   if(!rules.length){el.innerHTML='<div class="text-slate-500 text-xs">Правил пока нет. Создай первое слева.</div>';return;}
-  const cond=r=>r.match_type==="family"?("семейство: "+((_abFamilies.find(f=>f.key===r.path)||{}).label||r.path))
+  const cond=r=>r.match_type==="rate"?"частота: любой путь"
+    :r.match_type==="family"?("семейство: "+((_abFamilies.find(f=>f.key===r.path)||{}).label||r.path))
     :(r.match_type==="regex"?"regex ":"путь ⊃ ")+(r.path||"").split("\n").filter(Boolean).join(" ИЛИ ");
+  const ccBadge=r=>{const cs=(r.country||"").split(/[,\s]+/).filter(Boolean);return cs.length?" · "+cs.map(c=>flag(c)).join(""):"";};
   const ttlL=t=>!t?"навсегда":(t>=86400?(t/86400)+"д":(t>=3600?(t/3600)+"ч":t+"с"));
   el.innerHTML=rules.map(r=>`<div class="flex items-center gap-3 py-2 border-b border-slate-800/60 flex-wrap">
     <button onclick="abToggle(${r.id},${r.enabled?0:1})" title="${r.enabled?"выключить":"включить"}" class="shrink-0 w-11 h-6 rounded-full relative transition ${r.enabled?"bg-emerald-600/70":"bg-slate-700"}">
@@ -3248,7 +3257,7 @@ function renderAbRules(rules){
     ${r.match_type!=="family"?`<button onclick="setMainRule('autoban',${r.id})" title="${String(_mainRules.autoban_id)===String(r.id)?'основное автобан-правило':'сделать основным'}" class="text-base shrink-0 ${String(_mainRules.autoban_id)===String(r.id)?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>`:''}
     <div class="flex-1 min-w-[200px]">
       <div class="text-sm text-slate-200 font-medium">${esc(r.name)} ${String(_mainRules.autoban_id)===String(r.id)?'<span class="text-[10px] text-amber-400">основное</span>':''} ${r.enabled?'<span class="text-[10px] text-emerald-400">активно</span>':'<span class="text-[10px] text-slate-600">выкл</span>'}</div>
-      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${r.match_type!=="family"&&r.combine===0?" (по 1 пути)":(r.match_type!=="family"?" (∑ путей)":"")}${r.status?" · код "+esc(r.status):""} · бан ${ttlL(r.ttl)} · 🎯 ${esc(r.group||"группа по умолч.")}</div>
+      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${(r.match_type==="family"||r.match_type==="rate")?"":(r.combine===0?" (по 1 пути)":" (∑ путей)")}${r.status?" · код "+esc(r.status):""}${ccBadge(r)} · бан ${ttlL(r.ttl)} · 🎯 ${esc(r.group||"группа по умолч.")}</div>
     </div>
     <button onclick='abPreview(${JSON.stringify({id:r.id})})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">🔍 превью</button>
     <button onclick='abEditRule(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">ред.</button>

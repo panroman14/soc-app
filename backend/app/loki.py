@@ -561,6 +561,10 @@ def autoban_eval(rule, w=None, host="", k=300, ignore_paths=None, with_paths=Tru
     st = (rule.get("status") or "").strip()
     if st:
         base += ' | st=~`' + st.replace("`", "") + '`'
+    # optional country scope: only count requests from these GeoIP countries
+    cn = [c for c in re.findall(r"[A-Za-z]{2}", (rule.get("country") or "").upper())]
+    if cn:
+        base += ' | cc=~`(' + "|".join(cn) + ')`'
     # safety whitelist: drop requests to legit paths BEFORE counting (so a whitelisted
     # path can never push an IP over the threshold, no matter the rule)
     ig = [p.strip() for p in (ignore_paths or []) if p and p.strip()]

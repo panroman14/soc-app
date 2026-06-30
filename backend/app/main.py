@@ -12,6 +12,7 @@ import base64
 import ipaddress
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -664,10 +665,12 @@ def _clean_rule(body):
     combine = 0 if body.get("combine") in (0, "0", False, "false") else 1
     # ban group → enforcement targets ('' = blocklist-api default group)
     grp = (body.get("group") or "").strip()[:64]
+    # optional country scope: comma/space-separated ISO codes, e.g. "CN,RU" ('' = any)
+    country = ",".join(re.findall(r"[A-Za-z]{2}", (body.get("country") or "").upper()))[:64]
     return {"name": name[:80], "match_type": mt, "path": path,
             "status": (body.get("status") or "").strip()[:20], "threshold": thr,
             "window": win, "ttl": ttl, "enabled": 1 if body.get("enabled") else 0,
-            "combine": combine, "grp": grp}
+            "combine": combine, "grp": grp, "country": country}
 
 
 def _ban_groups():

@@ -54,6 +54,7 @@ def init():
                 enabled    INTEGER NOT NULL DEFAULT 0,         -- per-rule on/off toggle
                 combine    INTEGER NOT NULL DEFAULT 1,         -- 1=sum across all paths, 0=per-path
                 grp        TEXT DEFAULT '',                    -- ban group → enforcement targets ('' = default)
+                country    TEXT DEFAULT '',                    -- optional country filter (e.g. "CN,RU") via geoip
                 created    INTEGER, updated INTEGER
             )""")
         # migrate older autoban_rules tables that predate added columns
@@ -62,6 +63,8 @@ def init():
             c.execute("ALTER TABLE autoban_rules ADD COLUMN combine INTEGER NOT NULL DEFAULT 1")
         if "grp" not in cols:
             c.execute("ALTER TABLE autoban_rules ADD COLUMN grp TEXT DEFAULT ''")
+        if "country" not in cols:
+            c.execute("ALTER TABLE autoban_rules ADD COLUMN country TEXT DEFAULT ''")
         # small key/value settings (e.g. the global auto-ban kill-switch)
         c.execute("CREATE TABLE IF NOT EXISTS app_settings (k TEXT PRIMARY KEY, v TEXT)")
 
@@ -125,7 +128,7 @@ def setting_set(key, value):
 
 # --- auto-ban rules CRUD ---
 # Column names (DB uses `grp`; the API/UI field is `group` — translated in main.py).
-_RULE_COLS = ("name", "match_type", "path", "status", "threshold", "window", "ttl", "enabled", "combine", "grp")
+_RULE_COLS = ("name", "match_type", "path", "status", "threshold", "window", "ttl", "enabled", "combine", "grp", "country")
 
 
 def _rule_row(r):
@@ -134,6 +137,7 @@ def _rule_row(r):
                              "threshold", "window", "ttl", "enabled", "created", "updated")}
     out["combine"] = r["combine"] if "combine" in keys else 1
     out["group"] = (r["grp"] if "grp" in keys else "") or ""
+    out["country"] = (r["country"] if "country" in keys else "") or ""
     return out
 
 
@@ -154,8 +158,8 @@ def autoban_create(fields):
     vals = [fields.get(k) for k in _RULE_COLS]
     with _lock, _conn() as c:
         cur = c.execute(
-            "INSERT INTO autoban_rules (name, match_type, path, status, threshold, window, ttl, enabled, combine, grp, created, updated) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (*vals, now, now))
+            "INSERT INTO autoban_rules (name, match_type, path, status, threshold, window, ttl, enabled, combine, grp, country, created, updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (*vals, now, now))
         return cur.lastrowid
 
 
