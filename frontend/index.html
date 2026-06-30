@@ -10,17 +10,15 @@
   /* ── soc design system ─────────────────────────────────────────────────── */
   :root{
     color-scheme: dark;
-    --bg:#080a0f; --bg2:#0b0e14; --surface:#10141c; --surface2:#151b25;
-    --border:#1d2531; --border2:#283142; --text:#e6eaf2; --muted:#8893a7; --faint:#5b6577;
-    --accent:#6366f1; --accent2:#818cf8; --accent-weak:#6366f122;
-    --ok:#34d399; --warn:#fbbf24; --crit:#f87171; --info:#60a5fa;
-    --radius:14px; --radius-sm:9px;
+    --bg:#0d1015; --bg2:#0b0e13; --surface:#151a22; --surface2:#1a212c;
+    --border:#242c39; --border2:#303a4a; --text:#e4e9f1; --muted:#8a96a8; --faint:#5d6878;
+    --accent:#4d8dff; --accent2:#73a7ff; --accent-weak:#4d8dff1f;
+    --ok:#3fb950; --warn:#d6a020; --crit:#f0556a; --info:#73a7ff;
+    --radius:12px; --radius-sm:8px;
   }
-  *{scrollbar-width:thin;scrollbar-color:#2a3340 transparent}
-  body{background:
-      radial-gradient(1200px 600px at 80% -10%, #14203a55, transparent 60%),
-      radial-gradient(900px 500px at -10% 0%, #1b143a44, transparent 55%), var(--bg);
-    color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;}
+  *{scrollbar-width:thin;scrollbar-color:#2b3442 transparent}
+  body{background:var(--bg);
+    color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;}
   .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;}
   ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#2a3340;border-radius:6px}::-webkit-scrollbar-thumb:hover{background:#384357}
 
@@ -65,6 +63,22 @@
     color:var(--muted);cursor:pointer}.tray-chip:hover{color:var(--text);border-color:var(--accent)}
   #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
   #whoswhat > .card::-webkit-resizer{background:#2a3340}
+  /* grouped sidebar */
+  .nav-grp{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:14px 9px 4px}
+  .navitem .cnt{margin-left:auto;font-size:10px;color:var(--faint);background:#0c1016;border:1px solid var(--border);border-radius:20px;padding:1px 7px}
+  .navitem.active .cnt{color:var(--accent2);border-color:#4d8dff33}
+  /* persistent top bar */
+  .topbar{display:flex;align-items:center;gap:10px;margin:-2px 0 18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .search{flex:1;max-width:380px;display:flex;align-items:center;gap:8px;background:#0b0e13;border:1px solid var(--border);border-radius:8px;padding:7px 11px;color:var(--muted)}
+  .search input{flex:1;background:none;border:0;color:var(--text);outline:none;font:inherit}
+  .eyebrow{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  /* dense KPI strip */
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 13px}
+  .kpi .l{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .kpi .v{font-size:23px;font-weight:680;margin-top:5px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .kpi.alert{border-color:#f0556a40}
+  .num{font-variant-numeric:tabular-nums}
   .burger{display:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);background:#161c27;color:var(--text);cursor:pointer;font-size:16px;align-items:center;justify-content:center}
   @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s;box-shadow:0 0 40px #000a}.sidebar.open{left:0}.main{padding:14px}.burger{display:inline-flex}}
 </style>
@@ -76,54 +90,45 @@
       <div class="w-9 h-9 rounded-xl grid place-items-center font-bold" style="background:var(--accent-weak);border:1px solid #6366f140;color:var(--accent2)">◈</div>
       <div><div class="font-semibold tracking-tight leading-none">SOC</div><div class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tagline">traffic & attack monitor</div></div>
     </div>
-    <button id="navtab-dash" onclick="showView('dash')" class="navitem active"><span class="ic">▦</span><span data-i18n="nav.dash">Dashboard</span></button>
+    <div class="nav-grp" data-i18n="grp.monitor">Monitor</div>
+    <button id="navtab-dash" onclick="showView('dash')" class="navitem active"><span class="ic">▦</span><span data-i18n="nav.dash">Overview</span></button>
+    <button id="navtab-logs" onclick="showView('logs')" class="navitem"><span class="ic">📜</span><span data-i18n="nav.logs">Logs</span></button>
+    <button id="navtab-journal" onclick="showView('journal')" class="navitem"><span class="ic">📋</span><span data-i18n="nav.journal">Journal</span></button>
+    <div class="nav-grp" data-i18n="grp.defend">Defend</div>
     <button id="navtab-autoban" onclick="showView('autoban')" class="navitem"><span class="ic">⛔</span><span data-i18n="nav.autoban">Auto-ban</span></button>
     <button id="navtab-p403" onclick="showView('p403')" class="navitem"><span class="ic">🚫</span><span data-i18n="nav.p403">403 rules</span></button>
+    <div class="nav-grp" data-i18n="grp.infra">Infra</div>
     <button id="navtab-nodes" onclick="showView('nodes')" class="navitem"><span class="ic">🖥️</span><span data-i18n="nav.nodes">Nodes</span></button>
-    <button id="navtab-journal" onclick="showView('journal')" class="navitem"><span class="ic">📋</span><span data-i18n="nav.journal">Journal</span></button>
-    <button id="navtab-logs" onclick="showView('logs')" class="navitem"><span class="ic">📜</span><span data-i18n="nav.logs">Logs</span></button>
-    <button id="navtab-settings" onclick="showView('settings')" class="navitem"><span class="ic">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
-    <div class="mt-auto pt-3 border-t space-y-2" style="border-color:var(--border)">
-      <div class="px-1">
-        <div class="text-[10px] uppercase tracking-wide mb-1" style="color:var(--faint)" data-i18n="env">Environment</div>
-        <select id="env-sw" onchange="setEnv(this.value)" class="input" style="padding:6px 8px"><option value="" data-i18n="env.all">all</option></select>
-      </div>
-      <div class="flex items-center gap-1.5 px-1">
-        <button id="lang-btn" onclick="toggleLang()" class="btn btn-ghost btn-xs" title="language">EN</button>
-        <button id="llm-toggle" onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
-        <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
-      </div>
+    <div class="mt-auto pt-3 border-t" style="border-color:var(--border)">
+      <button id="navtab-settings" onclick="showView('settings')" class="navitem"><span class="ic">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
     </div>
   </aside>
 
   <main class="main">
-  <header class="flex items-center justify-between mb-5 flex-wrap gap-3">
-    <div class="flex items-center gap-3">
-      <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')" title="menu">☰</button>
-      <div>
-      <h1 class="text-lg font-semibold tracking-tight" id="view-title" data-i18n="title">SOC Dashboard</h1>
-      <p class="text-xs" style="color:var(--faint)" data-i18n="subtitle">traffic & attack monitoring · all domains</p>
-      </div>
+  <header class="topbar">
+    <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')" title="menu">☰</button>
+    <select id="env-sw" onchange="setEnv(this.value)" class="input" style="width:auto;padding:7px 10px" title="Environment — scopes the console"><option value="" data-i18n="env.all">all environments</option></select>
+    <label class="search"><span style="color:var(--faint)">⌕</span><input id="topsearch" onkeydown="if(event.key==='Enter')quickSearch(this.value)" placeholder="Search IP → profile" data-i18n-ph="search.ph"></label>
+    <div style="flex:1"></div>
+    <button class="btn btn-primary" onclick="quickBan()" title="Ban an IP / CIDR"><span>＋</span><span data-i18n="ban.quick">Ban IP</span></button>
+    <div id="status-badge" class="chip">—</div>
+    <div class="hidden sm:flex items-center gap-1.5 text-xs" title="data freshness">
+      <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
+      <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
     </div>
-    <div class="flex items-center gap-3">
-      <div id="status-badge" class="chip">—</div>
-      <div class="text-right">
-        <div class="flex items-center gap-1.5 justify-end text-xs">
-          <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
-          <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
-        </div>
-        <div id="updated" class="text-[11px] mono mt-0.5" style="color:var(--faint)">—</div>
-      </div>
-    </div>
+    <span id="updated" class="hidden"></span>
+    <button id="lang-btn" onclick="toggleLang()" class="iconbtn-x btn btn-ghost btn-xs" title="language">EN</button>
+    <button id="llm-toggle" onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
+    <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
+    <h1 id="view-title" class="hidden" data-i18n="title">SOC Dashboard</h1>
   </header>
 
   <div id="view-dash">
   <div id="banner" class="hidden mb-4"></div>
   <div id="card-tray" class="hidden mb-3 text-[11px] flex items-center gap-1.5 flex-wrap"></div>
   <section class="flex flex-wrap items-center gap-2 mb-3">
-    <span class="text-[11px] text-slate-500">окно:</span>
+    <span class="eyebrow" data-i18n="window">window</span>
     <div id="winsel" class="flex gap-1"></div>
-    <input id="ipsearch" placeholder="🔍 поиск IP → профиль" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-48" onkeydown="if(event.key==='Enter')globalSearch(this.value)">
     <span id="winnote" class="text-[11px] text-slate-600"></span>
   </section>
   <section id="health" class="flex flex-wrap gap-2 mb-4"></section>
@@ -649,13 +654,15 @@ function setEnv(v){
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Dashboard","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Дашборд","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
+  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
@@ -1031,6 +1038,11 @@ async function blockManual(){
   if(res.ok){msg.textContent="✓ "+(res.cidr||cidr);msg.className="text-xs text-emerald-300";document.getElementById("bl_cidr").value="";document.getElementById("bl_reason").value="";renderBlocklist();}
   else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-red-300";}
 }
+function quickBan(){
+  const ip=prompt(_lang==="ru"?"IP или CIDR для бана:":"IP or CIDR to ban:");
+  if(ip&&ip.trim())blockIP(ip.trim(),"manual (topbar)",2592000);
+}
+function quickSearch(v){ v=(v||"").trim(); if(v)openProfile(v); }
 async function unblockCIDR(cidr){
   if(!confirm("Снять блок с "+cidr+"?"))return;
   const res=await _post("/api/unblock",{cidr:cidr});
