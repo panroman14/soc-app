@@ -145,6 +145,10 @@ def _enf_result(group=None):
     that group's targets (a single ban); None = all targets (bulk/unblock/path)."""
     errs = enforce.last_errors()
     tids = enforce.resolve_group(group) if group is not None else enforce.all_target_ids()
+    # drop targets that aren't configured yet (e.g. a Cloudflare target without a
+    # token) — they're dormant, so they shouldn't show up as applied-to or failed.
+    ready = {t["id"] for t in enforce.targets() if enforce._target_ready(t)}
+    tids = [t for t in tids if t in ready]
     failed = {t: errs[t] for t in tids if errs.get(t)}
     return {"ok": not failed, "targets": tids, "failed": failed}
 

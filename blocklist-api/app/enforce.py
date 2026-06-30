@@ -235,6 +235,13 @@ def apply(per_target_cidrs, per_target_patterns, path_enabled):
     must NOT abort the ban or block other targets — the entry is still saved and the
     periodic resync re-applies it. The error is recorded for the check endpoint."""
     for t in targets():
+        # A Cloudflare target with no token yet is "not configured" — dormant, not
+        # broken. Skip it so it doesn't spam apply errors on every render just for
+        # being in the (catch-all) default group. The /targets check still flags it
+        # as needing a token. Once a token is set it becomes active automatically.
+        if not _target_ready(t):
+            _last_errors[t["id"]] = None
+            continue
         cidrs = per_target_cidrs.get(t["id"], [])
         try:
             _adapter(t)[0](t, cidrs, _patterns_for(per_target_patterns, t["id"]), path_enabled)
@@ -242,6 +249,19 @@ def apply(per_target_cidrs, per_target_patterns, path_enabled):
         except Exception as e:
             _last_errors[t["id"]] = str(e)
             print("[enforce] target %s (%s) apply failed: %s" % (t["id"], t.get("type"), e), flush=True)
+
+
+def _target_ready(t):
+    """Can this target actually be enforced right now? Cloudflare needs a token;
+    without one it's pending configuration (skip, don't error). Other types are
+    always considered ready."""
+    if t.get("type") != "cloudflare":
+        return True
+    try:
+        from . import cloudflare
+        return bool(cloudflare._cfg(t).get("token"))
+    except Exception:
+        return False
 
 
 def render_status(per_target_patterns, master):
