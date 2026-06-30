@@ -79,6 +79,13 @@
   .kpi .v{font-size:23px;font-weight:680;margin-top:5px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
   .kpi.alert{border-color:#f0556a40}
   .num{font-variant-numeric:tabular-nums}
+  /* settings vertical rail */
+  .setwrap{display:grid;grid-template-columns:186px 1fr;gap:18px;align-items:start}
+  .setnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:8px}
+  .setnav-btn{display:flex;gap:9px;align-items:center;padding:9px 12px;border-radius:9px;border:1px solid transparent;background:none;color:var(--muted);text-align:left;font-weight:500;font-size:13px;cursor:pointer;width:100%}
+  .setnav-btn:hover{background:#ffffff08;color:var(--text)}
+  .setnav-btn.on{background:var(--accent-weak);border-color:#4d8dff33;color:var(--accent2)}
+  @media(max-width:760px){.setwrap{grid-template-columns:1fr}.setnav{flex-direction:row;overflow:auto}}
   .burger{display:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);background:#161c27;color:var(--text);cursor:pointer;font-size:16px;align-items:center;justify-content:center}
   @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s;box-shadow:0 0 40px #000a}.sidebar.open{left:0}.main{padding:14px}.burger{display:inline-flex}}
 </style>
@@ -531,18 +538,20 @@
   </div><!-- /view-journal -->
 
   <div id="view-settings" class="hidden">
-    <div class="flex items-center gap-1 mb-3">
-      <button id="ssub-env" onclick="setSub('env')" class="px-3 py-1.5 rounded-md text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">🌐 Окружения</button>
-      <button id="ssub-notify" onclick="setSub('notify')" class="px-3 py-1.5 rounded-md text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">🔔 Уведомления</button>
-      <button id="ssub-global" onclick="setSub('global')" class="px-3 py-1.5 rounded-md text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">⚙️ Глобальные</button>
+    <div class="setwrap">
+    <div class="setnav">
+      <button id="ssub-env" onclick="setSub('env')" class="setnav-btn"><span>🌐</span><span data-i18n="set.env">Environments</span></button>
+      <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span>🔔</span><span data-i18n="set.notify">Notifications</span></button>
+      <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span>⚙️</span><span data-i18n="set.global">Global</span></button>
     </div>
+    <div>
 
     <!-- ── Окружения ── -->
     <section id="ssec-env" class="card p-4">
       <div class="flex items-center justify-between mb-1">
-        <div><h2 class="text-sm font-medium text-slate-200">🌐 Окружения (env / пул / проект)</h2>
-          <p class="text-[11px] text-slate-500 mt-0.5">Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают в env при установке (<span class="mono">--env</span>).</p></div>
-        <button onclick="envNew()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium shrink-0">+ Окружение</button>
+        <div><h2 class="text-sm font-medium text-slate-200">🌐 <span data-i18n="env.h">Environments</span></h2>
+          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="env.sub">Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join an environment at install (<span class="mono">--env</span>).</p></div>
+        <button onclick="envNew()" class="btn btn-primary btn-xs shrink-0"><span>＋</span><span data-i18n="env.new">New environment</span></button>
       </div>
       <div id="env-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
     </section>
@@ -580,6 +589,8 @@
       <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
       <div id="set-msg" class="text-[11px] mt-3"></div>
     </section>
+    </div><!-- /setwrap content -->
+    </div><!-- /setwrap -->
   </div><!-- /view-settings -->
 
   <div id="view-logs" class="hidden">
@@ -639,7 +650,7 @@ async function loadEnvSwitcher(){
     const d=await (await fetch("/api/environments")).json();
     const sel=document.getElementById("env-sw"); if(!sel)return;
     const envs=(d.environments||[]);
-    sel.innerHTML='<option value="">все</option>'+envs.map(e=>`<option value="${esc(e.id)}" ${e.id===_env?'selected':''}>${esc(e.name||e.id)}</option>`).join("");
+    sel.innerHTML='<option value="">'+(_lang==="ru"?"все окружения":"all environments")+'</option>'+envs.map(e=>`<option value="${esc(e.id)}" ${e.id===_env?'selected':''}>${esc(e.name||e.id)}</option>`).join("");
     if(_env&&!envs.some(e=>e.id===_env)){ _env=""; localStorage.removeItem("soc_env"); sel.value=""; }
   }catch(e){}
 }
@@ -655,14 +666,16 @@ function setEnv(v){
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
   "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
-  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window",
+  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.notify":"Notifications","set.global":"Global",
+  "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
-  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно",
+  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.notify":"Уведомления","set.global":"Глобальные",
+  "env.h":"Окружения","env.new":"Новое окружение","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
@@ -1738,7 +1751,7 @@ function setSub(name){
   _sub=name;
   [["env","ssec-env"],["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
     document.getElementById(sec).classList.toggle("hidden",n!==name);
-    document.getElementById("ssub-"+n).className="px-3 py-1.5 rounded-md text-xs border "+(n===name?"border-indigo-500 bg-indigo-500/10 text-indigo-200":"border-slate-700 text-slate-300 hover:bg-slate-800");
+    document.getElementById("ssub-"+n).className="setnav-btn"+(n===name?" on":"");
   });
   if(name==="env")loadEnvs(); if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
 }
