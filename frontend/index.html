@@ -303,6 +303,17 @@
     <div id="suspects" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
   </section>
 
+  <h2 class="sec">🛡️ <span data-i18n="crs.h">WAF / CRS triggers</span> <span class="text-slate-500 font-normal" data-i18n="crs.sub">/ OWASP ModSecurity — anomaly score exceeded</span></h2>
+  <section class="card p-4 mb-8">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div id="crs_summary" class="text-xs text-slate-400">…</div>
+      <select id="crs_win" onchange="renderCrs()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно">
+        <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
+      </select>
+    </div>
+    <div id="crs_list" class="text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">…</div></div>
+  </section>
+
   <h2 class="sec" data-llm data-i18n="ai.feed">AI insights feed</h2>
   <section class="card p-4 mb-8" data-llm><div id="insight-history" class="max-h-[520px] overflow-y-auto pr-1"></div></section>
   </div><!-- /view-dash -->
@@ -785,6 +796,7 @@ function setEnv(v){
   if(typeof refresh==="function")refresh();
   if(typeof renderBanCandidates==="function")renderBanCandidates();
   if(typeof renderSuspects==="function")renderSuspects();
+  if(typeof renderCrs==="function")renderCrs();
   if(_view==="nodes"&&typeof loadNodes==="function")loadNodes();
 }
 
@@ -803,6 +815,7 @@ const I18N={en:{
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
   "p403.where":"Where it applies:",
   "tf.h":"Threat feeds","tf.sub":"Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.","tf.every":"Refresh every (h)","tf.now":"Refresh now","tf.add":"＋ feed","tf.presets":"presets:",
+  "crs.h":"WAF / CRS triggers","crs.sub":"/ OWASP ModSecurity — anomaly score exceeded",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
@@ -817,6 +830,7 @@ const I18N={en:{
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
   "p403.where":"Где применяется:",
   "tf.h":"Threat-фиды","tf.sub":"Импорт внешних блок-листов (Spamhaus, Tor, свои IP/CIDR) и бан в группу. Самосинхронизация: ушедшие из фида записи истекают сами.","tf.every":"Обновлять каждые (ч)","tf.now":"Обновить сейчас","tf.add":"＋ фид","tf.presets":"пресеты:",
+  "crs.h":"WAF / CRS срабатывания","crs.sub":"/ OWASP ModSecurity — превышен anomaly score",
 }};
 let _lang=localStorage.getItem("soc_lang")||"en";
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
@@ -889,6 +903,7 @@ const RU2EN={
   "дефолтная группа:":"default group:","Превью":"Preview",
   "частота: любой путь":"rate: any path","нет фидов — добавь свой или возьми из пресетов ниже.":"no feeds — add your own or pick a preset below.",
   "страны (опц.)":"countries (opt.)","CN, RU — пусто = любая":"CN, RU — empty = any",
+  "сработок WAF":"WAF triggers","за CF":"behind CF","бан":"ban","чисто — срабатываний WAF нет за окно":"clean — no WAF triggers in window",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
@@ -1289,6 +1304,30 @@ function _renderBlPage(){
     </div>`:`<div class="text-[11px] text-slate-500 mt-2">${list.length} активных</div>`;
   el.innerHTML=rows+pager;
 }
+
+// --- WAF / CRS triggers (#6) ---
+async function renderCrs(){
+  const el=document.getElementById("crs_list"); if(!el)return;
+  const w=(document.getElementById("crs_win")||{}).value||"1h";
+  try{
+    const d=await fetch(_withEnv("/api/crs_offenders?window="+encodeURIComponent(w))).then(r=>r.json());
+    if(d.error){ el.innerHTML=`<div class="text-red-300 text-xs">${esc(d.error)}</div>`; return; }
+    const list=d.offenders||[];
+    document.getElementById("crs_summary").innerHTML=list.length
+      ? `<span class="text-slate-200 font-medium">${list.length}</span> IP · ${_trText("сработок WAF")}`
+      : "";
+    el.innerHTML=list.length?list.map(x=>`
+      <div class="flex items-center gap-2 py-1.5 border-b border-slate-800/60 last:border-0">
+        <span class="mono text-slate-200 w-32 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc(x.ip)}')" title="профиль">${esc(x.ip)} ↗</span>
+        <span class="mono text-amber-300 shrink-0 w-12 text-right" title="CRS hits">${fmt(x.count)}</span>
+        <span class="flex-1 min-w-0 flex flex-wrap gap-1">${(x.families||[]).map(f=>`<span class="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[10px]">${esc(f)}</span>`).join("")}</span>
+        ${x.cf?`<span class="text-[10px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">${_trText("за CF")}</span>`
+             :`<button onclick="crsBan('${esc(x.ip)}',${x.count})" class="text-[11px] px-2 py-0.5 rounded bg-red-600/70 text-white hover:bg-red-600 shrink-0">${_trText("бан")}</button>`}
+      </div>`).join("")
+      : `<div class="text-slate-600 text-xs">${_trText("чисто — срабатываний WAF нет за окно")} (${esc(d.window||w)})</div>`;
+  }catch(e){ el.innerHTML=`<div class="text-red-300 text-xs">${_trText("ошибка загрузки")}</div>`; }
+}
+async function crsBan(ip,count){ await blockIP(ip,"WAF/CRS · "+(count||0)+" hits"); renderCrs(); }
 
 // --- просятся в бан (сканеры) ---
 let _banCandObjs=[], _cfCandObjs=[], _showCf=false;

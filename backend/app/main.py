@@ -1524,6 +1524,17 @@ def api_ban_candidates(window: str = "1h", host: str = "", env: str = ""):
         _bc_lock.release()
 
 
+@app.get("/api/crs_offenders")
+def api_crs_offenders(window: str = "1h", env: str = ""):
+    """IPs that tripped OWASP CRS / ModSecurity (WAF panel, one-click ban)."""
+    w = window if window in _BC_WINDOWS else "1h"
+    try:
+        with loki.scope(env, _env_loki_url(env)):
+            return JSONResponse({"window": w, "offenders": loki.crs_offenders(w)})
+    except Exception as e:
+        return JSONResponse({"window": w, "offenders": [], "error": str(e)})
+
+
 _sc_cache = {}
 
 

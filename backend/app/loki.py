@@ -709,6 +709,35 @@ def attack_types(w=W):
     return sorted([{"key": k, "count": v} for k, v in agg.items()], key=lambda x: -x["count"])
 
 
+def crs_offenders(w=W, k=40):
+    """Per-IP OWASP CRS / ModSecurity offenders (Inbound Anomaly Score Exceeded),
+    newest-unhandled only. The client IP is parsed out of the error-log line. Feeds
+    the WAF panel's one-click ban. Global signal (error logs carry no host/geo field)."""
+    # per-IP hit counts
+    q = "topk(%d, sum by (ip) (count_over_time(%s | regexp `%s` [%s])))" % (k, CRS, CLIENT_RE, w)
+    rows = {}
+    for s in _get("/loki/api/v1/query", {"query": q}):
+        ip = s["metric"].get("ip", "")
+        if not ip or _skip_ip(ip) or ip in config.TRUSTED_IPS:
+            continue
+        rows[ip] = {"ip": ip, "count": int(float(s["value"][1])), "cf": _is_cf_ip(ip), "families": []}
+    if not rows:
+        return []
+    # which CRS families each IP triggered (rule-id prefix → attack class)
+    fq = ("sum by (ip, rid) (count_over_time(%s | regexp `%s` | regexp `\\[id \\\"(?P<rid>\\d+)\\\"\\]` [%s]))"
+          % (CRS, CLIENT_RE, w))
+    fam_by_ip = {}
+    for s in _safe(lambda: _get("/loki/api/v1/query", {"query": fq}), []):
+        ip = s["metric"].get("ip", ""); rid = s["metric"].get("rid", "")
+        if ip not in rows or rid.startswith("949"):
+            continue
+        fam = _CRS_FAMILY.get(rid[:3], "Прочее")
+        fam_by_ip.setdefault(ip, set()).add(fam)
+    for ip, fams in fam_by_ip.items():
+        rows[ip]["families"] = sorted(fams)
+    return sorted(rows.values(), key=lambda x: -x["count"])
+
+
 # Long-lived/large requests that inflate latency without meaning "slow backend":
 # websockets, realtime (soketi /app/), broadcasting auth, file uploads/imports.
 LATENCY_EXCLUDE = r'websockets|/app/|/broadcasting|/upload|/import|/files'
