@@ -57,6 +57,12 @@
   .bar-bg{height:6px;border-radius:3px;background:#1a212c}
   .card-hidden{display:none!important}
   .llm-off [data-llm]{display:none!important}   /* LLM off → hide every AI mention */
+  h2.sec{display:flex;align-items:center;gap:8px}
+  .card-hide{margin-left:auto;width:18px;height:18px;border-radius:5px;border:1px solid var(--border2);color:var(--faint);
+    background:transparent;cursor:pointer;font-size:12px;line-height:1;opacity:0;transition:.12s}
+  h2.sec:hover .card-hide{opacity:1}.card-hide:hover{color:var(--crit);border-color:#f8717155}
+  .tray-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:7px;border:1px dashed var(--border2);
+    color:var(--muted);cursor:pointer}.tray-chip:hover{color:var(--text);border-color:var(--accent)}
   #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
   #whoswhat > .card::-webkit-resizer{background:#2a3340}
   @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s}.sidebar.open{left:0}.main{padding:14px}}
@@ -109,6 +115,7 @@
 
   <div id="view-dash">
   <div id="banner" class="hidden mb-4"></div>
+  <div id="card-tray" class="hidden mb-3 text-[11px] flex items-center gap-1.5 flex-wrap"></div>
   <section class="flex flex-wrap items-center gap-2 mb-3">
     <span class="text-[11px] text-slate-500">окно:</span>
     <div id="winsel" class="flex gap-1"></div>
@@ -657,8 +664,44 @@ function applyI18n(){
   const lb=document.getElementById("lang-btn"); if(lb)lb.textContent=_lang.toUpperCase();
   document.documentElement.lang=_lang;
 }
-function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_lang",_lang); applyI18n();
+function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_lang",_lang); applyI18n(); initCards();
   if(typeof showView==="function")showView(_view||"dash"); }
+
+// ── card manager (hide / restore dashboard sections) ──────────────────────────
+let _hiddenCards=JSON.parse(localStorage.getItem("soc_hidden_cards")||"[]");
+function _cardKey(h){ return h.getAttribute("data-i18n")||h.dataset.card||h.textContent.replace("×","").trim().slice(0,40); }
+function _saveCards(){ localStorage.setItem("soc_hidden_cards",JSON.stringify(_hiddenCards)); }
+function _applyCard(h,key){
+  const hidden=_hiddenCards.includes(key);
+  h.style.display=hidden?"none":"";
+  const body=h.nextElementSibling;
+  if(body&&body.tagName!=="H2")body.style.display=hidden?"none":"";
+}
+function initCards(){
+  const dash=document.getElementById("view-dash"); if(!dash)return;
+  dash.querySelectorAll("h2.sec").forEach(h=>{
+    let key=h.dataset.card; if(!key){ key=_cardKey(h); h.dataset.card=key; }
+    if(!h.querySelector(".card-hide")){
+      const b=document.createElement("button"); b.className="card-hide"; b.textContent="×"; b.title="hide";
+      b.onclick=e=>{ e.stopPropagation(); hideCard(key); };
+      h.appendChild(b);
+    }
+    _applyCard(h,key);
+  });
+  renderTray();
+}
+function hideCard(k){ if(!_hiddenCards.includes(k))_hiddenCards.push(k); _saveCards(); initCards(); }
+function showCard(k){ _hiddenCards=_hiddenCards.filter(x=>x!==k); _saveCards(); initCards(); }
+function renderTray(){
+  const tray=document.getElementById("card-tray"); if(!tray)return;
+  if(!_hiddenCards.length){ tray.classList.add("hidden"); return; }
+  tray.classList.remove("hidden");
+  const lbl=_lang==="ru"?"скрытые карточки:":"hidden cards:";
+  tray.innerHTML=`<span style="color:var(--faint)">${lbl}</span>`+_hiddenCards.map(k=>{
+    const title=(I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k;
+    return `<span class="tray-chip" onclick="showCard(${JSON.stringify(k)})">+ ${esc(title)}</span>`;
+  }).join("");
+}
 
 // ── Logs viewer ───────────────────────────────────────────────────────────────
 let _lgTimer=null,_lgDeb=null;
@@ -2725,7 +2768,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
+applyI18n();initCards();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
