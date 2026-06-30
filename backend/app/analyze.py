@@ -22,11 +22,25 @@ def _median(vals):
     return statistics.median(vals) if vals else 0.0
 
 
-def detect(latest, history):
-    """Compare latest snapshot to median of recent history.
+def _mad(vals, med):
+    """Median Absolute Deviation — a robust (outlier-resistant) spread estimate.
+    Used instead of stdev so a single past spike doesn't inflate the band and mask
+    a real anomaly (or vice-versa)."""
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return 0.0
+    return statistics.median([abs(v - med) for v in vals])
 
-    Returns (severity, signals) where signals is a list of human-ish deltas.
-    severity: ok | notice | warning | critical
+
+def detect(latest, history):
+    """Compare latest snapshot to a ROBUST rolling baseline of recent history.
+
+    A field flags only when it clears its floor AND is a statistically significant
+    outlier — both a ratio jump (≥3× median) AND a modified z-score (≥3.5) vs the
+    baseline's own spread (MAD). Requiring significance, not just a ratio over a
+    possibly-noisy median, cuts false alarms on naturally bursty metrics.
+
+    Returns (severity, signals). severity: ok | notice | warning | critical
     """
     base = history[:-1] if len(history) > 1 else []
     signals = []
@@ -34,17 +48,25 @@ def detect(latest, history):
 
     for field, floor in FIELDS.items():
         cur = float(latest.get(field, 0) or 0)
-        med = _median([h.get(field, 0) for h in base]) if base else 0.0
+        vals = [float(h.get(field, 0) or 0) for h in base]
+        med = _median(vals) if vals else 0.0
         if cur < floor:
             continue
-        # ratio vs baseline (guard divide-by-zero: treat 0 baseline as 1)
         ratio = cur / med if med >= 1 else cur
-        if cur >= floor and (med < 1 or ratio >= 3):
-            sev = "high" if (ratio >= 6 or cur >= floor * 10) else "med"
+        # modified z-score (Iglewicz–Hoaglin): 0.6745·(x−median)/MAD, robust to spikes.
+        # MAD=0 (flat baseline) → fall back to "any ratio≥3 over floor" so a first-ever
+        # spike from a quiet baseline still fires.
+        mad = _mad(vals, med)
+        mz = 0.6745 * (cur - med) / mad if mad >= 1 else None
+        cold = med < 1                       # essentially no baseline yet
+        significant = cold or (ratio >= 3 and (mz is None or mz >= 3.5))
+        if significant:
+            sev = "high" if (ratio >= 6 or cur >= floor * 10 or (mz is not None and mz >= 8)) else "med"
             score += 2 if sev == "high" else 1
             signals.append({
                 "field": field, "current": cur, "baseline": round(med, 1),
-                "ratio": round(ratio, 1) if med >= 1 else None, "level": sev,
+                "ratio": round(ratio, 1) if med >= 1 else None,
+                "z": round(mz, 1) if mz is not None else None, "level": sev,
             })
 
     mr = float(latest.get("malicious_ratio", 0) or 0)
