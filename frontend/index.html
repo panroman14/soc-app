@@ -576,16 +576,21 @@
     <!-- ── Уведомления ── -->
     <section id="ssec-notify" class="hidden card p-4">
       <div class="flex items-center justify-between mb-1">
-        <h2 class="text-sm font-medium text-slate-200">🔔 Уведомления — Slack / Telegram</h2>
-        <button onclick="saveNotify()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
+        <div><h2 class="text-sm font-medium text-slate-200">🔔 <span data-i18n="nf.h">Notifications — Slack / Telegram</span></h2>
+          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="nf.sub">First define channels (where to send), then rules (what &amp; when — event × env × severity → channel).</p></div>
+        <button onclick="saveNotify()" class="btn btn-primary btn-xs shrink-0" data-i18n="save">Save</button>
       </div>
-      <p class="text-[11px] text-slate-500 mb-3">Сначала задай <b>каналы</b> (куда слать), затем <b>правила</b> (что и при каких условиях — событие × env × важность → канал).</p>
-      <div class="mb-2 flex items-center justify-between"><h3 class="text-xs font-medium text-slate-300">Каналы</h3>
-        <div class="flex gap-1"><button onclick="nfAddChannel('slack')" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+ Slack</button>
-          <button onclick="nfAddChannel('telegram')" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+ Telegram</button></div></div>
+
+      <div class="mt-4 mb-2 flex items-center justify-between">
+        <h3 class="text-xs font-medium text-slate-300 flex items-center gap-1.5"><span>📡</span><span data-i18n="nf.channels">Channels</span></h3>
+        <div class="flex gap-1.5">
+          <button onclick="nfAddChannel('slack')" class="btn btn-ghost btn-xs">＋ Slack</button>
+          <button onclick="nfAddChannel('telegram')" class="btn btn-ghost btn-xs">＋ Telegram</button></div></div>
       <div id="nf-channels" class="space-y-2"></div>
-      <div class="mt-4 mb-2 flex items-center justify-between"><h3 class="text-xs font-medium text-slate-300">Правила</h3>
-        <button onclick="nfAddRule()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+ Правило</button></div>
+
+      <div class="mt-5 mb-2 flex items-center justify-between">
+        <h3 class="text-xs font-medium text-slate-300 flex items-center gap-1.5"><span>🧭</span><span data-i18n="nf.rules">Rules</span></h3>
+        <button onclick="nfAddRule()" class="btn btn-ghost btn-xs" data-i18n="nf.addrule">＋ Rule</button></div>
       <div id="nf-rules" class="space-y-2"></div>
       <div id="nf-msg" class="text-[11px] mt-3"></div>
     </section>
@@ -716,6 +721,7 @@ const I18N={en:{
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
+  "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
@@ -726,6 +732,7 @@ const I18N={en:{
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
+  "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
 }};
 let _lang=localStorage.getItem("soc_lang")||"en";
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
@@ -761,6 +768,11 @@ const RU2EN={
   "Включить автобан":"Enable auto-ban","Автобан включён":"Auto-ban on","Выключен":"Off","Исполнитель не подключён":"Executor not wired",
   "Ноды":"Nodes","Подключённые ноды":"Connected nodes","Добавить ноду":"Add node","отозвать":"revoke","баны на ноде":"bans on node",
   "пока нет подключённых нод.":"no connected nodes yet.","Установка агента на nginx-VM":"Agent install on the nginx VM",
+  "nginx-VM с агентом soc-nginx-agent — откуда собираем трафик и куда применяем bans.":"nginx VMs running soc-nginx-agent — where traffic is read and bans are applied. The dashboard host itself is shown first.",
+  "пока нет подключённых нод. Нажми «+ Добавить ноду».":"no connected nodes yet. Click “+ Add node”.","нет нод в этом env.":"no nodes in this env.",
+  "дашборд":"dashboard","роль":"role","важность ≥":"severity ≥","(любой)":"(any)",
+  "Пока нет каналов — добавь Slack или Telegram выше.":"No channels yet — add Slack or Telegram above.",
+  "Пока нет правил — добавь правило, чтобы события попадали в канал.":"No rules yet — add one so events reach a channel.","blocklist-api не настроен.":"blocklist-api not configured.",
   "Журнал действий":"Action journal","все действия":"all actions","баны":"bans","разбаны":"unbans","истёкшие (TTL)":"expired (TTL)",
   "только с ошибкой":"errors only","применено":"applied","нет записей под фильтр.":"no records for this filter.",
   "Настройки":"Settings","Окружения":"Environments","Уведомления":"Notifications","Глобальные":"Global","Глобальные настройки":"Global settings",
@@ -1878,22 +1890,23 @@ async function envDelete(id){
 let _nf={channels:[],rules:[],events:[],severities:[]};
 async function loadNotify(){
   try{ _nf=await (await fetch("/api/notify_config")).json(); }catch(e){ _nf={channels:[],rules:[]}; }
-  if(_nf.enabled===false){ document.getElementById("nf-channels").innerHTML='<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>'; document.getElementById("nf-rules").innerHTML=""; return; }
+  if(_nf.enabled===false){ document.getElementById("nf-channels").innerHTML=_nfEmpty("🔌",_trText("blocklist-api не настроен.")); document.getElementById("nf-rules").innerHTML=""; return; }
   renderNotify();
 }
+function _nfEmpty(icon,txt){ return `<div class="rounded-lg border border-dashed border-slate-800 px-3 py-5 text-center text-[11px] text-slate-500"><div class="text-lg mb-1 opacity-70">${icon}</div>${esc(txt)}</div>`; }
 function renderNotify(){
-  document.getElementById("nf-channels").innerHTML=(_nf.channels||[]).map(nfChannelRow).join("")||'<div class="text-slate-600 text-[11px]">нет каналов</div>';
-  document.getElementById("nf-rules").innerHTML=(_nf.rules||[]).map(nfRuleRow).join("")||'<div class="text-slate-600 text-[11px]">нет правил</div>';
+  document.getElementById("nf-channels").innerHTML=(_nf.channels||[]).map(nfChannelRow).join("")||_nfEmpty("📭",_trText("Пока нет каналов — добавь Slack или Telegram выше."));
+  document.getElementById("nf-rules").innerHTML=(_nf.rules||[]).map(nfRuleRow).join("")||_nfEmpty("🧭",_trText("Пока нет правил — добавь правило, чтобы события попадали в канал."));
 }
 function nfChannelRow(c,i){
   const tg=c.type==="telegram";
   return `<div class="card p-2 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}">
     <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">${tg?'Telegram':'Slack'}</span>
     <input data-cf="id" value="${esc(c.id||'')}" placeholder="id" class="w-24 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-    <input data-cf="label" value="${esc(c.label||'')}" placeholder="метка" class="w-28 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+    <input data-cf="label" value="${esc(c.label||'')}" placeholder="${_trText('метка')}" class="w-28 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
     ${tg?`<input data-cf="bot_token" type="password" placeholder="${c.configured?'•••• задан':'bot token'}" class="flex-1 min-w-[140px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><input data-cf="chat_id" value="${esc(c.chat_id||'')}" placeholder="chat_id" class="w-28 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`:`<input data-cf="webhook" type="password" placeholder="${c.configured?'•••• задан':'Slack webhook URL'}" class="flex-1 min-w-[180px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`}
     <input type="hidden" data-cf="type" value="${tg?'telegram':'slack'}">
-    <button onclick="nfTest('${esc(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">тест</button>
+    <button onclick="nfTest('${esc(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${_trText('тест')}</button>
     <button onclick="nfDelChannel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
     ${c.last?`<span class="${c.last.ok?'text-emerald-400':'text-red-400'}">${c.last.ok?'✓':'✗ '+esc(c.last.error||'')}</span>`:""}
   </div>`;
@@ -1905,9 +1918,9 @@ function nfRuleRow(r,i){
   const evChecks=evs.map(e=>`<label class="inline-flex items-center gap-1 mr-2"><input type="checkbox" data-ev="${e}" ${(r.events||[]).includes(e)?'checked':''}> ${e}</label>`).join("");
   return `<div class="card p-2 text-[11px]" data-rule="${i}">
     <div class="flex flex-wrap items-center gap-2 mb-1">
-      <label class="inline-flex items-center gap-1"><input type="checkbox" data-rf="enabled" ${r.enabled!==false?'checked':''}> вкл</label>
-      <span class="text-slate-500">env:</span><input data-rf="env" value="${esc(r.env||'')}" placeholder="(любой)" class="w-20 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-      <span class="text-slate-500">важность ≥</span><select data-rf="min_severity" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${sevs.map(s=>`<option ${r.min_severity===s?'selected':''}>${s}</option>`).join("")}</select>
+      <label class="inline-flex items-center gap-1"><input type="checkbox" data-rf="enabled" ${r.enabled!==false?'checked':''}> ${_trText('вкл')}</label>
+      <span class="text-slate-500">env:</span><input data-rf="env" value="${esc(r.env||'')}" placeholder="${_trText('(любой)')}" class="w-20 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+      <span class="text-slate-500">${_trText('важность ≥')}</span><select data-rf="min_severity" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${sevs.map(s=>`<option ${r.min_severity===s?'selected':''}>${s}</option>`).join("")}</select>
       <span class="text-slate-500">→</span><select data-rf="channel" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${chOpts}</select>
       <button onclick="nfDelRule(${i})" class="ml-auto px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
     </div>
@@ -1939,6 +1952,10 @@ async function saveNotify(){
 // ── Глобальные настройки (ENV + GUI) ──────────────────────────────────────────
 const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare (default / fallback)",ingress:"☸️ ingress-nginx (default)",bans:"⛔ Bans: targets / groups"};
 let _setLocked=false;
+const _setGrpOpen={};  // remembers collapse state across re-renders
+function setGrpToggle(btn,bodyId){ const on=!btn.classList.contains("on"); btn.classList.toggle("on",on);
+  const b=document.getElementById(bodyId); if(b)b.classList.toggle("hidden",!on);
+  const g=bodyId.replace("setgrp-",""); _setGrpOpen[g]=on; }
 async function loadGlobal(){
   const wrap=document.getElementById("set-groups");
   try{
@@ -1954,9 +1971,13 @@ async function loadGlobal(){
     wrap.innerHTML=groups.map(g=>{
       const rows=byGroup[g].map(k=>settingRow(k,s[k])).join("");
       const extra=g==="cloudflare"?`<button onclick="checkCF()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 mt-1">Проверить подключение</button><div id="set-cf-check" class="text-[11px] mt-1"></div>`:"";
+      // collapsible groups (CF / ingress / bans) get a switch in the header; open by default. LLM is governed by the global LLM toggle.
+      const collapsible=g!=="llm";
+      const bid="setgrp-"+g, open=_setGrpOpen[g]!==false;
+      const sw=collapsible?`<button type="button" class="sw${open?' on':''}" onclick="setGrpToggle(this,'${bid}')" aria-label="toggle ${g}"><i></i></button>`:"";
       return `<div class="card p-3"${g==="llm"?" data-llm":""}>
-        <h3 class="text-xs font-medium text-slate-300 mb-2">${_setGroupMeta[g]||g}</h3>
-        <div class="space-y-2">${rows}</div>${extra}</div>`;
+        <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-medium text-slate-300">${_setGroupMeta[g]||g}</h3>${sw}</div>
+        <div id="${bid}" class="space-y-2${open?'':' hidden'}">${rows}${extra}</div></div>`;
     }).join("");
   }catch(e){ wrap.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
@@ -2036,34 +2057,37 @@ async function loadNodes(){
 function renderNodes(d){
   const el=document.getElementById("nodes-list");
   if(d.enabled===false){ el.innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен (BLOCKLIST_API_URL пуст) — ноды недоступны.</div>`; return; }
-  const nodes=(d.nodes||[]).filter(n=>!_env||(n.group||"")===_env);
-  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">${_env?"нет нод в этом env.":"пока нет подключённых нод. Нажми «+ Добавить ноду»."}</div>`; return; }
+  // dashboard host is always shown (not env-scoped); agent nodes are filtered by env
+  const all=d.nodes||[];
+  const nodes=all.filter(n=>n.role==="dashboard"||!_env||(n.group||"")===_env);
+  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">${_env?_trText("нет нод в этом env."):_trText("пока нет подключённых нод. Нажми «+ Добавить ноду».")}</div>`; return; }
   el.innerHTML=nodes.map(n=>{
-    const m=n.metrics||{}, online=n.online;
+    const m=n.metrics||{}, online=n.online, isDash=n.role==="dashboard";
     const dot=online?"bg-emerald-500":"bg-slate-600";
     const nginxBad=m.nginx_ok===false;
     const load=m.load1!=null?(m.load1+(m.ncpu?(" / "+m.ncpu+" cpu"):"")):"—";
     const loadPct=(m.load1!=null&&m.ncpu)?(m.load1/m.ncpu*100):null;
-    return `<div class="bg-slate-950/50 border ${nginxBad?'border-red-800/60':'border-slate-800'} rounded-lg p-3">
+    return `<div class="bg-slate-950/50 border ${isDash?'border-indigo-700/50':nginxBad?'border-red-800/60':'border-slate-800'} rounded-lg p-3">
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
           <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
           <span class="text-sm font-medium text-slate-200 truncate">${esc(n.id)}</span>
+          ${isDash?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300">${_trText("дашборд")}</span>`:""}
           ${n.group?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">🎯 ${esc(n.group)}</span>`:""}
           ${nginxBad?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-300">nginx -t ✗</span>`:""}
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?"online":"offline"} · ${_ago(n.last_seen)}</span>
-          <button onclick="deleteNode('${esc(n.id)}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">отозвать</button>
+          <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?_trText("онлайн"):"offline"} · ${_ago(n.last_seen)}</span>
+          ${isDash?"":`<button onclick="deleteNode('${esc(n.id)}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">${_trText("отозвать")}</button>`}
         </div>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-[11px]">
         <div><div class="text-slate-500 mb-0.5">CPU load</div><div class="text-slate-300 mb-1">${esc(load)}</div>${loadPct!=null?_bar(loadPct,70,90):""}</div>
         <div><div class="text-slate-500 mb-0.5">RAM</div><div class="text-slate-300 mb-1">${m.mem_used_pct!=null?(m.mem_used_pct+"%"+(m.mem_total_mb?(" / "+(m.mem_total_mb/1024).toFixed(1)+"G"):"")):"—"}</div>${m.mem_used_pct!=null?_bar(m.mem_used_pct,75,90):""}</div>
         <div><div class="text-slate-500 mb-0.5">uptime</div><div class="text-slate-300">${_uptime(m.uptime_s)}</div></div>
-        <div><div class="text-slate-500 mb-0.5">баны на ноде</div><div class="text-slate-300">${m.applied_cidrs!=null?m.applied_cidrs:"—"} CIDR</div></div>
+        ${isDash?`<div><div class="text-slate-500 mb-0.5">${_trText("роль")}</div><div class="text-slate-300">SOC dashboard</div></div>`:`<div><div class="text-slate-500 mb-0.5">${_trText("баны на ноде")}</div><div class="text-slate-300">${m.applied_cidrs!=null?m.applied_cidrs:"—"} CIDR</div></div>`}
       </div>
-      <div class="text-[10px] text-slate-600 mt-2 mono">${esc(n.hostname||"")}${n.ip?(" · "+esc(n.ip)):""}${n.agent_version?(" · agent "+esc(n.agent_version)):""}</div>
+      <div class="text-[10px] text-slate-600 mt-2 mono">${esc(n.hostname||"")}${n.ip?(" · "+esc(n.ip)):""}${n.agent_version?(" · "+esc(n.agent_version)):""}</div>
     </div>`;
   }).join("");
 }

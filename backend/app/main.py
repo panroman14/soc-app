@@ -470,13 +470,55 @@ async def api_notify_test(request: Request):
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
+def _dashboard_node():
+    """Self-metrics for the SOC-app host itself, shaped like an agent node so the
+    dashboard VM shows up alongside the nginx nodes (it runs no agent — stdlib only)."""
+    import os, socket, time
+    m = {}
+    try:
+        m["ncpu"] = os.cpu_count() or 0
+        m["load1"] = round(os.getloadavg()[0], 2)
+    except Exception:
+        pass
+    try:  # Linux /proc — best effort, skipped on macOS dev
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, _, v = line.partition(":")
+                info[k] = int(v.strip().split()[0])  # kB
+        total, avail = info.get("MemTotal", 0), info.get("MemAvailable", 0)
+        if total:
+            m["mem_total_mb"] = round(total / 1024)
+            m["mem_used_pct"] = round((total - avail) / total * 100)
+        with open("/proc/uptime") as f:
+            m["uptime_s"] = int(float(f.read().split()[0]))
+    except Exception:
+        pass
+    ip = ""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80)); ip = s.getsockname()[0]; s.close()
+    except Exception:
+        pass
+    return {
+        "id": socket.gethostname() or "soc-dashboard",
+        "role": "dashboard", "group": "", "online": True,
+        "last_seen": int(time.time()), "metrics": m,
+        "hostname": socket.gethostname(), "ip": ip, "agent_version": "soc-app",
+    }
+
+
 @app.get("/api/nodes")
 def api_nodes():
-    """Enrolled nginx-VM agents + liveness/host metrics (the «Ноды» tab)."""
+    """Enrolled nginx-VM agents + liveness/host metrics (the «Ноды» tab).
+    The dashboard host itself is always prepended as a `role:dashboard` node."""
+    dash = _dashboard_node()
     if not config.BLOCKLIST_API_URL:
-        return JSONResponse({"enabled": False, "nodes": []})
+        return JSONResponse({"enabled": True, "nodes": [dash]})
     _, body = _blocklist_call("GET", "/nodes")
-    return JSONResponse({"enabled": True, **(body or {})})
+    body = body or {}
+    nodes = [dash] + list(body.get("nodes", []))
+    return JSONResponse({"enabled": True, **body, "nodes": nodes})
 
 
 @app.post("/api/nodes/delete")
