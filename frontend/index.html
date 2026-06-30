@@ -854,6 +854,11 @@
         <button onclick="dbDeleteDash()" class="btn btn-ghost btn-xs text-rose-300">🗑</button>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-[10px] uppercase tracking-wide" style="color:var(--faint)">env</span>
+        <select id="db-var-env" class="input" style="width:auto" onchange="dbVarChange()"><option value="">all</option></select>
+        <select id="db-var-win" class="input" style="width:auto" onchange="dbVarChange()">
+          <option value="">win</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option><option value="6h">6h</option></select>
+        <span class="lg-sep"></span>
         <button onclick="dbAddPanel()" class="btn btn-ghost btn-xs">＋ <span data-i18n="db.panel">panel</span></button>
         <button id="db-editmode" onclick="dbToggleEdit()" class="btn btn-ghost btn-xs">✎ <span data-i18n="db.edit">edit</span></button>
         <button onclick="dbLoad(true)" class="btn btn-xs" data-i18n="refresh">refresh</button>
@@ -1134,7 +1139,7 @@ function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_l
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
   "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
-  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Источник (топ)":"Source (top-list)","Ширина":"Width","не удалось сохранить: ":"save failed: ",
+  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Источник (топ)":"Source (top-list)","Ширина":"Width","не удалось сохранить: ":"save failed: ",
   // _trText-consumed strings mistakenly added only to I18N (leaked Russian in EN) — now in RU2EN
   "Удалить это подключение?":"Delete this connection?","доступен, токен принят":"reachable, token accepted","нет ingress-таргетов":"no ingress targets","нет данных о хосте":"no host data","нет связи":"no connection","нет токена":"no token","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","проверяю":"checking","сделать активным":"make active","сохранено и активно":"saved and active","таргет":"target","токен задан":"token set","токен не принят":"token rejected","укажи hostname выше":"enter a hostname above",
   "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
@@ -1599,21 +1604,36 @@ async function loadDashboards(){
   try{
     const d=await fetch("/api/dashboards").then(r=>r.json());
     _db.list=d.list||[]; _db.def=d.default||""; if(!_db.curId)_db.curId=_db.def||(_db.list[0]||{}).id;
-    dbFillPicker(); dbLoad(true);
+    dbFillPicker(); dbSyncVars(); dbLoadEnvOpts(); dbLoad(true);
   }catch(e){ document.getElementById("db-grid").innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
 function dbFillPicker(){ const sel=document.getElementById("db-pick"); if(!sel)return;
   sel.innerHTML=_db.list.map(d=>`<option value="${esc(d.id)}" ${d.id===_db.curId?"selected":""}>${esc(d.name)}</option>`).join(""); }
-function dbSelect(id){ _db.curId=id; dbLoad(true); }
+function dbSelect(id){ _db.curId=id; dbSyncVars(); dbLoad(true); }
+function dbSyncVars(){ const d=dbCur()||{},v=d.vars||{};
+  const e=document.getElementById("db-var-env"),w=document.getElementById("db-var-win");
+  if(e)e.value=v.env||""; if(w)w.value=v.window||""; }
+function dbVarChange(){ const d=dbCur(); if(!d)return;
+  d.vars=Object.assign({},d.vars,{env:document.getElementById("db-var-env").value,window:document.getElementById("db-var-win").value});
+  dbPersist(); dbLoad(true); }
+async function dbLoadEnvOpts(){
+  try{ const d=await fetch("/api/log_label_values?name=env").then(r=>r.json());
+    const sel=document.getElementById("db-var-env"); if(!sel)return; const cur=sel.value;
+    sel.innerHTML='<option value="">all</option>'+(d.values||[]).map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(""); sel.value=cur;
+  }catch(e){}
+}
 async function dbLoad(refetch){
   const grid=document.getElementById("db-grid"); if(!grid)return;
   if(!dbCur()){ grid.innerHTML=`<div class="text-slate-600 text-xs">${_trText("нет дашбордов")}</div>`; return; }
   if(refetch||!_dbData){
+    const v=dbCur().vars||{}, qp=new URLSearchParams();
+    if(v.env)qp.set("env",v.env); if(v.window)qp.set("window",v.window);
+    const sfx=qp.toString()?("?"+qp.toString()):"";
     try{
       const [s,h,a]=await Promise.all([
-        fetch(_withEnv("/api/summary")).then(r=>r.json()).catch(()=>({})),
+        fetch("/api/summary"+(v.env?"?env="+encodeURIComponent(v.env):"")).then(r=>r.json()).catch(()=>({})),
         fetch("/api/history?limit=240").then(r=>r.json()).catch(()=>({snapshots:[]})),
-        fetch(_withEnv("/api/analytics")).then(r=>r.json()).catch(()=>({}))]);
+        fetch("/api/analytics"+sfx).then(r=>r.json()).catch(()=>({}))]);
       _dbData={summary:s.summary||s||{}, history:h.snapshots||[], analytics:(a.analytics||a||{})};
     }catch(e){ _dbData={summary:{},history:[],analytics:{}}; }
   }
@@ -1638,6 +1658,10 @@ function dbFillPanel(p){
     else if(p.type==="timeseries")el.innerHTML=_dbTimeseries(p);
     else if(p.type==="bar")el.innerHTML=_dbBar(p);
     else if(p.type==="table")el.innerHTML=_dbTable(p);
+    else if(p.type==="pie")el.innerHTML=_dbPie(p);
+    else if(p.type==="gauge")el.innerHTML=_dbGauge(p);
+    else if(p.type==="geo")el.innerHTML=_dbGeo(p);
+    else if(p.type==="logs"){ el.innerHTML=`<span class="text-slate-600 text-xs">…</span>`; _dbLogsPanel(p,el); }
     else el.innerHTML=`<span class="text-slate-600 text-xs">${esc(p.type)}?</span>`;
   }catch(e){ el.innerHTML=`<span class="text-rose-400 text-xs">${esc(e.message)}</span>`; }
 }
@@ -1672,6 +1696,37 @@ function _dbTable(p){
   const rows=_dbList(p.key).slice(0,12); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
   return `<table class="db-tbl"><thead><tr><th>${esc(_DB_ANALYTICS[p.key]||p.key)}</th><th style="text-align:right">#</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(String(r.k))}</td><td style="text-align:right">${_dbNum(r.n)}</td></tr>`).join("")}</tbody></table>`;
 }
+function _dbPie(p){
+  const rows=_dbList(p.key).slice(0,6); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  const total=rows.reduce((s,r)=>s+r.n,0)||1; const R=52,C=2*Math.PI*R; let off=0;
+  const ring=rows.map((r,i)=>{const frac=r.n/total,len=frac*C,seg=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${_DB_COLORS[i%_DB_COLORS.length]}" stroke-width="16" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"/>`;off+=len;return seg;}).join("");
+  const legend=rows.map((r,i)=>`<div class="flex items-center gap-1.5 text-[11px]"><span style="color:${_DB_COLORS[i%_DB_COLORS.length]}">●</span><span class="truncate flex-1" style="color:#94a3b8">${esc(String(r.k))}</span><span style="color:#cbd5e1">${Math.round(r.n/total*100)}%</span></div>`).join("");
+  return `<div class="flex items-center gap-3"><svg viewBox="0 0 120 120" style="width:100px;height:100px;flex-shrink:0">${ring}</svg><div class="flex-1 min-w-0 space-y-0.5">${legend}</div></div>`;
+}
+function _dbGauge(p){
+  const m=p.metric,meta=_DB_METRICS[m]||{l:m},raw=(_dbData.summary||{})[m];
+  let frac=+raw||0; if(frac>1)frac=Math.min(1,frac/100);    // ratios are 0..1; pct-ish 0..100
+  const pct=Math.round(frac*100),R=46,C=Math.PI*R,len=frac*C;
+  const col=frac>=0.66?"#34d399":frac>=0.33?"#fbbf24":"#f87171";
+  return `<div class="flex flex-col items-center"><svg viewBox="0 0 120 70" style="width:140px;height:80px">
+    <path d="M14 60 A46 46 0 0 1 106 60" fill="none" stroke="#1e293b" stroke-width="12" stroke-linecap="round"/>
+    <path d="M14 60 A46 46 0 0 1 106 60" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${len.toFixed(1)} ${C.toFixed(1)}"/></svg>
+    <div class="db-stat-val" style="font-size:22px;margin-top:-8px">${pct}%</div><div class="db-stat-sub">${esc(meta.l)}</div></div>`;
+}
+function _dbGeo(p){
+  const rows=_dbList("geo").slice(0,10); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  const max=Math.max(...rows.map(r=>r.n),1);
+  return rows.map(r=>`<div class="db-bar-row"><span class="db-bar-k">${flag(String(r.k))} ${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${Math.round(r.n/max*100)}%"></span></span><span class="db-bar-n">${_dbNum(r.n)}</span></div>`).join("");
+}
+async function _dbLogsPanel(p,el){
+  try{
+    const body={search:p.search||"",chips:[],sources:{},minutes:p.minutes||15,limit:12,env:(dbCur().vars||{}).env||_env||""};
+    const d=await fetch("/api/logs/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json());
+    const rows=d.rows||[];
+    el.innerHTML=rows.length?`<table class="db-tbl"><tbody>${rows.map(r=>`<tr><td class="mono" style="color:#5b6577;width:54px">${esc(r.time)}</td><td class="mono" style="color:${_lgStatusColor(r.status)};width:30px">${esc(r.status||"")}</td><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(r.path||r.line||"")}</td></tr>`).join("")}</tbody></table>`
+      :`<span class="text-slate-600 text-xs">${_trText("нет строк под фильтр")}</span>`;
+  }catch(e){ el.innerHTML=`<span class="text-rose-400 text-xs">${esc(e.message)}</span>`; }
+}
 function dbToggleEdit(){ _db.editing=!_db.editing; document.getElementById("db-editmode").classList.toggle("btn-primary",_db.editing); dbRender(); }
 function dbDelPanel(id){ const d=dbCur(); d.panels=d.panels.filter(p=>p.id!==id); dbPersist(); dbRender(); }
 function dbAddPanel(){ dbEditPanel(null); }
@@ -1684,9 +1739,10 @@ async function dbEditPanel(id){
   const to=t=>`<option value="${t}" ${_dbEdit.type===t?"selected":""}>${t==="timeseries"?"time-series":t}</option>`;
   const body=`<div class="space-y-2 text-[12px]" style="color:var(--muted)">
     <label class="block">${_trText("Заголовок")}<input class="input mt-1" oninput="_dbEdit.title=this.value" value="${esc(_dbEdit.title||"")}"></label>
-    <label class="block">${_trText("Тип")}<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${["stat","timeseries","bar","table"].map(to).join("")}</select></label>
+    <label class="block">${_trText("Тип")}<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${["stat","timeseries","bar","table","pie","gauge","geo","logs"].map(to).join("")}</select></label>
     <label class="block" id="dbe-metric-wrap">${_trText("Метрика")}<select class="input mt-1" onchange="_dbEdit.metric=this.value">${mo}</select></label>
     <label class="block" id="dbe-ana-wrap">${_trText("Источник (топ)")}<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
+    <label class="block hidden" id="dbe-logs-wrap">${_trText("Поиск в логах")}<input class="input mono mt-1" oninput="_dbEdit.search=this.value" value="${esc(_dbEdit.search||"")}" placeholder="/wp-login"></label>
     <label class="block">${_trText("Ширина")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.span=+this.value" value="${_dbEdit.span||4}"></label></div>`;
   setTimeout(dbeTypeChange,0);
   const r=await _showModal({title:_trText(id?"Панель":"Новая панель"),body,
@@ -1694,17 +1750,25 @@ async function dbEditPanel(id){
   if(r==="save")dbSavePanel(id);
 }
 function dbeTypeChange(){
-  const t=_dbEdit.type,mw=document.getElementById("dbe-metric-wrap"),aw=document.getElementById("dbe-ana-wrap");
-  if(mw)mw.classList.toggle("hidden",!(t==="stat"||t==="timeseries"));
-  if(aw)aw.classList.toggle("hidden",!(t==="bar"||t==="table"));
+  const t=_dbEdit.type,mw=document.getElementById("dbe-metric-wrap"),aw=document.getElementById("dbe-ana-wrap"),lw=document.getElementById("dbe-logs-wrap");
+  if(mw)mw.classList.toggle("hidden",!(t==="stat"||t==="timeseries"||t==="gauge"));
+  if(aw)aw.classList.toggle("hidden",!(t==="bar"||t==="table"||t==="pie"));   // geo fixed to "geo"
+  if(lw)lw.classList.toggle("hidden",t!=="logs");
 }
 function dbSavePanel(id){
   const d=dbCur(),e=_dbEdit,t=e.type;
   const p={id:e.id,type:t,title:(e.title||"").trim(),span:Math.max(2,Math.min(12,+e.span||4))};
-  if(t==="stat"){p.source="summary";p.metric=e.metric;}
+  if(t==="stat"||t==="gauge"){p.source="summary";p.metric=e.metric;}
   else if(t==="timeseries"){p.source="history";p.metrics=[e.metric];}
-  else{p.source="analytics";p.key=e.key;}
-  if(!p.title)p.title=(t==="bar"||t==="table")?(_DB_ANALYTICS[p.key]||p.key):(_DB_METRICS[p.metric]||{l:p.metric}).l;
+  else if(t==="bar"||t==="table"||t==="pie"){p.source="analytics";p.key=e.key;}
+  else if(t==="geo"){p.source="analytics";p.key="geo";}
+  else if(t==="logs"){p.source="logs";p.search=e.search||"";p.minutes=15;}
+  if(!p.title){
+    if(t==="bar"||t==="table"||t==="pie")p.title=_DB_ANALYTICS[p.key]||p.key;
+    else if(t==="geo")p.title="Countries";
+    else if(t==="logs")p.title="Logs";
+    else p.title=(_DB_METRICS[p.metric]||{l:p.metric}).l;
+  }
   const ix=id?d.panels.findIndex(x=>x.id===id):-1; if(ix>=0)d.panels[ix]=p; else d.panels.push(p);
   dbPersist(); dbRender();
 }
