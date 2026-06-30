@@ -20,3 +20,6 @@ deploy/hosts.txt
 state.json
 positions.yaml
 /data/
+
+# local dev preview config (machine-specific paths)
+.claude/launch.json

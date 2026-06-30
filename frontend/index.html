@@ -65,7 +65,8 @@
     color:var(--muted);cursor:pointer}.tray-chip:hover{color:var(--text);border-color:var(--accent)}
   #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
   #whoswhat > .card::-webkit-resizer{background:#2a3340}
-  @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s}.sidebar.open{left:0}.main{padding:14px}}
+  .burger{display:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);background:#161c27;color:var(--text);cursor:pointer;font-size:16px;align-items:center;justify-content:center}
+  @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s;box-shadow:0 0 40px #000a}.sidebar.open{left:0}.main{padding:14px}.burger{display:inline-flex}}
 </style>
 </head>
 <body class="min-h-screen">
@@ -97,9 +98,12 @@
 
   <main class="main">
   <header class="flex items-center justify-between mb-5 flex-wrap gap-3">
-    <div>
+    <div class="flex items-center gap-3">
+      <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')" title="menu">☰</button>
+      <div>
       <h1 class="text-lg font-semibold tracking-tight" id="view-title" data-i18n="title">SOC Dashboard</h1>
       <p class="text-xs" style="color:var(--faint)" data-i18n="subtitle">traffic & attack monitoring · all domains</p>
+      </div>
     </div>
     <div class="flex items-center gap-3">
       <div id="status-badge" class="chip">—</div>
@@ -738,6 +742,9 @@ const RU2EN={
   "Нидерланды":"Netherlands","Норвегия":"Norway","Польша":"Poland","Португалия":"Portugal","Россия":"Russia","Румыния":"Romania","Сингапур":"Singapore",
   "Турция":"Turkey","Украина":"Ukraine","Финляндия":"Finland","Франция":"France","Чехия":"Czechia","Швейцария":"Switzerland","Швеция":"Sweden","Эстония":"Estonia","Япония":"Japan",
   "США":"USA","ОАЭ":"UAE","ЮАР":"South Africa",
+  // status badge (uppercased) + chart legends + misc
+  "СПОКОЙНО":"CALM","ВНИМАНИЕ":"NOTICE","ТРЕВОГА":"ALERT","КРИТИЧНО":"CRITICAL",
+  "статусы:":"statuses:","всего":"total","реальный":"real","новые блоки":"new blocks","денлист":"denylist",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
@@ -874,7 +881,7 @@ function mkChart(id,datasets,stacked){
       scales:{x:{ticks:{color:"#475569",maxTicksLimit:6,font:{size:9}},grid:{color:"#161c25"},stacked:!!stacked},
               y:{ticks:{color:"#475569",font:{size:9}},grid:{color:"#161c25"},beginAtZero:true,stacked:!!stacked}}}});
 }
-const ds=(l,c,fill)=>({label:l,data:[],borderColor:c,backgroundColor:c+(fill?"33":"22"),borderWidth:2,pointRadius:0,fill:!!fill,tension:.3});
+const ds=(l,c,fill)=>({label:(typeof _trText==="function"?_trText(l):l),data:[],borderColor:c,backgroundColor:c+(fill?"33":"22"),borderWidth:2,pointRadius:0,fill:!!fill,tension:.3});
 function setChart(c,snaps,arrs){c.data.labels=snaps.map(s=>{const d=new Date(s.ts*1000);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");});arrs.forEach((a,i)=>c.data.datasets[i].data=snaps.map(a));c.update();}
 
 const ATTACK_RE=/(\bunion\b.{0,20}\bselect\b|\bselect\b.{0,30}\bfrom\b|sleep\(\d|benchmark\(|waitfor\s+delay|\bor\s+\d+\s*[-*=]|information_schema|\/\*!|0x[0-9a-f]{8}|<script|onerror\s*=|javascript:|\.\.\/\.\.|etc\/passwd|\$\{(jndi|@?print)|\bmd5\(|;\s*print|\bxor\b)/i;
