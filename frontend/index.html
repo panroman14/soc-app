@@ -561,6 +561,17 @@
     </section>
 
     <section class="card p-4 mb-4">
+      <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <h3 class="text-sm font-medium text-slate-300 shrink-0">Активные правила <span id="p403-count" class="text-slate-600"></span></h3>
+        <div class="flex items-center gap-2 ml-auto">
+          <input id="p403-search" oninput="_p403RenderList()" placeholder="🔍 поиск по имени / паттерну…" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-60"/>
+          <button onclick="loadP403()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">↻</button>
+        </div>
+      </div>
+      <div id="p403-list" class="space-y-1.5"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+
+    <section class="card p-4 mb-4">
       <div class="env-row">
         <h3 class="text-sm font-medium text-slate-300 flex items-center gap-1.5"><span id="p403-form-chev" style="color:var(--faint)">▸</span><span data-i18n="p403.addrule">Add rule</span></h3>
         <button onclick="p403FormToggle()" class="btn btn-primary btn-xs"><span>＋</span><span data-i18n="p403.addrule">Add rule</span></button>
@@ -608,16 +619,6 @@
       </div><!-- /p403-form-body -->
     </section>
 
-    <section class="card p-4">
-      <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-        <h3 class="text-sm font-medium text-slate-300 shrink-0">Активные правила <span id="p403-count" class="text-slate-600"></span></h3>
-        <div class="flex items-center gap-2 ml-auto">
-          <input id="p403-search" oninput="_p403RenderList()" placeholder="🔍 поиск по имени / паттерну…" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-60"/>
-          <button onclick="loadP403()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">↻</button>
-        </div>
-      </div>
-      <div id="p403-list" class="space-y-1.5"><div class="text-slate-600 text-xs">загрузка…</div></div>
-    </section>
   </div><!-- /view-p403 -->
 
   <div id="view-targets" class="hidden">
