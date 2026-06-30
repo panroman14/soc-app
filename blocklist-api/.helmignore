@@ -1,0 +1,22 @@
+# Patterns to exclude when packaging the chart (Helm bundles the whole chart
+# directory into the release object — keep dev cruft out or the release blows the
+# ~1–3MB etcd object limit). NB: .venv here is 60MB and contains a symlink into the
+# system Python framework, which Helm follows; it MUST be excluded.
+.venv/
+venv/
+env/
+.git/
+.gitignore
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+*.tmp
+*.bak
+*.orig
+.DS_Store
+# local/secret values are passed with --set or -f, never packaged
+values-secret.yaml
