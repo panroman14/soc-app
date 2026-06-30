@@ -143,6 +143,12 @@
   .attach-row{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:6px 9px;border:0;border-radius:7px;background:transparent;color:#e2e8f0;font-size:12px;cursor:pointer}
   .attach-row:hover{background:#1e293b}
   .attach-row .attach-res{margin-left:auto;color:#64748b;font-size:11px}
+  /* шапка раздела — визуально отделена от карточек-контента */
+  .viewhead{background:linear-gradient(135deg,#1b2336,#141a27);border-left:3px solid var(--accent)}
+  /* группы — другой акцент (папка), чтобы читались отдельно от nginx/CF-бэкендов */
+  .grouphead{border-left:3px solid #d6a35c}
+  .grp-card{background:#1a1710;border:1px solid #3a311e;border-radius:10px;padding:10px 12px}
+  .grp-card .grp-name{font-weight:600;color:#f4e3c4}
 </style>
 </head>
 <body class="min-h-screen">
@@ -162,7 +168,7 @@
     <button id="navtab-autoban" onclick="showView('autoban')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9.5 9 5 5"/><path d="m14.5 9-5 5"/></svg></span><span data-i18n="nav.autoban">Auto-ban</span></button>
     <button id="navtab-p403" onclick="showView('p403')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span><span data-i18n="nav.p403">403 rules</span></button>
     <div class="nav-grp" data-i18n="grp.infra">Infra</div>
-    <button id="navtab-nodes" onclick="showView('nodes')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01"/><path d="M6 17h.01"/></svg></span><span data-i18n="nav.nodes">Nodes</span></button>
+    <button id="navtab-targets" onclick="showView('targets')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span data-i18n="nav.targets">Resources</span></button>
     <div class="mt-auto pt-3 border-t" style="border-color:var(--border)">
       <button id="navtab-settings" onclick="showView('settings')" class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span data-i18n="nav.settings">Settings</span></button>
     </div>
@@ -360,7 +366,7 @@
         <div>
           <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
           <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx — это подключённые ноды, Cloudflare — из реестра CF-таргетов.</div>
-          <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">Ноды</a> · <a onclick="showView('settings');setSub('cf')" class="text-indigo-300 cursor-pointer">Настройки → CF-таргеты</a></div>
+          <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('targets');setTsub('nginx')" class="text-indigo-300 cursor-pointer">Targets → nginx</a> · <a onclick="showView('targets');setTsub('cf')" class="text-indigo-300 cursor-pointer">Targets → Cloudflare</a></div>
         </div>
         <div class="flex items-center gap-2">
           <label class="text-[11px] text-slate-500">ручной бан в группу:</label>
@@ -369,22 +375,6 @@
         </div>
       </div>
       <div id="ban-targets" class="text-sm text-slate-400">загрузка…</div>
-    </div>
-
-    <div class="card p-4 mb-4">
-      <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
-        <div>
-          <div class="text-sm font-semibold text-slate-200">🎯 Таргет-группы</div>
-          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Группа — это набор таргетов. Правила 403 и автобан применяются к выбранной группе. (Окружения уже сами по себе группы; тут — свои произвольные.)</div>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <input id="grp-new" placeholder="имя группы, напр. nginx1" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 w-48" onkeydown="if(event.key==='Enter')grpNew()">
-          <button onclick="grpNew()" class="btn btn-ghost btn-xs">＋ группа</button>
-          <button onclick="grpSave()" class="btn btn-primary btn-xs">Save</button>
-        </div>
-      </div>
-      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
-      <div id="grp-msg" class="text-[11px] mt-2"></div>
     </div>
 
     <section class="card p-4 mb-4">
@@ -530,9 +520,6 @@
       </section>
     </div>
 
-    <h2 class="sec">Готовые пути <span class="text-slate-600 font-normal normal-case tracking-normal">— клик добавит путь в условие правила (ИЛИ)</span></h2>
-    <section class="card p-4 mb-4"><div id="ab-presets" class="space-y-3"></div></section>
-
     <h2 class="sec">Правила автобана</h2>
     <section class="card p-4 mb-4"><div id="ab-rules" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div></section>
 
@@ -556,11 +543,11 @@
   </div><!-- /view-autoban -->
 
   <div id="view-p403" class="hidden">
-    <section class="card p-4 mb-4">
+    <section class="card viewhead p-4 mb-4">
       <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 class="text-base font-semibold text-slate-200">🚫 Правила 403 — блокировка по пути</h2>
-          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span> (сканеры/эксплойты: <span class="mono">/.env</span>, <span class="mono">/wp-login</span>, jndi…). Это <b>не бан IP</b> — режется сам путь, на всех доменах окружения.</p>
+          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span>. Это <b>не бан IP</b> — режется сам путь, на всех привязанных таргетах.</p>
         </div>
         <div id="p403-types" class="flex items-center gap-1.5 flex-wrap shrink-0"></div>
       </div>
@@ -626,11 +613,23 @@
     </section>
   </div><!-- /view-p403 -->
 
-  <div id="view-nodes" class="hidden">
-    <section class="card p-4">
+  <div id="view-targets" class="hidden">
+    <div class="setwrap">
+    <div class="setnav">
+      <button id="tsub-nginx" onclick="setTsub('nginx')" class="setnav-btn"><span><svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#009639" d="M12 1.6 2.5 7v10L12 22.4 21.5 17V7L12 1.6z"/><path fill="#fff" d="M9 8.4v7.2H10.6V11.3l4 4.3H16V8.4H14.4v4.4l-4-4.4H9z"/></svg></span><span>nginx</span></button>
+      <button id="tsub-cf" onclick="setTsub('cf')" class="setnav-btn"><span><svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#FBAD41" d="M9.5 8.5a4.5 4.5 0 0 1 8.3 1.2 3 3 0 0 1-.3 6H7.5z"/><path fill="#F38020" d="M16.6 16H6a3 3 0 0 1-.3-6 4.5 4.5 0 0 1 8.5-1.3 2.8 2.8 0 0 1 3.8 2.1 2.7 2.7 0 0 1-1.4 5.2z"/></svg></span><span>Cloudflare</span></button>
+      <button id="tsub-ingress" onclick="setTsub('ingress')" class="setnav-btn"><span><svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#326CE5" d="M12 2 3.6 6v8L12 22l8.4-8V6L12 2z"/><circle cx="12" cy="12" r="3.1" fill="#fff"/></svg></span><span>Ingress</span></button>
+      <button id="tsub-groups" onclick="setTsub('groups')" class="setnav-btn"><span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#d6a35c" stroke-width="2" class="shrink-0"><path d="M4 7a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></span><span data-i18n="tg.groups">Groups</span></button>
+      <div style="height:1px;background:var(--border);margin:6px 6px"></div>
+      <button id="tsub-system" onclick="setTsub('system')" class="setnav-btn"><span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg></span><span data-i18n="nav.system">System</span></button>
+    </div>
+    <div>
+
+    <!-- ── nginx-ноды ── -->
+    <section id="tsec-nginx" class="card p-4">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <h2 class="text-sm font-medium text-slate-200">🖥️ Подключённые ноды</h2>
+          <h2 class="text-sm font-medium text-slate-200">🟢 Подключённые ноды (nginx)</h2>
           <p class="text-[11px] text-slate-500 mt-0.5">nginx-VM с агентом soc-nginx-agent — откуда собираем трафик и куда применяем баны.</p>
         </div>
         <button onclick="showAddNode()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">+ Добавить ноду</button>
@@ -649,7 +648,56 @@
       </div>
       <div id="nodes-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
     </section>
-  </div><!-- /view-nodes -->
+
+    <!-- ── Cloudflare-таргеты (именованный реестр) ── -->
+    <section id="tsec-cf" class="hidden card p-4">
+      <div class="flex items-center justify-between mb-1">
+        <div><h2 class="text-sm font-medium text-slate-200">☁️ <span data-i18n="cft.h">Cloudflare targets</span></h2>
+          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="cft.sub">A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).</p></div>
+        <button onclick="cfNew()" class="btn btn-primary btn-xs shrink-0"><span>＋</span><span data-i18n="cft.new">New CF target</span></button>
+      </div>
+      <div id="cf-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+
+    <!-- ── Таргет-группы ── -->
+    <section id="tsec-groups" class="hidden card grouphead p-4">
+      <div class="mb-3">
+        <div class="text-sm font-medium text-slate-200">🗂 <span data-i18n="tg.groups">Target groups</span></div>
+        <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl" data-i18n="tg.sub">A group bundles several targets (nginx nodes + Cloudflare). 403 &amp; auto-ban rules attach to a group and apply to all its targets at once.</div>
+      </div>
+      <!-- создание новой группы -->
+      <div class="flex items-center gap-2 mb-3 p-2.5 rounded-lg" style="background:#0f0d08;border:1px dashed #3a311e">
+        <span class="text-[11px] shrink-0" style="color:#d6a35c" data-i18n="tg.newname">New group:</span>
+        <input id="grp-new" placeholder="nginx-aaa" class="flex-1 max-w-xs bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 mono" onkeydown="if(event.key==='Enter')grpNew()">
+        <button onclick="grpNew()" class="btn btn-ghost btn-xs shrink-0">＋ <span data-i18n="tg.create">Create</span></button>
+        <span class="flex-1"></span>
+        <span id="grp-msg" class="text-[11px]"></span>
+        <button onclick="grpSave()" class="btn btn-primary btn-xs shrink-0">💾 <span data-i18n="save">Save</span></button>
+      </div>
+      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
+    </section>
+
+    <!-- ── ingress-cm таргеты (read-only) ── -->
+    <section id="tsec-ingress" class="hidden card p-4">
+      <div class="mb-3">
+        <h2 class="text-sm font-medium text-slate-200">☸️ <span data-i18n="ing.h">Ingress</span></h2>
+        <p class="text-[11px] text-slate-500 mt-0.5" data-i18n="ing.sub">ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.</p>
+      </div>
+      <div id="ingress-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+
+    <!-- ── System: хост дашборда ── -->
+    <section id="tsec-system" class="hidden card p-4">
+      <div class="mb-3">
+        <h2 class="text-sm font-medium text-slate-200">🖥️ <span data-i18n="sys.h">System</span></h2>
+        <p class="text-[11px] text-slate-500 mt-0.5" data-i18n="sys.sub">Host running the SOC dashboard (soc-app) — its own load, memory and uptime.</p>
+      </div>
+      <div id="system-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    </section>
+
+    </div>
+    </div>
+  </div><!-- /view-targets -->
 
   <div id="view-journal" class="hidden">
     <section class="card p-4">
@@ -677,21 +725,10 @@
   <div id="view-settings" class="hidden">
     <div class="setwrap">
     <div class="setnav">
-      <button id="ssub-cf" onclick="setSub('cf')" class="setnav-btn"><span>☁️</span><span data-i18n="set.cf">CF targets</span></button>
       <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span>🔔</span><span data-i18n="set.notify">Notifications</span></button>
       <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span>⚙️</span><span data-i18n="set.global">Global</span></button>
     </div>
     <div>
-
-    <!-- ── CF-таргеты (именованный реестр) ── -->
-    <section id="ssec-cf" class="card p-4">
-      <div class="flex items-center justify-between mb-1">
-        <div><h2 class="text-sm font-medium text-slate-200">☁️ <span data-i18n="cft.h">Cloudflare targets</span></h2>
-          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="cft.sub">A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).</p></div>
-        <button onclick="cfNew()" class="btn btn-primary btn-xs shrink-0"><span>＋</span><span data-i18n="cft.new">New CF target</span></button>
-      </div>
-      <div id="cf-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
-    </section>
 
     <!-- ── Уведомления ── -->
     <section id="ssec-notify" class="hidden card p-4">
@@ -843,7 +880,7 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов — задаются в BAN_TARGETS blocklist-api (внутри кластера).":"no ingress targets — defined in blocklist-api BAN_TARGETS (in-cluster).","nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.global":"Global",
   "cft.h":"Cloudflare targets","cft.sub":"A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).","cft.new":"New CF target",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
@@ -860,7 +897,7 @@ const I18N={en:{
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.","nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.global":"Глобальные",
   "cft.h":"Cloudflare-таргеты","cft.sub":"Именованный аккаунт/зона Cloudflare, который привязывается к группам и 403-правилам как любой таргет. Токен write-only (хранится на сервере, показывается только как «задан»).","cft.new":"Новый CF-таргет",
   "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
@@ -928,7 +965,7 @@ const RU2EN={
   // ── 403 view static strings ──
   "Правила 403 — блокировка по пути":"403 rules — block by path","блокировка по пути":"block by path",
   "Пути, которые сразу отдают ":"Paths that immediately return ","Это ":"This is ","не бан IP":"not an IP ban",
-  "(сканеры/эксплойты:":"(scanners/exploits:"," — режется сам путь, на всех доменах окружения.":" — the path itself is cut, on all domains of the environment.",
+  "(сканеры/эксплойты:":"(scanners/exploits:"," — режется сам путь, на всех доменах окружения.":" — the path itself is cut, on all domains of the environment."," — режется сам путь, на всех привязанных таргетах.":" — the path itself is cut, on all attached targets.",
   "содержит":"contains","секция:":"section:","поиск по имени / паттерну…":"search by name / pattern…",
   "сгенерится regex:":"generated regex:","проверь на примере — забанит или нет:":"test on an example — blocked or not:",
   "засеять из правил автобана":"seed from auto-ban rules","базовый набор сканеров":"basic scanner set","автобана":"auto-ban","Автобане":"Auto-ban","(подстрока)":"(substring)",
@@ -2004,7 +2041,7 @@ let _abLoaded=false, _abWindows=["1m","5m","10m","1h","8h"], _abFamilies=[], _ab
 let _abInterval=60, _abMaxTick=20, _abLastRun=null, _abRules=null, _abIgnore=[];
 let _abLogRows=[], _abLogPage=0; const _AB_LOG_PER=10;
 let _view="dash";
-const _VIEWS=["dash","autoban","p403","nodes","journal","logs","settings"];
+const _VIEWS=["dash","autoban","p403","targets","journal","logs","settings"];
 function showView(name){
   if(!_VIEWS.includes(name))name="dash";
   _view=name;
@@ -2018,7 +2055,7 @@ function showView(name){
   const sb=document.getElementById("sidebar"); if(sb)sb.classList.remove("open");
   if(name==="autoban")loadAutoban();
   if(name==="p403")loadP403();
-  if(name==="nodes")loadNodes();
+  if(name==="targets")loadTargets();
   if(name==="settings")loadSettings();
   if(name==="journal")loadJournal();
   if(name==="logs")loadLogs();
@@ -2075,15 +2112,39 @@ function renderJournal(){
 }
 
 // ── Настройки: суб-вкладки (Окружения / Уведомления / Глобальные) ─────────────
-let _sub="cf";
+let _sub="notify";
 function setSub(name){
   _sub=name;
-  [["cf","ssec-cf"],["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
+  [["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
     document.getElementById(sec).classList.toggle("hidden",n!==name);
     document.getElementById("ssub-"+n).className="setnav-btn"+(n===name?" on":"");
   });
-  if(name==="cf")loadCfTargets(); if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
+  if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
 }
+// ── Targets: подвкладки (nginx-ноды / Cloudflare / группы) ─────────────────────
+let _tsub="nginx";
+function setTsub(name){
+  _tsub=name;
+  [["nginx","tsec-nginx"],["cf","tsec-cf"],["ingress","tsec-ingress"],["groups","tsec-groups"],["system","tsec-system"]].forEach(([n,sec])=>{
+    document.getElementById(sec).classList.toggle("hidden",n!==name);
+    document.getElementById("tsub-"+n).className="setnav-btn"+(n===name?" on":"");
+  });
+  if(name==="nginx")loadNodes(); if(name==="cf")loadCfTargets(); if(name==="ingress")loadIngress();
+  if(name==="groups")loadGroups(); if(name==="system")loadSystem();
+}
+// ingress-cm таргеты — read-only список (создаются в BAN_TARGETS внутри кластера)
+async function loadIngress(){
+  const el=document.getElementById("ingress-list");if(!el)return;
+  try{ const d=await fetch("/api/ban_targets").then(r=>r.json());
+    if(d.enabled===false){ el.innerHTML='<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>'; return; }
+    const ing=(d.targets||[]).filter(t=>t.type==="ingress-cm");
+    el.innerHTML=ing.length?ing.map(t=>`<div class="bg-slate-950/50 border border-slate-800 rounded-lg p-3 flex items-center gap-2">
+      <svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#326CE5" d="M12 2 3.6 6v8L12 22l8.4-8V6L12 2z"/><circle cx="12" cy="12" r="3.1" fill="#fff"/></svg>
+      <span class="mono text-sm text-slate-200">${esc(t.id)}</span>${t.env?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">env: ${esc(t.env)}</span>`:""}</div>`).join("")
+      :`<div class="text-slate-500 text-xs">${_trText("нет ingress-таргетов — задаются в BAN_TARGETS blocklist-api (внутри кластера).")}</div>`;
+  }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+}
+function loadTargets(){ setTsub(_tsub); }
 function loadSettings(){ setSub(_sub); }
 
 // ── CF-таргеты (именованный реестр) ──
@@ -2103,7 +2164,7 @@ function renderCfTargets(){
 }
 function cfCard(t){
   const id=esc(t.id), open=_cfOpen.has(t.id), migr=t.env?`<span class="chip" title="мигрирован из окружения ${esc(t.env)}">env: ${esc(t.env)}</span>`:"";
-  const chips=[t.token_set?`<span class="chip">🔑 token</span>`:`<span class="chip" style="opacity:.5">нет токена</span>`,
+  const chips=[t.token_set?`<span class="chip">🔑 ${_trText('токен задан')}</span>`:`<span class="chip" style="opacity:.5">${_trText('нет токена')}</span>`,
                `<span class="chip">${esc(t.mode||"ip-list")}</span>`, migr].filter(Boolean).join(" ");
   return `<div class="card p-3" data-cf="${id}">
     <div class="env-row" style="cursor:pointer" onclick="cfToggle('${id}')">
@@ -2137,8 +2198,10 @@ function cfCard(t){
   </div>`;
 }
 function cfToggle(id){
+  // NB: getElementById принимает литеральный id, НЕ CSS-селектор — CSS.escape тут
+  // ломает числовые id (напр. «4444» → «\34 444»), и элемент не находится.
   const open=_cfOpen.has(id); if(open)_cfOpen.delete(id); else _cfOpen.add(id);
-  const body=document.getElementById("cfbody-"+CSS.escape(id)), chev=document.getElementById("cfchev-"+CSS.escape(id));
+  const body=document.getElementById("cfbody-"+id), chev=document.getElementById("cfchev-"+id);
   if(body)body.classList.toggle("hidden",open); if(chev)chev.textContent=open?"▸":"▾";
 }
 async function cfNew(){
@@ -2339,18 +2402,28 @@ async function loadNodes(){
     const r=await fetch("/api/nodes"); const d=await r.json();
     renderNodes(d);
   }catch(e){ document.getElementById("nodes-list").innerHTML=`<div class="text-red-400 text-xs">ошибка загрузки: ${esc(e.message)}</div>`; }
-  if(_view==="nodes"){ clearTimeout(_nodesTimer); _nodesTimer=setTimeout(loadNodes,10000); }
+  if(_view==="targets"&&_tsub==="nginx"){ clearTimeout(_nodesTimer); _nodesTimer=setTimeout(loadNodes,10000); }
 }
 // логотип nginx (inline SVG, self-contained) — метка для нод-агентов nginx
 const _NGINX_ICON='<svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0" title="nginx" aria-label="nginx"><path fill="#009639" d="M12 1.6 2.5 7v10L12 22.4 21.5 17V7L12 1.6z"/><path fill="#fff" d="M9 8.4v7.2H10.6V11.3l4 4.3H16V8.4H14.4v4.4l-4-4.4H9z"/></svg>';
 function renderNodes(d){
   const el=document.getElementById("nodes-list");
   if(d.enabled===false){ el.innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен (BLOCKLIST_API_URL пуст) — ноды недоступны.</div>`; return; }
-  // dashboard host is always shown (not env-scoped); agent nodes are filtered by env
-  const all=d.nodes||[];
-  const nodes=all.filter(n=>n.role==="dashboard"||!_env||(n.group||"")===_env);
-  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">${_env?_trText("нет нод в этом env."):_trText("пока нет подключённых нод. Нажми «+ Добавить ноду».")}</div>`; return; }
-  el.innerHTML=nodes.map(n=>{
+  // только nginx-ноды агентов; хост дашборда (role=dashboard) живёт в разделе System
+  const nodes=(d.nodes||[]).filter(n=>n.role!=="dashboard");
+  if(!nodes.length){ el.innerHTML=`<div class="text-slate-500 text-xs">${_trText("пока нет подключённых нод. Нажми «+ Добавить ноду».")}</div>`; return; }
+  el.innerHTML=nodes.map(_nodeCard).join("");
+}
+function loadSystem(){ // тот же фид нод, но показываем только хост(ы) дашборда
+  fetch("/api/nodes").then(r=>r.json()).then(renderSystem).catch(e=>{const el=document.getElementById("system-list");if(el)el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`;});
+}
+function renderSystem(d){
+  const el=document.getElementById("system-list");if(!el)return;
+  if(d.enabled===false){ el.innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>`; return; }
+  const sys=(d.nodes||[]).filter(n=>n.role==="dashboard");
+  el.innerHTML=sys.length?sys.map(_nodeCard).join(""):`<div class="text-slate-500 text-xs">${_trText("нет данных о хосте")}</div>`;
+}
+function _nodeCard(n){
     const m=n.metrics||{}, online=n.online, isDash=n.role==="dashboard";
     const dot=online?"bg-emerald-500":"bg-slate-600";
     const nginxBad=m.nginx_ok===false;
@@ -2379,7 +2452,6 @@ function renderNodes(d){
       </div>
       <div class="text-[10px] text-slate-600 mt-2 mono">${esc(n.hostname||"")}${n.ip?(" · "+esc(n.ip)):""}${n.agent_version?(" · "+esc(n.agent_version)):""}</div>
     </div>`;
-  }).join("");
 }
 async function showAddNode(){
   const box=document.getElementById("nodes-add"); box.classList.remove("hidden");
@@ -2599,7 +2671,7 @@ async function renderP403Applies(){
       ? enf.map(t=>{const node=t.type==="nginx-file"&&t.enrolled!==false;
           const cf=t.type==="cloudflare";
           const tip=cf?_trText('Cloudflare WAF — 403 по пути на edge'):(node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress-cm таргет'));
-          const go=cf?"showView('settings');setSub('cf')":(node?"showView('nodes')":"showView('settings');setSub('global')");
+          const go=cf?"showView('targets');setTsub('cf')":(node?"showView('targets');setTsub('nginx')":"showView('settings');setSub('global')");
           return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70 inline-flex items-center gap-1">${_typeIcon(t.type)}${esc(t.id)} <span class="text-emerald-500/70">${esc(_typeLabel(t.type))}</span> ↗</span>`;}).join("")
       : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
     if(cfIpOnly.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cfIpOnly.map(t=>esc(t.id)).join(", ")}</span>`;
@@ -2659,7 +2731,7 @@ function _p403RenderList(){
     const isMain=String(_mainRules.path_id)===String(r.id);
     return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded px-3 py-2 ${en?'':'opacity-60'}">
       <div class="flex items-center gap-2">
-        <button onclick="p403Toggle('${esc(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="text-sm shrink-0">${en?'🟢':'⚪'}</button>
+        <button onclick="p403Toggle('${esc(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
         <button onclick="setMainRule('path','${esc(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
         <span class="text-sm text-slate-200 font-medium truncate">${esc(r.name||'(без имени)')}${isMain?' <span class="text-[10px] text-amber-400">основное</span>':''}</span>
         ${en?'':'<span class="text-[10px] text-amber-400 shrink-0">выкл</span>'}${by}${dt}
@@ -3321,7 +3393,7 @@ async function loadAutoban(){
     _abInterval=d.interval||60; _abMaxTick=d.max_per_tick||20; _abLastRun=d.last_run||null;
     _abIgnore=Array.isArray(d.ignore_paths)?d.ignore_paths:[]; renderAbIgnore();
     _abGroups=Array.isArray(d.groups)?d.groups:[]; _abDefaultGroup=d.default_group||"";
-    if(!_abLoaded){abFillSelects();abRenderPaths([""]);abMtypeChange();renderAbPresets();_abLoaded=true;}
+    if(!_abLoaded){abFillSelects();abRenderPaths([""]);abMtypeChange();_abLoaded=true;}
     else abFillGroups();
     renderArm(d.executor);
     _abRules=d.rules||[];
@@ -3329,7 +3401,6 @@ async function loadAutoban(){
     renderAbRules(d.rules||[]);
     loadAbLog();
     loadBanTargets();
-    loadGroups();
     loadThreatFeeds();
     loadEscalation();
   }catch(e){document.getElementById("ab-rules").innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки: ${esc(e.message||String(e))}</div>`;}
@@ -3378,6 +3449,7 @@ function renderGroups(){
   const names=Object.keys(_grpDraft);
   const allTargets=(_banGroupInfo.targets||[]).filter(t=>t.type!=="noop");
   if(!names.length){el.innerHTML=`<div class="text-slate-600 text-xs">${_trText('пока нет своих групп. Создай группу и добавь в неё таргеты.')}</div>`;return;}
+  const folder='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#d6a35c" stroke-width="2" class="shrink-0"><path d="M4 7a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>';
   el.innerHTML=names.map(g=>{
     const members=_grpDraft[g]||[];
     const chips=members.map(tid=>{
@@ -3385,17 +3457,26 @@ function renderGroups(){
       return `<span class="chip">${ty?_typeIcon(ty):""}${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(_typeLabel(ty))}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
     }).join(" ")||`<span class="text-[11px] text-slate-600">${_trText('пусто')}</span>`;
     const avail=allTargets.filter(t=>!members.includes(t.id));
-    const opts=avail.map(t=>`<option value="${esc(t.id)}">${esc(t.id)} · ${esc(_typeLabel(t.type))}</option>`).join("");
-    return `<div class="bg-slate-900/40 border border-slate-800 rounded p-2">
-      <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-        <span class="mono text-slate-200 text-[13px]">${esc(g)}</span>
+    return `<div class="grp-card">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        ${folder}<span class="grp-name mono text-[13px]">${esc(g)}</span>
         <span class="flex items-center gap-1" title="${_trText('через какие бэкенды эта группа применяет баны/403')}">${_levelBadges(members)}</span>
         <button onclick="grpDelete('${esc(g)}')" class="ml-auto text-[11px] text-rose-300 hover:bg-rose-500/10 rounded px-1.5 py-0.5">${_trText('удалить группу')}</button>
       </div>
-      <div class="flex items-center gap-1.5 flex-wrap">${chips}
-        ${avail.length?`<select onchange="if(this.value){grpAddTarget('${esc(g)}',this.value);}" class="text-[11px] bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-300"><option value="">${_trText('+ таргет…')}</option>${opts}</select>`:""}
-      </div></div>`;
+      <div class="flex items-center gap-1.5 flex-wrap">${chips} ${_grpAddMenu(g,avail)}</div>
+    </div>`;
   }).join("");
+}
+// выпадашка «＋ таргет» в группе — кастомная (на <details>), с лого по бэкендам
+function _grpAddMenu(g,avail){
+  if(!avail.length) return "";
+  const order=["nginx-file","cloudflare","ingress-cm"];
+  const types=[...new Set(avail.map(t=>t.type))].sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
+  const close="this.closest('details').removeAttribute('open')";
+  let m="";
+  types.forEach(ty=>{const mt=_typeMeta(ty);
+    m+=`<div class="attach-sec">${mt.svg} ${esc(mt.lbl)}</div>`+avail.filter(t=>t.type===ty).map(t=>`<button type="button" onclick="${close};grpAddTarget('${esc(g)}','${esc(t.id)}')" class="attach-row">${mt.svg}<span>${esc(t.id)}</span></button>`).join("");});
+  return `<details class="attach-dd"><summary class="attach-add">＋ ${_trText('таргет')}</summary><div class="attach-menu">${m}</div></details>`;
 }
 function grpNew(){
   const inp=document.getElementById("grp-new"),name=(inp.value||"").trim();
@@ -3411,7 +3492,7 @@ async function grpSave(){
   try{
     const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates:{BAN_GROUPS:JSON.stringify(_grpDraft||{})}})});
     const d=await r.json();
-    if(d.ok){msg.textContent="✓ сохранено";msg.className="text-[11px] mt-2 text-emerald-400";loadGroups();if(_view==="autoban")loadBanTargets();}
+    if(d.ok){msg.textContent="✓ сохранено";msg.className="text-[11px] mt-2 text-emerald-400";loadGroups();loadBanTargets();}
     else{msg.textContent="✗ "+(d.error||"ошибка");msg.className="text-[11px] mt-2 text-rose-400";}
   }catch(e){msg.textContent="✗ "+e.message;msg.className="text-[11px] mt-2 text-rose-400";}
 }
@@ -3419,9 +3500,9 @@ function _targetSource(t){
   // a human sentence answering "what is this and where do I manage it?", with a link
   const env=t.env?(" · env "+esc(t.env)):"";
   if(t.type==="nginx-file"&&t.enrolled!==false)
-    return _trText("подключённая нода")+` → <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">${_trText("Ноды")}</a>`+env;
+    return _trText("подключённая нода")+` → <a onclick="showView('targets');setTsub('nginx')" class="text-indigo-300 cursor-pointer">Targets → nginx</a>`+env;
   if(t.type==="cloudflare")
-    return _trText("Cloudflare-таргет")+` → <a onclick="showView('settings');setSub('cf')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → CF-таргеты")}</a>`+env;
+    return _trText("Cloudflare-таргет")+` → <a onclick="showView('targets');setTsub('cf')" class="text-indigo-300 cursor-pointer">Targets → Cloudflare</a>`+env;
   if(t.type==="ingress-cm")
     return _trText("ingress-cm таргет")+` → <a onclick="showView('settings');setSub('global')" class="text-indigo-300 cursor-pointer">${_trText("задан в BAN_TARGETS")}</a>`+env;
   return _trText("задан в BAN_TARGETS")+` → <a onclick="showView('settings');setSub('global')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Глобальные")}</a>`;
@@ -3430,7 +3511,9 @@ async function loadBanTargets(){
   const el=document.getElementById("ban-targets");if(!el)return;
   try{
     const d=await fetch("/api/ban_targets").then(r=>r.json());
-    _targetsData=d; if(_view==="autoban"&&Array.isArray(_abRules))renderAbRules(_abRules); // подписи «применяется к»
+    _targetsData=d;
+    if(d&&d.enabled!==false)_banGroupInfo={groups:d.groups||{},targets:d.targets||[],default_group:d.default_group||"",cf_edge_paths:!!d.cf_edge_paths};
+    if(_view==="autoban"&&Array.isArray(_abRules))renderAbRules(_abRules); // подписи «применяется к»
     if(d.enabled===false){el.innerHTML=`<span class="text-slate-500">blocklist-api не настроен — баны отключены.</span>`;return;}
     const tg=(d.targets||[]).filter(t=>t.type!=="noop"), groups=d.groups||{}, errs=d.last_errors||{};
     fillBanGroupSelect(groups,d.default_group||"");
@@ -3443,7 +3526,7 @@ async function loadBanTargets(){
       const src=_targetSource(t);
       const isNode=t.type==="nginx-file"&&t.enrolled!==false;
       const idHtml=isNode
-        ? `<span class="text-slate-200 mono cursor-pointer hover:text-indigo-300" onclick="showView('nodes')" title="${_trText('открыть во вкладке Ноды')}">${esc(t.id)} ↗</span>`
+        ? `<span class="text-slate-200 mono cursor-pointer hover:text-indigo-300" onclick="showView('targets');setTsub('nginx')" title="${_trText('открыть во вкладке Ноды')}">${esc(t.id)} ↗</span>`
         : `<span class="text-slate-200 mono">${esc(t.id)}</span>`;
       return `<div class="py-1.5 border-b border-slate-800/40 last:border-0">
         <div class="flex items-center gap-2 flex-wrap">
@@ -3619,7 +3702,7 @@ async function abDelete(id){
 }
 // Only treat the hash as a view name for known views — the dashboard uses the hash
 // for its own win/host params (parseHash below), which showView('dash') would wipe.
-{const _h=location.hash.slice(1); if(["autoban","p403","nodes","journal","logs","settings"].includes(_h))showView(_h);}
+{const _h=location.hash.slice(1); if(["autoban","p403","targets","journal","logs","settings"].includes(_h))showView(_h);}
 
 // активна ли вкладка: не на паузе И страница на экране (скрытая вкладка не грузит Loki)
 // ── кастомный брендинг (заголовок / подпись / иконка), хранится на бэке ──────────
@@ -3634,7 +3717,9 @@ function applyBranding(){
   if(typeof applyI18n==="function")applyI18n();
 }
 async function loadBranding(){
-  try{ _branding=await fetch("/api/branding").then(r=>r.json())||{}; }catch(e){ _branding={}; }
+  // применяем кэш сразу (синхронно) — чтобы при перезагрузке не мигал дефолтный SOC
+  try{ const c=localStorage.getItem("soc_brand"); if(c){ _branding=JSON.parse(c)||{}; applyBranding(); } }catch(e){}
+  try{ _branding=await fetch("/api/branding").then(r=>r.json())||{}; localStorage.setItem("soc_brand",JSON.stringify(_branding)); }catch(e){ _branding=_branding||{}; }
   applyBranding();
 }
 function brandEdit(){
@@ -3663,6 +3748,7 @@ async function brandSave(){
     const r=await _post("/api/branding",payload);
     if(r&&r.ok===false){ _brandErr(r.error||"ошибка сохранения");return; }
     _branding={title:r.title||"",subtitle:r.subtitle||"",icon:r.icon||""};
+    try{localStorage.setItem("soc_brand",JSON.stringify(_branding));}catch(e){}
     applyBranding(); brandClose();
   }catch(e){ _brandErr("не удалось сохранить"); }
 }
