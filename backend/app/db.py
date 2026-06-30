@@ -67,6 +67,11 @@ def init():
             c.execute("ALTER TABLE autoban_rules ADD COLUMN country TEXT DEFAULT ''")
         # small key/value settings (e.g. the global auto-ban kill-switch)
         c.execute("CREATE TABLE IF NOT EXISTS app_settings (k TEXT PRIMARY KEY, v TEXT)")
+        # repeat-offender ledger for the escalation ladder (#9): how many times an IP
+        # has been auto-banned, so a re-offense after a prior ban expired escalates TTL.
+        c.execute("""CREATE TABLE IF NOT EXISTS autoban_offenders (
+                ip TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0,
+                first_ts INTEGER, last_ts INTEGER )""")
 
 
 def cache_get(key, max_age):
@@ -176,6 +181,31 @@ def autoban_update(rule_id, fields):
 def autoban_delete(rule_id):
     with _lock, _conn() as c:
         c.execute("DELETE FROM autoban_rules WHERE id=?", (rule_id,))
+
+
+# --- repeat-offender ledger (escalation ladder, #9) ---
+def offender_bump(ip, memory_s):
+    """Record an auto-ban of `ip` and return its offense count. If the previous ban
+    was longer ago than `memory_s`, the counter resets to 1 (forgiveness window)."""
+    now = int(time.time())
+    with _lock, _conn() as c:
+        r = c.execute("SELECT count, last_ts FROM autoban_offenders WHERE ip=?", (ip,)).fetchone()
+        if r and memory_s and (now - (r["last_ts"] or 0)) <= memory_s:
+            count = (r["count"] or 0) + 1
+            c.execute("UPDATE autoban_offenders SET count=?, last_ts=? WHERE ip=?", (count, now, ip))
+        else:
+            count = 1
+            c.execute("INSERT INTO autoban_offenders (ip, count, first_ts, last_ts) VALUES (?,?,?,?) "
+                      "ON CONFLICT(ip) DO UPDATE SET count=1, first_ts=?, last_ts=?",
+                      (ip, count, now, now, now, now))
+        return count
+
+
+def offender_top(k=50):
+    with _lock, _conn() as c:
+        rows = c.execute("SELECT ip, count, first_ts, last_ts FROM autoban_offenders "
+                         "ORDER BY count DESC, last_ts DESC LIMIT ?", (k,)).fetchall()
+    return [{"ip": r["ip"], "count": r["count"], "first_ts": r["first_ts"], "last_ts": r["last_ts"]} for r in rows]
 
 
 def new_subnets(subnets, ts):

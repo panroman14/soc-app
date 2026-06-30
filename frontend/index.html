@@ -329,6 +329,21 @@
       </div>
     </div>
 
+    <section class="card p-4 mb-4">
+      <div class="env-row mb-1">
+        <div><span class="text-sm font-medium text-slate-200">📈 <span data-i18n="esc.h">Escalation ladder</span></span>
+          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="esc.sub">Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.</p></div>
+        <button type="button" class="sw" id="esc-enabled" onclick="this.classList.toggle('on')" aria-label="toggle escalation"><i></i></button>
+      </div>
+      <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
+        <label class="block flex-1 min-w-[220px]"><span data-i18n="esc.ladder">TTL ladder (1st, 2nd, 3rd… offense)</span><input id="esc-ladder" placeholder="1h, 6h, 24h, 7d, forever" class="input mono mt-1"></label>
+        <label class="block"><span data-i18n="esc.memory">Forgive after (days)</span><input id="esc-memory" type="number" min="1" value="30" class="input mono mt-1 w-28"></label>
+        <button onclick="escSave()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+        <span id="esc-msg" class="text-[11px]" style="color:var(--faint)"></span>
+      </div>
+      <div id="esc-offenders" class="mt-3 text-[11px]"></div>
+    </section>
+
     <div class="card p-4 mb-4">
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
@@ -381,8 +396,9 @@
       <div class="env-row mb-1">
         <div><span class="text-sm font-medium text-slate-200">📡 <span data-i18n="tf.h">Threat feeds</span></span>
           <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tf.sub">Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.</p></div>
-        <button type="button" class="sw" id="tf-enabled" onclick="this.classList.toggle('on')" aria-label="toggle feeds"><i></i></button>
+        <button type="button" class="sw" id="tf-enabled" onclick="tfToggle(this)" aria-label="toggle feeds"><i></i></button>
       </div>
+      <div id="tf-body" class="hidden">
       <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
         <label class="block">Group<input id="tf-group" placeholder="threat-feeds" class="input mono mt-1 w-40"></label>
         <label class="block"><span data-i18n="tf.every">Refresh every (h)</span><input id="tf-refresh" type="number" min="1" value="6" class="input mono mt-1 w-24"></label>
@@ -395,6 +411,7 @@
         <button onclick="tfAdd()" class="btn btn-ghost btn-xs" data-i18n="tf.add">＋ feed</button>
         <span style="color:var(--faint)" data-i18n="tf.presets">presets:</span>
         <span id="tf-presets" class="flex gap-1 flex-wrap"></span>
+      </div>
       </div>
     </section>
 
@@ -816,6 +833,7 @@ const I18N={en:{
   "p403.where":"Where it applies:",
   "tf.h":"Threat feeds","tf.sub":"Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.","tf.every":"Refresh every (h)","tf.now":"Refresh now","tf.add":"＋ feed","tf.presets":"presets:",
   "crs.h":"WAF / CRS triggers","crs.sub":"/ OWASP ModSecurity — anomaly score exceeded",
+  "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
@@ -831,6 +849,7 @@ const I18N={en:{
   "p403.where":"Где применяется:",
   "tf.h":"Threat-фиды","tf.sub":"Импорт внешних блок-листов (Spamhaus, Tor, свои IP/CIDR) и бан в группу. Самосинхронизация: ушедшие из фида записи истекают сами.","tf.every":"Обновлять каждые (ч)","tf.now":"Обновить сейчас","tf.add":"＋ фид","tf.presets":"пресеты:",
   "crs.h":"WAF / CRS срабатывания","crs.sub":"/ OWASP ModSecurity — превышен anomaly score",
+  "esc.h":"Лестница эскалации","esc.sub":"Повторные нарушители (забанены снова после истечения прошлого бана) получают всё более длинный бан. Выкл = у каждого правила свой фиксированный TTL.","esc.ladder":"Лестница TTL (1-е, 2-е, 3-е… нарушение)","esc.memory":"Прощать через (дней)",
 }};
 let _lang=localStorage.getItem("soc_lang")||"en";
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
@@ -907,6 +926,7 @@ const RU2EN={
   "подключённая нода":"connected node","Cloudflare окружения":"environment Cloudflare","ingress окружения":"environment ingress",
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
+  "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
@@ -1306,6 +1326,33 @@ function _renderBlPage(){
       <button onclick="_blPage++;_renderBlPage()" ${_blPage>=pages-1?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_blPage>=pages-1?"opacity-40":"hover:bg-slate-700"}">→</button>
     </div>`:`<div class="text-[11px] text-slate-500 mt-2">${list.length} активных</div>`;
   el.innerHTML=rows+pager;
+}
+
+// --- escalation ladder (#9) ---
+function _secToTtl(s){ s=+s||0; if(!s)return "forever"; if(s%86400===0)return (s/86400)+"d"; if(s%3600===0)return (s/3600)+"h"; if(s%60===0)return (s/60)+"m"; return s+"s"; }
+function _ttlToSec(t){ t=String(t).trim().toLowerCase(); if(!t||t==="forever"||t==="0"||t==="навсегда")return 0;
+  const m=t.match(/^(\d+)\s*([smhd]?)$/); if(!m)return null; const n=+m[1];
+  return n*({s:1,m:60,h:3600,d:86400,"":1}[m[2]]); }
+async function loadEscalation(){
+  let d; try{ d=await (await fetch("/api/autoban/escalation")).json(); }catch(e){ return; }
+  document.getElementById("esc-enabled").classList.toggle("on",!!d.enabled);
+  const lad=document.getElementById("esc-ladder"); if(document.activeElement!==lad)lad.value=(d.ladder||[]).map(_secToTtl).join(", ");
+  const mem=document.getElementById("esc-memory"); if(document.activeElement!==mem)mem.value=d.memory_days||30;
+  const off=d.offenders||[];
+  document.getElementById("esc-offenders").innerHTML=off.length
+    ? `<div class="text-slate-500 mb-1">${_trText("повторные нарушители")}:</div>`+off.slice(0,12).map(o=>
+        `<span class="inline-flex items-center gap-1 mr-1.5 mb-1 px-1.5 py-0.5 rounded bg-slate-800 mono cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc(o.ip)}')">${esc(o.ip)} <span class="text-amber-300">×${o.count}</span></span>`).join("")
+    : `<span style="color:var(--faint)">${_trText("повторных нарушителей пока нет")}</span>`;
+}
+async function escSave(){
+  const msg=document.getElementById("esc-msg"); msg.textContent=_trText("сохраняю…");
+  const ladder=document.getElementById("esc-ladder").value.split(",").map(x=>_ttlToSec(x)).filter(x=>x!==null);
+  const body={enabled:document.getElementById("esc-enabled").classList.contains("on"),
+    memory_days:document.getElementById("esc-memory").value};
+  if(ladder.length)body.ladder=ladder;
+  try{ const d=await (await fetch("/api/autoban/escalation",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    msg.textContent=d.ok?"✓":(_trText("ошибка")); loadEscalation();
+  }catch(e){ msg.textContent="✗ "+e.message; }
 }
 
 // --- WAF / CRS triggers (#6) ---
@@ -2707,6 +2754,7 @@ let _tf={feeds:[],presets:[],status:{},enabled:false};
 async function loadThreatFeeds(){
   try{ _tf=await (await fetch("/api/threat_feeds")).json(); }catch(e){ return; }
   const en=document.getElementById("tf-enabled"); if(en)en.classList.toggle("on",!!_tf.enabled);
+  document.getElementById("tf-body").classList.toggle("hidden",!_tf.enabled);
   const g=document.getElementById("tf-group"); if(g&&!g.value)g.value=_tf.group||"";
   const rf=document.getElementById("tf-refresh"); if(rf)rf.value=_tf.refresh_hours||6;
   document.getElementById("tf-presets").innerHTML=(_tf.presets||[]).map((p,i)=>
@@ -2732,6 +2780,8 @@ function _tfSync(){ _tf.feeds=[...document.querySelectorAll("#tf-list [data-tf]"
   name:d.querySelector('[data-tff="name"]').value.trim(),
   url:d.querySelector('[data-tff="url"]').value.trim(),
   enabled:d.querySelector('.sw').classList.contains('on')})); }
+function tfToggle(btn){ const on=!btn.classList.contains("on"); btn.classList.toggle("on",on);
+  document.getElementById("tf-body").classList.toggle("hidden",!on); }
 function tfAdd(){ _tfSync(); _tf.feeds.push({name:"",url:"",enabled:true}); renderThreatFeeds(); }
 function tfDel(i){ _tfSync(); _tf.feeds.splice(i,1); renderThreatFeeds(); }
 function tfPreset(i){ _tfSync(); const p=_tf.presets[i]; if(p&&!_tf.feeds.some(f=>f.url===p.url))_tf.feeds.push({name:p.name,url:p.url,enabled:true}); renderThreatFeeds(); }
@@ -3061,6 +3111,7 @@ async function loadAutoban(){
     loadBanTargets();
     loadGroups();
     loadThreatFeeds();
+    loadEscalation();
   }catch(e){document.getElementById("ab-rules").innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки: ${esc(e.message||String(e))}</div>`;}
 }
 

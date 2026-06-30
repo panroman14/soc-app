@@ -872,6 +872,49 @@ def _autoban_host_cidr(ip):
     return "%s/32" % ip if a.version == 4 else "%s/128" % ip
 
 
+# ── escalation ladder (#9) ────────────────────────────────────────────────────
+_ESCALATE_DEFAULT = [3600, 21600, 86400, 604800, 0]   # offense 1..5+: 1h,6h,24h,7d,forever
+
+def _escalate_enabled():
+    return bool(db.setting_get("autoban_escalate", False))
+
+def _escalate_ladder():
+    v = db.setting_get("autoban_escalate_ladder", None)
+    if isinstance(v, list) and v and all(isinstance(x, (int, float)) for x in v):
+        return [max(0, int(x)) for x in v]
+    return list(_ESCALATE_DEFAULT)
+
+def _escalate_memory_s():
+    try:
+        return max(1, int(db.setting_get("autoban_escalate_memory_days", 30) or 30)) * 86400
+    except (TypeError, ValueError):
+        return 30 * 86400
+
+
+@app.get("/api/autoban/escalation")
+def api_escalation_get():
+    return {"enabled": _escalate_enabled(), "ladder": _escalate_ladder(),
+            "memory_days": _escalate_memory_s() // 86400, "offenders": db.offender_top(50)}
+
+
+@app.post("/api/autoban/escalation")
+async def api_escalation_set(request: Request):
+    body = await request.json()
+    if "enabled" in body:
+        db.setting_set("autoban_escalate", bool(body["enabled"]))
+    if isinstance(body.get("ladder"), list):
+        lad = [max(0, int(x)) for x in body["ladder"] if str(x).strip().lstrip("-").isdigit()]
+        if lad:
+            db.setting_set("autoban_escalate_ladder", lad)
+    if body.get("memory_days"):
+        try:
+            db.setting_set("autoban_escalate_memory_days", max(1, int(body["memory_days"])))
+        except (TypeError, ValueError):
+            pass
+    return {"ok": True, "enabled": _escalate_enabled(), "ladder": _escalate_ladder(),
+            "memory_days": _escalate_memory_s() // 86400}
+
+
 def autoban_run_once():
     rules = [r for r in db.autoban_rules() if r.get("enabled")]
     if not rules:
@@ -905,7 +948,7 @@ def autoban_run_once():
             # defense-in-depth: autoban_eval already drops these, re-check anyway
             if ip in config.TRUSTED_IPS or loki._skip_ip(ip) or loki._is_cf_ip(ip):
                 continue
-            seen[ip] = {"cidr": _autoban_host_cidr(ip),
+            seen[ip] = {"ip": ip, "cidr": _autoban_host_cidr(ip),
                         "reason": "автобан · %s · ≥%s/%s" % (
                             r.get("name", "?"), r.get("threshold"), r.get("window")),
                         "ttl": int(r.get("ttl") or 0), "grp": (r.get("group") or ""),
@@ -914,6 +957,15 @@ def autoban_run_once():
     cap = config.AUTOBAN_MAX_PER_TICK
     deferred = max(0, len(items) - cap)
     todo = items[:cap]
+    # escalation ladder (#9): a repeat offender (re-banned after a prior ban expired)
+    # gets a longer TTL each time. Overrides the rule TTL only when enabled.
+    if _escalate_enabled():
+        ladder, memory_s = _escalate_ladder(), _escalate_memory_s()
+        for it in todo:
+            n = db.offender_bump(it["ip"], memory_s)
+            if n > 1:                                   # first offense keeps the rule TTL
+                it["ttl"] = ladder[min(n - 1, len(ladder) - 1)]
+                it["reason"] += " · рецидив #%d" % n
     # BATCH: /block_bulk does ONE reload per call. Group by (ttl, group) — block_bulk
     # takes a single shared ttl + group → one bulk call per distinct (ttl, group)
     # combo, so each enforcement target reloads at most once per tick.
