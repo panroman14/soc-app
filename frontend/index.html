@@ -348,7 +348,7 @@
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
           <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
-          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx-file — это подключённые ноды, cloudflare — из реестра CF-таргетов.</div>
+          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: 🌐 nginx — это подключённые ноды, ☁️ Cloudflare — из реестра CF-таргетов.</div>
           <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">Ноды</a> · <a onclick="showView('settings');setSub('cf')" class="text-indigo-300 cursor-pointer">Настройки → CF-таргеты</a></div>
         </div>
         <div class="flex items-center gap-2">
@@ -2464,27 +2464,45 @@ function _appliesLineRule(r, pathOnly){
   const noAttach=!r.all && !(r.groups||[]).length && !(r.targets||[]).length;
   if(noAttach) return `<div class="text-[10px] mt-1 text-amber-400/80">↳ ${_trText("не привязано — правило не действует")}</div>`;
   if(!list.length) return `<div class="text-[10px] mt-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${pathOnly?_trText("нет nginx/ingress таргетов"):_trText("нет таргетов")}</div>`;
-  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${esc(t.id)}<span style="color:var(--faint)">·${esc(t.type)}</span></span>`).join(" ");
+  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${_typeMeta(t.type).ic} ${esc(t.id)}<span style="color:var(--faint)"> ·${esc(_typeLabel(t.type))}</span></span>`).join(" ");
   return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
 }
 // ── редактор привязки правила (группы + таргеты + «все») ───────────────────────
+// единое человеческое имя/иконка бэкенда (nginx-file → «nginx» и т.п.)
+const _TGT_META={"nginx-file":{ic:"🌐",lbl:"nginx"},"cloudflare":{ic:"☁️",lbl:"Cloudflare"},
+                 "ingress-cm":{ic:"☸️",lbl:"ingress"},"noop":{ic:"•",lbl:"noop"}};
+function _typeMeta(t){return _TGT_META[t]||{ic:"🎯",lbl:t||"?"};}
+function _typeLabel(t){return _typeMeta(t).lbl;}
 // во что группа резолвится → короткая подпись «→ test-1» / «→ все» / «→ 3 таргета»
-function _grpResolve(g){
-  const d=_targetsData; if(!d) return "";
+// 'empty' (ни одного таргета) | 'all' (ровно все — дубль кнопки «все таргеты») | 'some'
+function _grpKind(g){
+  const d=_targetsData; if(!d) return "some";
   const ids=(d.groups&&d.groups[g])||[];
   const allReal=(d.targets||[]).filter(t=>t.type!=="noop").map(t=>t.id);
-  if(!ids.length) return _trText("пусто");
-  if(allReal.length&&ids.length>=allReal.length&&allReal.every(id=>ids.includes(id))) return _trText("все");
+  if(!ids.length) return "empty";
+  if(allReal.length&&ids.length>=allReal.length&&allReal.every(id=>ids.includes(id))) return "all";
+  return "some";
+}
+function _grpResolve(g){
+  const k=_grpKind(g);
+  if(k==="empty") return _trText("пусто");
+  if(k==="all") return _trText("все");
+  const ids=(_targetsData&&_targetsData.groups&&_targetsData.groups[g])||[];
   if(ids.length<=2) return ids.join(", ");
   return ids.length+" "+_trText("таргетов");
 }
 function _attachOptions(r){
   const d=_targetsData; if(!d) return `<option value="">${_trText('+ привязать…')}</option>`;
-  const gs=Object.keys(d.groups||{}).filter(g=>g&&!(r.groups||[]).includes(g));
+  // прячем шумные группы: пустые (ничего не забанят) и совпадающие со «всеми» (дубль кнопки)
+  const gs=Object.keys(d.groups||{}).filter(g=>g&&!(r.groups||[]).includes(g)&&_grpKind(g)==="some");
   const ts=(d.targets||[]).filter(t=>t.type!=="noop"&&!(r.targets||[]).includes(t.id));
   let o=`<option value="">${_trText('+ привязать…')}</option>`;
-  if(gs.length) o+=`<optgroup label="${_trText('группы')}">`+gs.map(g=>`<option value="g:${esc(g)}">🗂 ${esc(g)} → ${esc(_grpResolve(g))}</option>`).join("")+`</optgroup>`;
-  if(ts.length) o+=`<optgroup label="${_trText('таргеты')}">`+ts.map(t=>`<option value="t:${esc(t.id)}">🎯 ${esc(t.id)} · ${esc(t.type)}</option>`).join("")+`</optgroup>`;
+  if(gs.length) o+=`<optgroup label="🗂 ${_trText('группы')}">`+gs.map(g=>`<option value="g:${esc(g)}">${esc(g)} → ${esc(_grpResolve(g))}</option>`).join("")+`</optgroup>`;
+  // таргеты — отдельной секцией на каждый бэкенд (nginx / Cloudflare / ingress)
+  const order=["nginx-file","cloudflare","ingress-cm"];
+  const types=[...new Set(ts.map(t=>t.type))].sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
+  types.forEach(ty=>{const m=_typeMeta(ty),arr=ts.filter(t=>t.type===ty);
+    o+=`<optgroup label="${m.ic} ${esc(m.lbl)}">`+arr.map(t=>`<option value="t:${esc(t.id)}">${m.ic} ${esc(t.id)}</option>`).join("")+`</optgroup>`;});
   return o;
 }
 function _attachUI(r, kind){
@@ -2541,7 +2559,7 @@ function _appliesLine(group, pathOnly){
   if(list==null) return "";
   const lbl=group?(_trText("группа")+" «"+esc(group)+"»"):_trText("все таргеты");
   if(!list.length) return `<div class="text-[10px] mt-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${lbl} — ${pathOnly?_trText("нет nginx/ingress таргетов"):_trText("нет таргетов")}</div>`;
-  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${esc(t.id)}<span style="color:var(--faint)">·${esc(t.type)}</span></span>`).join(" ");
+  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${_typeMeta(t.type).ic} ${esc(t.id)}<span style="color:var(--faint)"> ·${esc(_typeLabel(t.type))}</span></span>`).join(" ");
   return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
 }
 async function renderP403Applies(){
@@ -2560,7 +2578,7 @@ async function renderP403Applies(){
           const cf=t.type==="cloudflare";
           const tip=cf?_trText('Cloudflare WAF — 403 по пути на edge'):(node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress-cm таргет'));
           const go=cf?"showView('settings');setSub('cf')":(node?"showView('nodes')":"showView('settings');setSub('global')");
-          return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${cf?'cf':esc(t.type)}</span> ↗</span>`;}).join("")
+          return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${esc(_typeLabel(t.type))}</span> ↗</span>`;}).join("")
       : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
     if(cfIpOnly.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cfIpOnly.map(t=>esc(t.id)).join(", ")}</span>`;
     el.innerHTML=html;
@@ -3342,10 +3360,10 @@ function renderGroups(){
     const members=_grpDraft[g]||[];
     const chips=members.map(tid=>{
       const ty=_targetType(tid);
-      return `<span class="chip">${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(ty)}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
+      return `<span class="chip">${ty?_typeMeta(ty).ic+" ":""}${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(_typeLabel(ty))}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
     }).join(" ")||`<span class="text-[11px] text-slate-600">${_trText('пусто')}</span>`;
     const avail=allTargets.filter(t=>!members.includes(t.id));
-    const opts=avail.map(t=>`<option value="${esc(t.id)}">${esc(t.id)} · ${esc(t.type)}</option>`).join("");
+    const opts=avail.map(t=>`<option value="${esc(t.id)}">${_typeMeta(t.type).ic} ${esc(t.id)} · ${esc(_typeLabel(t.type))}</option>`).join("");
     return `<div class="bg-slate-900/40 border border-slate-800 rounded p-2">
       <div class="flex items-center gap-2 mb-1.5 flex-wrap">
         <span class="mono text-slate-200 text-[13px]">${esc(g)}</span>
@@ -3409,7 +3427,7 @@ async function loadBanTargets(){
         <div class="flex items-center gap-2 flex-wrap">
           <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
           ${idHtml}
-          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(t.type)}</span>
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${_typeMeta(t.type).ic} ${esc(_typeLabel(t.type))}</span>
           ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
           <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Применяет и баны IP, и правила 403 по пути':'Применяет только баны IP — 403-пути Cloudflare не умеет'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
           <span class="text-[11px] text-slate-600">${_trText('группы:')} ${inGroups.map(esc).join(", ")||"—"}</span>
