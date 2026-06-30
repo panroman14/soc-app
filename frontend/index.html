@@ -722,7 +722,7 @@ const I18N={en:{
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.notify":"Notifications","set.global":"Global",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
   "set.global.sub":"LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.",
-  "save":"Save","delete":"Delete","env.name":"Name","env.loki":"Loki URL","env.loki.hint":"(blank = shared Loki + env label)","env.cf":"Cloudflare for this environment","env.ing":"ingress-nginx (k8s) for this environment",
+  "save":"Save","delete":"Delete","edit":"Edit","env.name":"Name","env.loki":"Loki URL","env.loki.hint":"(blank = shared Loki + env label)","env.cf":"Cloudflare for this environment","env.ing":"ingress-nginx (k8s) for this environment",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
@@ -732,7 +732,7 @@ const I18N={en:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.notify":"Уведомления","set.global":"Глобальные",
-  "env.h":"Окружения","env.new":"Новое окружение","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
+  "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
   "set.global.sub":"LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), и группа по умолчанию. ENV — дефолты, тут переопределяются.",
   "save":"Сохранить","delete":"Удалить","env.name":"Название","env.loki":"Loki URL","env.loki.hint":"(пусто = общий Loki + метка env)","env.cf":"Cloudflare для этого окружения","env.ing":"ingress-nginx (k8s) для этого окружения",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
@@ -1866,16 +1866,28 @@ async function loadEnvs(){
 function renderEnvs(){
   const el=document.getElementById("env-list");
   el.innerHTML=_envs.map(envCard).join("")||'<div class="text-slate-500 text-xs">пока нет окружений. Нажми «+ Окружение».</div>';
+  if(typeof applyI18n==="function")applyI18n();
 }
+const _envOpen=new Set();   // which env cards are expanded for editing
 function envCard(e){
-  const cf=e.cloudflare||{}, ing=e.ingress||{}, id=esc(e.id);
+  const cf=e.cloudflare||{}, ing=e.ingress||{}, id=esc(e.id), open=_envOpen.has(e.id);
+  // compact summary chips shown when collapsed
+  const chips=[
+    e.loki_url?`<span class="chip">Loki</span>`:`<span class="chip" style="opacity:.5">Loki: shared</span>`,
+    cf.enabled?`<span class="chip">☁️ CF</span>`:"",
+    ing.enabled?`<span class="chip">☸️ ingress</span>`:"",
+  ].filter(Boolean).join(" ");
   return `<div class="card p-3" data-env="${id}">
-    <div class="env-row mb-3">
-      <div class="text-sm font-medium">${esc(e.name||e.id)} <span class="mono text-[11px]" style="color:var(--faint)">${id}</span></div>
-      <div class="flex gap-1">
-        <button onclick="envSave('${id}')" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
-        <button onclick="envDelete('${id}')" class="btn btn-danger btn-xs" data-i18n="delete">Delete</button></div>
+    <div class="env-row" style="cursor:pointer" onclick="envToggle('${id}')">
+      <div class="flex items-center gap-2 min-w-0 flex-wrap">
+        <span id="envchev-${id}" style="color:var(--faint)">${open?'▾':'▸'}</span>
+        <span class="text-sm font-medium">${esc(e.name||e.id)}</span>
+        <span class="mono text-[11px]" style="color:var(--faint)">${id}</span>
+        <span class="flex gap-1">${chips}</span>
+      </div>
+      <button onclick="event.stopPropagation();envToggle('${id}')" class="btn btn-ghost btn-xs shrink-0"><span data-i18n="edit">Edit</span></button>
     </div>
+    <div id="envbody-${id}" class="${open?'':'hidden'} mt-3">
     <div class="grid sm:grid-cols-2 gap-3 text-[11px]" style="color:var(--muted)">
       <label class="block"><span data-i18n="env.name">Name</span><input data-f="name" value="${esc(e.name||'')}" class="input mt-1"></label>
       <label class="block"><span data-i18n="env.loki">Loki URL</span> <span style="color:var(--faint)" data-i18n="env.loki.hint">(blank = shared Loki + env label)</span><input data-f="loki_url" value="${esc(e.loki_url||'')}" placeholder="http://loki:3100" class="input mono mt-1"></label>
@@ -1896,13 +1908,26 @@ function envCard(e){
         <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="input mono">
       </div>
     </div>
+    <div class="env-row mt-3 pt-3" style="border-top:1px solid var(--border)">
+      <span class="text-[11px]" style="color:var(--faint)"></span>
+      <div class="flex gap-1">
+        <button onclick="envSave('${id}')" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+        <button onclick="envDelete('${id}')" class="btn btn-danger btn-xs" data-i18n="delete">Delete</button></div>
+    </div>
+    </div>
   </div>`;
+}
+function envToggle(id){
+  const open=_envOpen.has(id); if(open)_envOpen.delete(id); else _envOpen.add(id);
+  const body=document.getElementById("envbody-"+CSS.escape(id)), chev=document.getElementById("envchev-"+CSS.escape(id));
+  if(body)body.classList.toggle("hidden",open); if(chev)chev.textContent=open?"▸":"▾";
 }
 function envSw(btn,blockId){ btn.classList.toggle("on"); const b=document.getElementById(blockId); if(b)b.classList.toggle("hidden",!btn.classList.contains("on")); }
 async function envNew(){
   const id=await uiPrompt(_lang==="ru"?"ID окружения (латиница, напр. prod / dev):":"Environment ID (latin, e.g. prod / dev):");
   if(!id||!id.trim())return;
-  _envs.push({id:id.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-'),name:id.trim(),cloudflare:{},ingress:{}}); renderEnvs();
+  const newId=id.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-');
+  _envs.push({id:newId,name:id.trim(),cloudflare:{},ingress:{}}); _envOpen.add(newId); renderEnvs(); applyI18n();
 }
 function _envField(id,f){ const c=document.querySelector(`[data-env="${id}"]`),el=c&&c.querySelector(`[data-f="${f}"]`);
   if(!el)return undefined;
