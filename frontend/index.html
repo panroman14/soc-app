@@ -1097,6 +1097,8 @@ function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_l
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
   "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
+  // _trText-consumed strings mistakenly added only to I18N (leaked Russian in EN) — now in RU2EN
+  "Удалить это подключение?":"Delete this connection?","доступен, токен принят":"reachable, token accepted","нет ingress-таргетов":"no ingress targets","нет данных о хосте":"no host data","нет связи":"no connection","нет токена":"no token","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","проверяю":"checking","сделать активным":"make active","сохранено и активно":"saved and active","таргет":"target","токен задан":"token set","токен не принят":"token rejected","укажи hostname выше":"enter a hostname above",
   "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
   "окно:":"window:","🔍 поиск IP → профиль":"🔍 search IP → profile","загрузка…":"loading…","загрузка":"loading",
   "ошибка:":"error:","ошибка":"error","ошибка проверки:":"check error:","не удалось:":"failed:","сохраняю…":"saving…",
