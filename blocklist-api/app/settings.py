@@ -37,6 +37,8 @@ SPEC = {
     "CF_ACCOUNT_ID": {"type": "str", "group": "cloudflare", "env": config.CF_ACCOUNT_ID, "label": "CF account id"},
     "CF_LIST_NAME":  {"type": "str", "group": "cloudflare", "env": config.CF_LIST_NAME, "label": "CF IP List name"},
     "CF_RULE_DESC":  {"type": "str", "group": "cloudflare", "env": config.CF_RULE_DESC, "label": "CF rule description"},
+    "CF_EDGE_PATHS": {"type": "str", "group": "cloudflare", "env": config.CF_EDGE_PATHS,
+                      "label": "CF edge 403-paths (WAF)", "choices": ["off", "on"]},
     # ingress-nginx (k8s)
     "CONTROLLER_NS": {"type": "str", "group": "ingress", "env": config.CONTROLLER_NS,
                       "label": "ingress-nginx namespace"},

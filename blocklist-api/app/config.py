@@ -115,6 +115,9 @@ CF_ZONE_NAME = _env("CF_ZONE_NAME", "")       # optional; pick zone by name
 CF_ACCOUNT_ID = _env("CF_ACCOUNT_ID", "")     # optional; else from zone
 CF_LIST_NAME = _env("CF_LIST_NAME", "soc_blocklist")
 CF_RULE_DESC = _env("CF_RULE_DESC", "soc blocklist")
+# also 403 scanner paths at the CF edge via a WAF custom rule (needs a plan with
+# WAF `matches`). off = Cloudflare blocks IPs only (the safe default).
+CF_EDGE_PATHS = _env("CF_EDGE_PATHS", "off")  # off | on
 
 # --- auth ---
 # Two privilege levels:

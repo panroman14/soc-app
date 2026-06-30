@@ -61,8 +61,13 @@ def _noop_status(target, patterns, master):
 
 
 def _cf_apply(target, cidrs, patterns, path_enabled):
-    from . import cloudflare
-    cloudflare.reconcile(target, cidrs)   # path-403 is not a CF concept; IPs only
+    from . import cloudflare, settings
+    cloudflare.reconcile(target, cidrs)   # IP bans — the always-on path
+    # Optional edge path-403: block scanner paths at Cloudflare's WAF too. Off by
+    # default (needs a CF plan with WAF `matches`). Isolated: a failure here must NOT
+    # lose the IP ban above — re-raise only after IPs are safely applied.
+    if str(settings.get("CF_EDGE_PATHS") or "").lower() in ("on", "1", "true"):
+        cloudflare.reconcile_paths(target, patterns if path_enabled else [])
 
 
 def _cf_status(target, patterns, master):

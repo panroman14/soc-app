@@ -206,6 +206,55 @@ def _sync_access_rules(c, cidrs):
         _req(c["token"], "DELETE", "/zones/%s/firewall/access_rules/rules/%s" % (c["zone_id"], existing[cidr]))
 
 
+# ── edge path/UA blocking (WAF custom rule) ───────────────────────────────────
+def _paths_rule_desc(c):
+    return (c.get("rule_desc") or "soc") + " — paths"
+
+
+def _path_expr(patterns):
+    """One WAF expression that blocks request URIs matching ANY of the 403 path
+    regexes. Matches on http.request.uri (path+query) so the same `(\\?|$)` anchors
+    the nginx rules use still apply. Needs a CF plan whose WAF supports `matches`."""
+    alt = "|".join(p.replace('"', "").replace("`", "") for p in patterns if p)
+    return '(http.request.uri matches "%s")' % alt
+
+
+def reconcile_paths(target, patterns):
+    """Manage a WAF custom rule (action block) for the 403 path patterns routed to
+    this Cloudflare target — so scanner paths are 403'd at the EDGE, not just at the
+    origin. Empty patterns → the managed rule is removed. Idempotent (matched by
+    description). Caller gates this on the CF_EDGE_PATHS setting."""
+    c = _resolve(target, ensure=False)
+    if not c.get("zone_id"):
+        raise CFError("нет zone_id для edge-path правила")
+    phase = "http_request_firewall_custom"
+    base = "/zones/%s/rulesets" % c["zone_id"]
+    desc = _paths_rule_desc(c)
+    try:
+        ep = _req(c["token"], "GET", base + "/phases/%s/entrypoint" % phase)
+    except CFError:
+        ep = None
+    patterns = [p for p in (patterns or []) if p]
+    if not ep:
+        if not patterns:
+            return
+        ep = _req(c["token"], "POST", base, {
+            "name": "soc custom firewall", "kind": "zone", "phase": phase, "rules": []})
+    found = next((r for r in (ep.get("rules") or []) if r.get("description") == desc), None)
+    if not patterns:                       # nothing to block → delete our rule if present
+        if found:
+            _req(c["token"], "DELETE", base + "/%s/rules/%s" % (ep["id"], found["id"]))
+        return
+    expr = _path_expr(patterns)
+    if found:
+        if found.get("expression") != expr:
+            _req(c["token"], "PATCH", base + "/%s/rules/%s" % (ep["id"], found["id"]),
+                 {"expression": expr, "action": "block", "description": desc})
+    else:
+        _req(c["token"], "POST", base + "/%s/rules" % ep["id"],
+             {"expression": expr, "action": "block", "description": desc})
+
+
 # ── public: reconcile + check ─────────────────────────────────────────────────
 def reconcile(target, cidrs):
     """Make Cloudflare match the desired CIDR set for this target."""

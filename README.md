@@ -91,7 +91,10 @@ A **target** is where a ban is applied. Types:
 
 - **`cloudflare`** — CF API. You provide only the API **token**; the IP List + WAF
   custom rule (`ip.src in $list`) are **auto-created** on the first ban (modes
-  `ip-list` or `access-rules`). Verify with **Настройки → Проверить подключение**.
+  `ip-list` or `access-rules`). Verify with **Settings → Check connection**.
+  Optional `CF_EDGE_PATHS=on` also blocks the 403 scanner paths routed to this target
+  at the CF **edge** via a managed WAF rule (needs a CF plan with WAF `matches`; off by
+  default — IP-only otherwise).
 - **`nginx-file`** — a plain nginx VM. The enrolled `soc-nginx-agent` pulls
   `GET /nginx_snippet`, writes deny includes, runs `nginx -t`, reloads (rolls back on
   failure). **Enrolled nodes become `nginx-file` targets automatically.**
