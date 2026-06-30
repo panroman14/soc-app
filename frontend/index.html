@@ -904,6 +904,9 @@ const RU2EN={
   "частота: любой путь":"rate: any path","нет фидов — добавь свой или возьми из пресетов ниже.":"no feeds — add your own or pick a preset below.",
   "страны (опц.)":"countries (opt.)","CN, RU — пусто = любая":"CN, RU — empty = any",
   "сработок WAF":"WAF triggers","за CF":"behind CF","бан":"ban","чисто — срабатываний WAF нет за окно":"clean — no WAF triggers in window",
+  "подключённая нода":"connected node","Cloudflare окружения":"environment Cloudflare","ingress окружения":"environment ingress",
+  "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
+  "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
@@ -2352,7 +2355,9 @@ async function renderP403Applies(){
     const path=(d.targets||[]).filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
     const cf=(d.targets||[]).filter(t=>t.type==="cloudflare");
     let html=path.length
-      ? path.map(t=>`<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono">${esc(t.id)} <span class="text-emerald-500/70">${esc(t.type)}</span></span>`).join("")
+      ? path.map(t=>{const node=t.type==="nginx-file"&&t.enrolled!==false;
+          const tip=node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress окружения');
+          return `<span onclick="${node?"showView('nodes')":"showView('settings');setSub('env')"}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${esc(t.type)}</span> ↗</span>`;}).join("")
       : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
     if(cf.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cf.map(t=>esc(t.id)).join(", ")}</span>`;
     el.innerHTML=html;
@@ -3125,10 +3130,15 @@ async function grpSave(){
   }catch(e){msg.textContent="✗ "+e.message;msg.className="text-[11px] mt-2 text-rose-400";}
 }
 function _targetSource(t){
-  if(t.type==="nginx-file")return _trText("нода")+(t.env?" · env "+esc(t.env):"");
-  if(t.type==="cloudflare")return "Cloudflare"+(t.env?" · env "+esc(t.env):"");
-  if(t.type==="ingress-cm")return "ingress"+(t.env?" · env "+esc(t.env):"");
-  return t.env?("env "+esc(t.env)):"";
+  // a human sentence answering "what is this and where do I manage it?", with a link
+  const env=t.env?(" · env "+esc(t.env)):"";
+  if(t.type==="nginx-file"&&t.enrolled!==false)
+    return _trText("подключённая нода")+` → <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">${_trText("Ноды")}</a>`+env;
+  if(t.type==="cloudflare")
+    return _trText("Cloudflare окружения")+` → <a onclick="showView('settings');setSub('env')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Окружения")}</a>`+env;
+  if(t.type==="ingress-cm")
+    return _trText("ingress окружения")+` → <a onclick="showView('settings');setSub('env')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Окружения")}</a>`+env;
+  return _trText("задан в BAN_TARGETS")+` → <a onclick="showView('settings');setSub('global')" class="text-indigo-300 cursor-pointer">${_trText("Настройки → Глобальные")}</a>`;
 }
 async function loadBanTargets(){
   const el=document.getElementById("ban-targets");if(!el)return;
@@ -3144,15 +3154,21 @@ async function loadBanTargets(){
       const inGroups=Object.keys(groups).filter(g=>(groups[g]||[]).includes(t.id));
       const blocksPath=(t.type==="nginx-file"||t.type==="ingress-cm");
       const src=_targetSource(t);
-      return `<div class="flex items-center gap-2 py-1 flex-wrap">
-        <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
-        <span class="text-slate-200 mono">${esc(t.id)}</span>
-        <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(t.type)}</span>
-        ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
-        <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Применяет и баны IP, и правила 403 по пути':'Применяет только баны IP — 403-пути Cloudflare не умеет'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
-        <span class="text-[11px] text-slate-600">${_trText('группы:')} ${inGroups.map(esc).join(", ")||"—"}</span>
-        ${src?`<span class="text-[11px] text-slate-600">· ${src}</span>`:""}
-        ${err?`<span class="text-[11px] text-red-300">${esc(err)}</span>`:""}
+      const isNode=t.type==="nginx-file"&&t.enrolled!==false;
+      const idHtml=isNode
+        ? `<span class="text-slate-200 mono cursor-pointer hover:text-indigo-300" onclick="showView('nodes')" title="${_trText('открыть во вкладке Ноды')}">${esc(t.id)} ↗</span>`
+        : `<span class="text-slate-200 mono">${esc(t.id)}</span>`;
+      return `<div class="py-1.5 border-b border-slate-800/40 last:border-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
+          ${idHtml}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(t.type)}</span>
+          ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
+          <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Применяет и баны IP, и правила 403 по пути':'Применяет только баны IP — 403-пути Cloudflare не умеет'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
+          <span class="text-[11px] text-slate-600">${_trText('группы:')} ${inGroups.map(esc).join(", ")||"—"}</span>
+          ${err?`<span class="text-[11px] text-red-300">${esc(err)}</span>`:""}
+        </div>
+        ${src?`<div class="text-[11px] text-slate-500 mt-0.5 ml-3.5">${_trText('источник')}: ${src}</div>`:""}
       </div>`;}).join("");
     el.innerHTML=rows+`<div class="text-[11px] text-slate-600 mt-1">дефолтная группа: <span class="mono">${esc(d.default_group||"default")}</span></div>`;
   }catch(e){el.innerHTML=`<span class="text-red-300">ошибка: ${esc(e.message||String(e))}</span>`;}
