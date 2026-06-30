@@ -366,6 +366,27 @@
       <div id="ab-ignore" class="flex flex-wrap gap-1.5"></div>
     </section>
 
+    <section class="card p-4 mb-4">
+      <div class="env-row mb-1">
+        <div><span class="text-sm font-medium text-slate-200">📡 <span data-i18n="tf.h">Threat feeds</span></span>
+          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tf.sub">Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.</p></div>
+        <button type="button" class="sw" id="tf-enabled" onclick="this.classList.toggle('on')" aria-label="toggle feeds"><i></i></button>
+      </div>
+      <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
+        <label class="block">Group<input id="tf-group" placeholder="threat-feeds" class="input mono mt-1 w-40"></label>
+        <label class="block"><span data-i18n="tf.every">Refresh every (h)</span><input id="tf-refresh" type="number" min="1" value="6" class="input mono mt-1 w-24"></label>
+        <button onclick="tfSave()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+        <button onclick="tfRefresh(this)" class="btn btn-xs" data-i18n="tf.now">Refresh now</button>
+        <span id="tf-msg" class="text-[11px]" style="color:var(--faint)"></span>
+      </div>
+      <div id="tf-list" class="mt-3 space-y-1.5"></div>
+      <div class="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
+        <button onclick="tfAdd()" class="btn btn-ghost btn-xs" data-i18n="tf.add">＋ feed</button>
+        <span style="color:var(--faint)" data-i18n="tf.presets">presets:</span>
+        <span id="tf-presets" class="flex gap-1 flex-wrap"></span>
+      </div>
+    </section>
+
     <div class="grid lg:grid-cols-2 gap-4 mb-4">
       <section class="card p-4">
         <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="abCardToggle('ab-form-body','ab-form-chev')">
@@ -777,6 +798,7 @@ const I18N={en:{
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
   "p403.where":"Where it applies:",
+  "tf.h":"Threat feeds","tf.sub":"Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.","tf.every":"Refresh every (h)","tf.now":"Refresh now","tf.add":"＋ feed","tf.presets":"presets:",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
@@ -790,6 +812,7 @@ const I18N={en:{
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
   "p403.where":"Где применяется:",
+  "tf.h":"Threat-фиды","tf.sub":"Импорт внешних блок-листов (Spamhaus, Tor, свои IP/CIDR) и бан в группу. Самосинхронизация: ушедшие из фида записи истекают сами.","tf.every":"Обновлять каждые (ч)","tf.now":"Обновить сейчас","tf.add":"＋ фид","tf.presets":"пресеты:",
 }};
 let _lang=localStorage.getItem("soc_lang")||"en";
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
@@ -860,7 +883,8 @@ const RU2EN={
   "blocklist-api не настроен — баны отключены.":"blocklist-api not configured — bans disabled.",
   "таргеты не заданы — забань ноду в окружение или включи Cloudflare у env.":"no targets — assign a node to an environment or enable Cloudflare for the env.",
   "дефолтная группа:":"default group:","Превью":"Preview",
-  "частота: любой путь":"rate: any path",
+  "частота: любой путь":"rate: any path","нет фидов — добавь свой или возьми из пресетов ниже.":"no feeds — add your own or pick a preset below.",
+  "обновляю…":"refreshing…","забанено: ":"banned: ",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
   "Исполнитель не подключён — реального бана нет.":"Executor not wired — no real ban.","Заполни условие и нажми «Превью».":"Fill the condition and hit “Preview”.",
@@ -2629,6 +2653,53 @@ async function abIgnoreSave(){
     _abIgnore=d.ignore_paths||[];renderAbIgnore();msg.textContent="✓ сохранено";msg.className="text-[11px] text-emerald-300";
   }catch(e){msg.textContent="ошибка: "+(e.message||e);msg.className="text-[11px] text-red-300";}
 }
+// ── threat feeds (#2) ──────────────────────────────────────────────────────
+let _tf={feeds:[],presets:[],status:{},enabled:false};
+async function loadThreatFeeds(){
+  try{ _tf=await (await fetch("/api/threat_feeds")).json(); }catch(e){ return; }
+  const en=document.getElementById("tf-enabled"); if(en)en.classList.toggle("on",!!_tf.enabled);
+  const g=document.getElementById("tf-group"); if(g&&!g.value)g.value=_tf.group||"";
+  const rf=document.getElementById("tf-refresh"); if(rf)rf.value=_tf.refresh_hours||6;
+  document.getElementById("tf-presets").innerHTML=(_tf.presets||[]).map((p,i)=>
+    `<button onclick="tfPreset(${i})" class="tray-chip">+ ${esc(p.name)}</button>`).join("");
+  renderThreatFeeds();
+}
+function _tfAgo(ts){ if(!ts)return ""; const d=Math.floor(Date.now()/1000)-ts; return d<60?d+"s":d<3600?Math.floor(d/60)+"m":d<86400?Math.floor(d/3600)+"h":Math.floor(d/86400)+"d"; }
+function renderThreatFeeds(){
+  const el=document.getElementById("tf-list");
+  if(!_tf.feeds.length){ el.innerHTML=`<div class="text-slate-600 text-[11px]">${_trText("нет фидов — добавь свой или возьми из пресетов ниже.")}</div>`; return; }
+  el.innerHTML=_tf.feeds.map((f,i)=>{
+    const st=(_tf.status||{})[f.name];
+    const badge=st?(st.ok?`<span class="text-emerald-400">✓ ${st.count} · ${_tfAgo(st.ts)}</span>`:`<span class="text-red-300">✗ ${esc((st.error||"").slice(0,40))}</span>`):"";
+    return `<div class="flex flex-wrap items-center gap-2 text-[11px]" data-tf="${i}">
+      <button type="button" class="sw${f.enabled?' on':''}" onclick="this.classList.toggle('on')" aria-label="toggle feed"></button>
+      <input data-tff="name" value="${esc(f.name||'')}" placeholder="name" class="input w-32">
+      <input data-tff="url" value="${esc(f.url||'')}" placeholder="https://…/list.txt" class="input mono flex-1 min-w-[200px]">
+      ${badge}
+      <button onclick="tfDel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
+    </div>`;}).join("");
+}
+function _tfSync(){ _tf.feeds=[...document.querySelectorAll("#tf-list [data-tf]")].map(d=>({
+  name:d.querySelector('[data-tff="name"]').value.trim(),
+  url:d.querySelector('[data-tff="url"]').value.trim(),
+  enabled:d.querySelector('.sw').classList.contains('on')})); }
+function tfAdd(){ _tfSync(); _tf.feeds.push({name:"",url:"",enabled:true}); renderThreatFeeds(); }
+function tfDel(i){ _tfSync(); _tf.feeds.splice(i,1); renderThreatFeeds(); }
+function tfPreset(i){ _tfSync(); const p=_tf.presets[i]; if(p&&!_tf.feeds.some(f=>f.url===p.url))_tf.feeds.push({name:p.name,url:p.url,enabled:true}); renderThreatFeeds(); }
+async function tfSave(){
+  _tfSync(); const msg=document.getElementById("tf-msg"); msg.textContent=_trText("сохраняю…");
+  const body={feeds:_tf.feeds,enabled:document.getElementById("tf-enabled").classList.contains("on"),
+    group:document.getElementById("tf-group").value.trim(),refresh_hours:document.getElementById("tf-refresh").value};
+  try{ const d=await (await fetch("/api/threat_feeds",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    msg.textContent=d.ok?"✓":(_trText("ошибка")); loadThreatFeeds();
+  }catch(e){ msg.textContent="✗ "+e.message; }
+}
+async function tfRefresh(btn){
+  const msg=document.getElementById("tf-msg"); btn.disabled=true; const o=btn.textContent; btn.textContent=_trText("обновляю…");
+  try{ const d=await (await fetch("/api/threat_feeds/refresh",{method:"POST"})).json();
+    msg.textContent=d.ok?("✓ "+_trText("забанено: ")+d.banned):("✗ "+(d.error||"")); loadThreatFeeds();
+  }catch(e){ msg.textContent="✗ "+e.message; } finally{ btn.disabled=false; btn.textContent=o; }
+}
 // проверить IP — забанен ли и за что
 async function abWhy(){
   const ip=(document.getElementById("ab-why-ip").value||"").trim(), out=document.getElementById("ab-why");
@@ -2940,6 +3011,7 @@ async function loadAutoban(){
     loadAbLog();
     loadBanTargets();
     loadGroups();
+    loadThreatFeeds();
   }catch(e){document.getElementById("ab-rules").innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки: ${esc(e.message||String(e))}</div>`;}
 }
 

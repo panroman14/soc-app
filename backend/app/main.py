@@ -959,6 +959,143 @@ def autoban_run_once():
                                         "deferred": deferred, "already": len(already)})
 
 
+# ── threat-intelligence feeds (#2) ────────────────────────────────────────────
+# Periodically import external block lists (Spamhaus DROP, Tor exit nodes, custom
+# IP/CIDR lists) and ban them into a chosen group. Self-syncing without diffing:
+# each refresh re-bans with a TTL a few cycles long, so an entry that leaves the
+# feed simply expires. Banning is gated by an explicit enable toggle.
+_TF_GROUP_DEFAULT = "threat-feeds"
+_TF_PRESETS = [
+    {"name": "Spamhaus DROP", "url": "https://www.spamhaus.org/drop/drop.txt"},
+    {"name": "Tor exit nodes", "url": "https://check.torproject.org/torbulkexitlist"},
+]
+
+def _threat_feeds():
+    v = db.setting_get("threat_feeds", None)
+    return v if isinstance(v, list) else []
+
+def _tf_refresh_hours():
+    try:
+        return max(1, int(db.setting_get("threat_feed_refresh_hours", 6)))
+    except (TypeError, ValueError):
+        return 6
+
+def _parse_feed_lines(text, cap=200000):
+    """Extract valid IPs / CIDRs from a feed body. Tolerates `;` and `#` comments
+    and trailing annotations (Spamhaus `1.2.3.0/24 ; SBL123`)."""
+    out, seen = [], set()
+    for line in text.splitlines():
+        line = line.split(";", 1)[0].split("#", 1)[0].strip()
+        if not line:
+            continue
+        tok = line.split()[0]
+        try:
+            net = ipaddress.ip_network(tok, strict=False) if "/" in tok else ipaddress.ip_address(tok)
+        except ValueError:
+            continue
+        cidr = str(net)
+        if cidr not in seen:
+            seen.add(cidr); out.append(cidr)
+            if len(out) >= cap:
+                break
+    return out
+
+def _fetch_feed(url, timeout=20, max_bytes=8 * 1024 * 1024):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "soc-threat-feed/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read(max_bytes).decode("utf-8", "replace")
+
+def threat_feed_run_once(manual=False):
+    """Fetch each enabled feed and ban its IPs/CIDRs into the configured group.
+    Returns a per-feed status dict (also persisted for the dashboard)."""
+    feeds = [f for f in _threat_feeds() if f.get("enabled") and f.get("url")]
+    group = (db.setting_get("threat_feed_group", "") or _TF_GROUP_DEFAULT)
+    # TTL = a few refresh cycles, so a dropped entry expires instead of lingering
+    ttl = _tf_refresh_hours() * 3600 * 3
+    status = dict(db.setting_get("threat_feed_status", {}) or {})
+    total = 0
+    for f in feeds:
+        name = f.get("name") or f.get("url")
+        try:
+            cidrs = _parse_feed_lines(_fetch_feed(f["url"]))
+            if not config.BLOCKLIST_API_URL:
+                raise RuntimeError("blocklist-api не настроен")
+            banned = 0
+            for i in range(0, len(cidrs), 2000):   # chunk so each bulk call stays sane
+                chunk = cidrs[i:i + 2000]
+                payload = {"items": [{"cidr": c, "reason": "feed: " + name} for c in chunk],
+                           "ttl": ttl, "added_by": "feed", "force": False}
+                if group:
+                    payload["group"] = group
+                _, resp = _blocklist_call("POST", "/block_bulk", payload)
+                if resp and resp.get("ok"):
+                    banned += len(resp.get("blocked") or [])
+            total += banned
+            status[name] = {"ts": int(time.time()), "ok": True, "count": len(cidrs),
+                            "banned": banned, "error": None}
+        except Exception as e:
+            status[name] = {"ts": int(time.time()), "ok": False, "count": 0,
+                            "banned": 0, "error": str(e)}
+            print("[feed] %s failed: %s" % (name, e), flush=True)
+    db.setting_set("threat_feed_status", status)
+    db.setting_set("threat_feed_last_run", int(time.time()))
+    return {"ok": True, "feeds": len(feeds), "banned": total, "status": status, "group": group}
+
+def _threat_feed_tick():
+    """Called every autoban tick; fetches only when enabled and the refresh interval
+    has elapsed (banning external lists requires its own explicit toggle)."""
+    if not db.setting_get("threat_feeds_enabled", False):
+        return
+    last = db.setting_get("threat_feed_last_run", 0) or 0
+    if time.time() - last < _tf_refresh_hours() * 3600:
+        return
+    try:
+        threat_feed_run_once()
+    except Exception as e:
+        print("[feed] tick error:", e, flush=True)
+
+
+@app.get("/api/threat_feeds")
+def api_threat_feeds():
+    return {"feeds": _threat_feeds(), "enabled": bool(db.setting_get("threat_feeds_enabled", False)),
+            "group": db.setting_get("threat_feed_group", "") or _TF_GROUP_DEFAULT,
+            "refresh_hours": _tf_refresh_hours(), "presets": _TF_PRESETS,
+            "status": db.setting_get("threat_feed_status", {}) or {},
+            "last_run": db.setting_get("threat_feed_last_run", None),
+            "blocklist_enabled": bool(config.BLOCKLIST_API_URL)}
+
+
+@app.post("/api/threat_feeds")
+async def api_threat_feeds_save(request: Request):
+    body = await request.json()
+    feeds = []
+    for f in (body.get("feeds") or [])[:50]:
+        url = (f.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            continue
+        feeds.append({"name": (f.get("name") or url)[:80], "url": url[:500],
+                      "enabled": bool(f.get("enabled", True))})
+    db.setting_set("threat_feeds", feeds)
+    if "enabled" in body:
+        db.setting_set("threat_feeds_enabled", bool(body["enabled"]))
+    if body.get("group") is not None:
+        db.setting_set("threat_feed_group", (body.get("group") or "").strip()[:64])
+    if body.get("refresh_hours"):
+        try:
+            db.setting_set("threat_feed_refresh_hours", max(1, int(body["refresh_hours"])))
+        except (TypeError, ValueError):
+            pass
+    return {"ok": True, "feeds": feeds}
+
+
+@app.post("/api/threat_feeds/refresh")
+def api_threat_feeds_refresh():
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"ok": False, "error": "blocklist-api не настроен"}, status_code=400)
+    return threat_feed_run_once(manual=True)
+
+
 def autoban_loop():
     # daemon thread always runs; it only BANS when the kill-switch is armed, so the
     # UI toggle takes effect with no restart. Disarmed = pure no-op (no Loki load).
@@ -969,6 +1106,10 @@ def autoban_loop():
         except Exception as e:
             print("[autoban] loop error:", e, flush=True)
         _refresh_path403()   # render-health for the 403-path section (runs every tick)
+        try:
+            _threat_feed_tick()
+        except Exception as e:
+            print("[feed] loop error:", e, flush=True)
         time.sleep(config.AUTOBAN_INTERVAL)
 
 
