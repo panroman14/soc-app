@@ -25,6 +25,22 @@ from . import analyze, config, db, llm, loki, metrics
 
 app = FastAPI(title="soc", version="0.4.0")
 
+# GUI-override for BLOCKLIST_API_URL/TOKEN: env vars are the default, but an
+# operator can point the dashboard at blocklist-api from Resources → Ingress
+# without touching the dashboard's own deploy config. Stored in the same
+# settings table as branding; applied to the config module attribute directly
+# (every call site does config.BLOCKLIST_API_URL/TOKEN at call time, so a live
+# mutation takes effect immediately — no restart needed).
+def _apply_blocklist_override():
+    o = db.setting_get("blocklist_api_override", {}) or {}
+    if o.get("url"):
+        config.BLOCKLIST_API_URL = o["url"]
+    if o.get("token"):
+        config.BLOCKLIST_API_TOKEN = o["token"]
+
+
+_apply_blocklist_override()
+
 
 @app.middleware("http")
 async def no_cache_html(request: Request, call_next):
@@ -221,6 +237,79 @@ def api_logs(stream: str = "access", minutes: int = 15, q: str = "", env: str = 
         return JSONResponse({"enabled": True, "lines": lines})
     except Exception as e:
         return JSONResponse({"enabled": True, "lines": [], "error": str(e)})
+
+
+# ── Live Logs explorer ────────────────────────────────────────────────────────
+@app.get("/api/log_labels")
+def api_log_labels(env: str = ""):
+    """Label names for the source-picker tree."""
+    if not config.LOKI_URL:
+        return {"enabled": False, "labels": []}
+    with loki.scope(env, _env_loki_url(env)):
+        return {"enabled": True, "labels": loki.log_labels()}
+
+
+@app.get("/api/log_label_values")
+def api_log_label_values(name: str, env: str = ""):
+    if not config.LOKI_URL:
+        return {"enabled": False, "values": []}
+    with loki.scope(env, _env_loki_url(env)):
+        return {"enabled": True, "name": name, "values": loki.log_label_values(name)}
+
+
+def _logql_from_body(body):
+    return loki.build_logql(
+        sources=body.get("sources") or {}, chips=body.get("chips") or [],
+        search=body.get("search") or "", regex=bool(body.get("regex")),
+        attacks_only=bool(body.get("attacks_only")), raw=body.get("raw") or "")
+
+
+@app.post("/api/logs/query")
+async def api_logs_query(request: Request):
+    """Structured Live-Logs query → parsed rows (newest first). Body: {sources,
+    chips, search, regex, attacks_only, raw, minutes, end_ns, limit, env}."""
+    if not config.LOKI_URL:
+        return {"enabled": False, "rows": []}
+    body = await request.json()
+    q = _logql_from_body(body)
+    mins = min(max(int(body.get("minutes") or 15), 1), 1440)
+    try:
+        with loki.scope(body.get("env") or "", _env_loki_url(body.get("env") or "")):
+            rows = loki.query_logs(q, mins, end_ns=body.get("end_ns"),
+                                   limit=min(int(body.get("limit") or 300), 1000))
+        return {"enabled": True, "query": q, "rows": rows}
+    except Exception as e:
+        return {"enabled": True, "query": q, "rows": [], "error": str(e)}
+
+
+@app.post("/api/logs/histogram")
+async def api_logs_histogram(request: Request):
+    if not config.LOKI_URL:
+        return {"enabled": False, "points": []}
+    body = await request.json()
+    q = _logql_from_body(body)
+    mins = min(max(int(body.get("minutes") or 15), 1), 1440)
+    try:
+        with loki.scope(body.get("env") or "", _env_loki_url(body.get("env") or "")):
+            return {"enabled": True, **loki.log_histogram(q, mins)}
+    except Exception as e:
+        return {"enabled": True, "points": [], "error": str(e)}
+
+
+@app.get("/api/log_views")
+def api_log_views_get():
+    """Saved Live-Logs views (sources + chips + range)."""
+    return {"views": db.setting_get("log_views", []) or []}
+
+
+@app.post("/api/log_views")
+async def api_log_views_set(request: Request):
+    body = await request.json()
+    views = body.get("views")
+    if not isinstance(views, list):
+        return JSONResponse({"ok": False, "error": "ожидается список views"}, status_code=400)
+    db.setting_set("log_views", views[:50])
+    return {"ok": True, "views": views[:50]}
 
 
 @app.get("/api/history")
@@ -1350,6 +1439,159 @@ async def api_path_rule(request: Request):
                "all": bool(body.get("all", False)), "group": body.get("group", "")}
     status, resp = _blocklist_call("POST", "/path_rule", payload)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
+
+
+@app.get("/api/blocklist_config")
+def api_blocklist_config_get():
+    """Where the dashboard points its blocklist-api client. Token is write-only —
+    never returned, just whether one is set."""
+    o = db.setting_get("blocklist_api_override", {}) or {}
+    return {"url": config.BLOCKLIST_API_URL or "", "token_set": bool(config.BLOCKLIST_API_TOKEN),
+            "is_override": bool(o.get("url") or o.get("token")),
+            "env_url": os.environ.get("BLOCKLIST_API_URL", "")}
+
+
+@app.post("/api/blocklist_config")
+async def api_blocklist_config_set(request: Request):
+    body = await request.json()
+    url = (body.get("url") or "").strip()
+    if url and not (url.startswith("http://") or url.startswith("https://")):
+        return JSONResponse({"ok": False, "error": "URL должен начинаться с http:// или https://"}, status_code=400)
+    o = db.setting_get("blocklist_api_override", {}) or {}
+    o["url"] = url  # empty clears the override → falls back to env var on next restart
+    if body.get("token"):  # blank = leave the existing token as-is
+        o["token"] = body["token"]
+    db.setting_set("blocklist_api_override", o)
+    # apply live — no restart needed (every call site reads config.* at call time)
+    config.BLOCKLIST_API_URL = url or os.environ.get("BLOCKLIST_API_URL", "")
+    if body.get("token"):
+        config.BLOCKLIST_API_TOKEN = body["token"]
+    return {"ok": True, "url": config.BLOCKLIST_API_URL, "token_set": bool(config.BLOCKLIST_API_TOKEN)}
+
+
+# ── Ingress API registry: several blocklist-api backends the dashboard can talk
+# to (one per cluster you ran Setup-cluster against), each registered by hostname.
+# Only ONE is "active" at a time — that's the one every existing call site uses
+# via config.BLOCKLIST_API_URL/TOKEN (today's single-upstream architecture).
+# Registering the others keeps them one click away ("activate") without
+# re-typing host/token, and lets you verify a fresh cluster before switching.
+import re as _re
+
+
+def _ing_apis():
+    return db.setting_get("ingress_apis", {"items": {}, "active": ""}) or {"items": {}, "active": ""}
+
+
+def _ing_apis_save(d):
+    db.setting_set("ingress_apis", d)
+
+
+def _ing_slug(s):
+    return _re.sub(r"[^a-z0-9_.:-]+", "-", (s or "").strip().lower()).strip("-")[:48]
+
+
+def _set_active_backend(url, token=None):
+    """Point the dashboard at this blocklist-api, live, no restart (mirrors into
+    the same override _apply_blocklist_override reads on the next process start)."""
+    o = db.setting_get("blocklist_api_override", {}) or {}
+    o["url"] = url
+    if token:
+        o["token"] = token
+    db.setting_set("blocklist_api_override", o)
+    config.BLOCKLIST_API_URL = url
+    if token:
+        config.BLOCKLIST_API_TOKEN = token
+
+
+@app.get("/api/ingress_apis")
+def api_ingress_apis_list():
+    """Registered blocklist-api backends. Token is write-only (token_set bool only)."""
+    d = _ing_apis()
+    items = [{"id": tid, "url": e.get("url", ""), "token_set": bool(e.get("token"))}
+             for tid, e in d["items"].items()]
+    return {"items": sorted(items, key=lambda x: x["id"]), "active": d.get("active", "")}
+
+
+@app.post("/api/ingress_apis/test")
+async def api_ingress_apis_test(request: Request):
+    """Probe a blocklist-api endpoint before saving it: reachable (/healthz, no
+    auth) + token valid (/targets, Bearer). Works on an unsaved url+token, or by
+    `id` to re-test an already-registered one without re-entering its token."""
+    import urllib.error
+    import urllib.request
+    body = await request.json()
+    url = (body.get("url") or "").strip().rstrip("/")
+    token = body.get("token") or ""
+    if body.get("id") and not token:
+        token = (_ing_apis()["items"].get(body["id"]) or {}).get("token", "")
+    if not url:
+        return {"ok": False, "error": "пустой URL"}
+    out = {"ok": False, "reachable": False, "token_valid": False, "error": None}
+    try:
+        with urllib.request.urlopen(url + "/healthz", timeout=6) as r:
+            out["reachable"] = (r.status == 200)
+    except Exception as e:
+        out["error"] = "нет связи: %s" % e
+        return out
+    try:
+        req = urllib.request.Request(url + "/targets", headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            out["token_valid"] = (r.status == 200)
+    except urllib.error.HTTPError as e:
+        out["error"] = "токен не принят (HTTP %s)" % e.code
+    except Exception as e:
+        out["error"] = "ошибка запроса /targets: %s" % e
+    out["ok"] = out["reachable"] and out["token_valid"]
+    return out
+
+
+@app.post("/api/ingress_apis")
+async def api_ingress_apis_save(request: Request):
+    """Register a blocklist-api backend (doesn't activate it — see /activate)."""
+    body = await request.json()
+    url = (body.get("url") or "").strip().rstrip("/")
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return JSONResponse({"ok": False, "error": "URL должен начинаться с http:// или https://"}, status_code=400)
+    tid = _ing_slug(body.get("id") or url.split("://", 1)[-1])
+    if not tid:
+        return JSONResponse({"ok": False, "error": "не удалось определить id из URL"}, status_code=400)
+    d = _ing_apis()
+    cur = dict(d["items"].get(tid) or {})
+    cur["url"] = url
+    if body.get("token"):   # blank = keep existing secret on update
+        cur["token"] = body["token"]
+    d["items"][tid] = cur
+    _ing_apis_save(d)
+    return {"ok": True, "id": tid, "url": cur["url"], "token_set": bool(cur.get("token"))}
+
+
+@app.post("/api/ingress_apis/activate")
+async def api_ingress_apis_activate(request: Request):
+    """Make this the live backend every dashboard call site talks to."""
+    body = await request.json()
+    tid = body.get("id") or ""
+    d = _ing_apis()
+    e = d["items"].get(tid)
+    if not e:
+        return JSONResponse({"ok": False, "error": "подключение не найдено"}, status_code=404)
+    d["active"] = tid
+    _ing_apis_save(d)
+    _set_active_backend(e.get("url", ""), e.get("token"))
+    return {"ok": True, "id": tid}
+
+
+@app.post("/api/ingress_apis/delete")
+async def api_ingress_apis_delete(request: Request):
+    body = await request.json()
+    tid = body.get("id") or ""
+    d = _ing_apis()
+    existed = tid in d["items"]
+    if existed:
+        d["items"].pop(tid)
+        if d.get("active") == tid:
+            d["active"] = ""
+        _ing_apis_save(d)
+    return {"ok": True, "deleted": existed}
 
 
 @app.get("/api/branding")

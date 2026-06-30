@@ -141,6 +141,156 @@ def recent_logs(stream="access", minutes=15, q="", limit=300):
     return out
 
 
+# ── Live Logs explorer ────────────────────────────────────────────────────────
+# Field map: GUI chip field -> (json source key in the nginx log line). These are
+# extracted once via `| json a="b"` so chips can filter and the table can render.
+_LOG_FIELDS = {
+    "status": "status", "method": "request_method", "path": "request_uri",
+    "ip": "remote_addr", "real_ip": "real_ip_cloudflare", "ua": "http_user_agent",
+    "country": "geoip_country_code", "host": "host", "rt": "request_time",
+}
+_ATTACK_RE = "forbidden|ModSecurity|Inbound Anomaly Score Exceeded"
+
+
+def _raw_get(path, params=None):
+    """GET returning the whole `data` payload (labels/values endpoints return a list
+    of strings, not the {result:[…]} shape `_get` unwraps)."""
+    base = getattr(_ctx, "loki_url", "") or config.LOKI_URL
+    qs = ("?" + urllib.parse.urlencode(params)) if params else ""
+    with urllib.request.urlopen(base + path + qs, timeout=config.HTTP_TIMEOUT) as r:
+        return json.load(r).get("data", [])
+
+
+def log_labels():
+    """Label names available for the source-picker tree (minus noisy internals)."""
+    try:
+        skip = {"__name__", "filename", "stream"}
+        return [l for l in _raw_get("/loki/api/v1/labels") if l not in skip]
+    except Exception:
+        return []
+
+
+def log_label_values(name):
+    try:
+        return _raw_get("/loki/api/v1/label/%s/values" % urllib.parse.quote(name))
+    except Exception:
+        return []
+
+
+def _sel_with_sources(sources):
+    """Base INGRESS_SELECTOR + chosen source labels merged into one stream selector.
+    sources: {label: [value, ...]} → label=~"v1|v2" (regex-or)."""
+    inner = SEL.strip()[1:-1].strip() if SEL.strip().startswith("{") else ""
+    parts = [inner] if inner else []
+    for label, vals in (sources or {}).items():
+        vals = [v for v in vals if v]
+        if not vals or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", label or ""):
+            continue
+        esc = "|".join(re.escape(v) for v in vals)
+        parts.append('%s=~"%s"' % (label, esc))
+    return "{" + ",".join(parts) + "}"
+
+
+def _chip_clause(field, op, value):
+    """One filter chip -> a LogQL pipeline clause operating on the json-extracted
+    label `field`. op: eq|neq|re|gte|class (class = status family like '4')."""
+    f = field if field in _LOG_FIELDS else None
+    if not f or value is None or value == "":
+        return ""
+    v = str(value)
+    if f == "status" and op == "class":      # 4xx/5xx → status=~"4.."
+        d = re.sub(r"\D", "", v)[:1] or "4"
+        return '| status=~"%s.."' % d
+    if f == "rt" and op == "gte":            # latency >= seconds
+        try:
+            return "| rt > %f" % float(v)
+        except ValueError:
+            return ""
+    if op == "re":
+        return '| %s=~"%s"' % (f, v.replace('"', '.'))
+    if op == "neq":
+        return '| %s!="%s"' % (f, v.replace('"', '.'))
+    return '| %s="%s"' % (f, v.replace('"', '.'))
+
+
+def build_logql(sources=None, chips=None, search="", regex=False, attacks_only=False, raw=""):
+    """Compose a LogQL query from the structured GUI filter. `raw` (advanced escape
+    hatch) wins outright. Returns the query string (env scoping is applied later by
+    `_get`)."""
+    if raw and raw.strip():
+        return raw.strip()
+    q = _sel_with_sources(sources)
+    # cheap line pre-filters BEFORE json (keeps Loki fast)
+    q += ' |= "remote_addr"'
+    if attacks_only:
+        q += " |~ `%s`" % _ATTACK_RE
+    if search:
+        s = search.replace("`", "")
+        q += (" |~ `%s`" % s) if regex else (' |= "%s"' % s.replace('"', '.'))
+    # one json stage extracting every field we filter on or render
+    q += " | json " + ", ".join('%s="%s"' % (k, v) for k, v in _LOG_FIELDS.items())
+    for c in (chips or []):
+        q += " " + _chip_clause(c.get("field"), c.get("op", "eq"), c.get("value"))
+    return re.sub(r"\s+", " ", q).strip()
+
+
+def _parse_line(ts_ns, line, labels):
+    """Turn a raw json log line into a structured row for the table."""
+    row = {"ts": ts_ns // 10**6, "time": _fmt_ns(ts_ns), "line": line, "labels": labels}
+    try:
+        o = json.loads(line)
+    except Exception:
+        o = {}
+    if o:
+        row.update({
+            "status": str(o.get("status", "")), "method": o.get("request_method", ""),
+            "path": o.get("request_uri", ""),
+            "ip": o.get("real_ip_cloudflare") or o.get("remote_addr", ""),
+            "ua": o.get("http_user_agent", ""), "country": o.get("geoip_country_code", ""),
+            "host": o.get("host", ""), "rt": o.get("request_time", "")})
+    else:
+        m = re.search(r'"status":"?(\d{3})', line)
+        row["status"] = m.group(1) if m else ""
+    return row
+
+
+def query_logs(query, minutes=15, end_ns=None, limit=300):
+    """Run a built LogQL query over [now-minutes, now] and return parsed rows
+    (newest first). `end_ns` lets the tail page forward from a cursor."""
+    import time as _t
+    end = int(end_ns or _t.time() * 1e9)
+    start = end - int(minutes) * 60 * 10**9
+    res = _get("/loki/api/v1/query_range", {"query": query, "start": str(start),
+               "end": str(end), "limit": str(min(int(limit), 1000)), "direction": "backward"})
+    rows = []
+    for s in res:
+        lbl = s.get("stream", {})
+        for v in s.get("values", []):
+            rows.append(_parse_line(int(v[0]), v[1], lbl))
+    rows.sort(key=lambda r: -r["ts"])
+    return rows[:limit]
+
+
+def log_histogram(query, minutes=15, buckets=60):
+    """Volume-over-time for the sparkline: count_over_time bucketed across the range."""
+    import time as _t
+    end = int(_t.time())
+    start = end - int(minutes) * 60
+    step = max(1, (end - start) // max(1, buckets))
+    metric = "sum(count_over_time(%s [%ds]))" % (query, step)
+    try:
+        res = _get("/loki/api/v1/query_range", {"query": metric, "start": str(start),
+                   "end": str(end), "step": str(step)})
+    except Exception:
+        return {"step": step, "points": []}
+    pts = []
+    for s in res:                       # matrix: one series, values=[[ts,val],…]
+        for ts, val in s.get("values", []):
+            pts.append({"t": int(ts), "v": float(val)})
+    pts.sort(key=lambda p: p["t"])
+    return {"step": step, "points": pts}
+
+
 def scalar(expr):
     """Instant query returning a single number (0 if empty)."""
     res = _get("/loki/api/v1/query", {"query": "sum(count_over_time(" + expr + " [" + W + "]))"})

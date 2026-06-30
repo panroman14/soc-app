@@ -149,6 +149,30 @@
   .grouphead{border-left:3px solid #d6a35c}
   .grp-card{background:#1a1710;border:1px solid #3a311e;border-radius:10px;padding:10px 12px}
   .grp-card .grp-name{font-weight:600;color:#f4e3c4}
+  /* Live Logs explorer */
+  .lg-explorer{display:flex;gap:12px;align-items:flex-start}
+  .lg-aside{width:240px;flex-shrink:0;max-height:80vh;overflow:auto}
+  .lg-main{flex:1;min-width:0}
+  .lg-sep{width:1px;height:18px;background:var(--border);display:inline-block}
+  .lg-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:7px;font-size:11px;background:#1e293b;border:1px solid #334155;color:#cbd5e1}
+  .lg-chip b{color:#93c5fd;font-weight:600}
+  .lg-chip button{color:#64748b;line-height:1}
+  .lg-addchip{display:inline-flex;gap:4px;align-items:center}
+  .lg-tree-lbl{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 4px;border-radius:5px;color:#cbd5e1}
+  .lg-tree-lbl:hover{background:#1e293b}
+  .lg-tree-val{display:flex;align-items:center;gap:6px;padding:2px 4px 2px 18px;border-radius:5px;cursor:pointer;color:#94a3b8;font-size:11px}
+  .lg-tree-val:hover{background:#1e293b}
+  .lg-tree-val input{accent-color:var(--accent)}
+  .lg-hist{height:42px;display:flex;align-items:flex-end;gap:1px;background:#0a0e14;border:1px solid var(--border);border-radius:8px;padding:3px}
+  .lg-hist .bar{flex:1;background:#3b82f6aa;border-radius:1px 1px 0 0;min-height:1px;transition:height .15s}
+  .lg-table{background:#0a0e14;border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:64vh;font-size:11.5px}
+  .lg-row{display:grid;grid-template-columns:62px 120px 46px 36px 1fr 48px 28px;gap:8px;padding:3px 8px;border-bottom:1px solid #131a26;cursor:pointer;align-items:center}
+  .lg-row:hover{background:#111826}
+  .lg-row .mono{font-family:ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lg-row.head{position:sticky;top:0;background:#0d131d;color:#64748b;text-transform:uppercase;font-size:9px;letter-spacing:.04em;cursor:default;z-index:1}
+  .lg-detail{background:#070b11;border-bottom:1px solid #131a26;padding:8px 10px}
+  .lg-raw-line{padding:3px 8px;border-bottom:1px solid #131a26;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+  @media(max-width:820px){.lg-explorer{flex-direction:column}.lg-aside{width:100%;max-height:none}}
 </style>
 </head>
 <body class="min-h-screen">
@@ -695,26 +719,71 @@
         <button onclick="ingSetupToggle()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium shrink-0">⎈ <span data-i18n="ing.setup">Setup cluster</span></button>
       </div>
 
-      <div id="ing-setup" class="hidden mb-4 card p-3" style="background:#0e1424">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-xs font-medium text-slate-300" data-i18n="ing.setup.h">Deploy blocklist-api into the cluster (Helm)</h3>
-          <button onclick="ingSetupToggle()" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+      <div id="ing-setup" class="hidden mb-4 card p-4" style="background:#0e1424">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="text-sm font-semibold text-slate-200">⎈ <span data-i18n="ing.setup.h">Подключить кластер</span></h3>
+          <button onclick="ingSetupToggle()" class="text-slate-500 hover:text-slate-300 text-sm">✕</button>
         </div>
-        <p class="text-[11px] text-slate-500 mb-3" data-i18n="ing.setup.sub">The chart carries the RBAC to patch the ingress-nginx ConfigMap. Fill the values, copy the command, run it with cluster-admin.</p>
-        <div class="grid sm:grid-cols-2 gap-2.5 text-[11px]" style="color:var(--muted)">
-          <label class="block"><span data-i18n="ing.f.ns">Install namespace</span><input id="ing-ns" value="soc" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.host">block-api hostname</span><input id="ing-host" value="block-api.example.com" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.cns">Controller namespace</span><input id="ing-cns" value="ingress-nginx" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.ccm">Controller ConfigMap</span><input id="ing-ccm" value="ingress-nginx-controller" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.ip">Dashboard IP (whitelist)</span><input id="ing-ip" placeholder="203.0.113.10" oninput="ingCmd()" class="input mono mt-1"></label>
+        <p class="text-[11px] text-slate-500 mb-4" data-i18n="ing.setup.sub">Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.</p>
+
+        <!-- ШАГ 1 — установка чарта -->
+        <div class="mb-2 flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 text-[11px] grid place-items-center shrink-0">1</span>
+          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s1">Установить blocklist-api (Helm)</span></div>
+        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s1.sub">Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.</p>
+        <div class="ml-7 grid sm:grid-cols-2 gap-2.5 text-[11px]" style="color:var(--muted)">
+          <label class="block"><span data-i18n="ing.f.ns">Namespace установки</span><input id="ing-ns" value="soc" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.host">Хостнейм block-api</span><input id="ing-host" value="block-api.example.com" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.cns">Namespace контроллера</span><input id="ing-cns" value="ingress-nginx" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ccm">ConfigMap контроллера</span><input id="ing-ccm" value="ingress-nginx-controller" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ip">IP дашборда (whitelist)</span><input id="ing-ip" placeholder="203.0.113.10" oninput="ingCmd()" class="input mono mt-1"></label>
           <label class="block"><span data-i18n="ing.f.token">Token</span>
-            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="text-[11px] px-2 rounded bg-slate-700 text-slate-200 shrink-0" data-i18n="ing.gen">gen</button></span></label>
+            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="text-[11px] px-2 rounded bg-slate-700 text-slate-200 shrink-0" data-i18n="ing.gen">сгенерить</button></span></label>
         </div>
-        <div class="flex items-stretch gap-2 mt-3">
+        <div class="ml-7 flex items-stretch gap-2 mt-3">
           <pre id="ing-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300"></pre>
-          <button onclick="ingCopyCmd()" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+          <button onclick="ingCopyCmd('ing-cmd')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
         </div>
-        <p class="text-[11px] text-amber-400/80 mt-2" data-i18n="ing.setup.after">After install, point the dashboard at the API: set BLOCKLIST_API_URL=https://&lt;hostname&gt;</p>
+        <div class="ml-7 mt-3 p-2.5 rounded-lg" style="background:#0f1420;border:1px solid #1e293b">
+          <div class="text-[11px] font-medium text-slate-300 mb-2" data-i18n="ing.connect">После установки — проверь, что дашборд достучится до этого API:</div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="bcTest()" class="text-[11px] px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 shrink-0">🔌 <span data-i18n="ing.test">Проверить соединение</span></button>
+            <span id="bc-result" class="text-[11px]"></span>
+            <button id="bc-save-btn" onclick="bcSave()" class="hidden text-[11px] px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium shrink-0">💾 <span data-i18n="save">Save</span></button>
+          </div>
+          <div id="bc-msg" class="text-[11px] mt-1.5"></div>
+          <p class="text-[10px] mt-1.5" style="color:var(--faint)" data-i18n="ing.connect.hint">Хост и токен берутся из полей выше. Save регистрирует это подключение в списке ниже — активным становится сразу.</p>
+        </div>
+
+        <!-- зарегистрированные подключения к blocklist-api (можно несколько, активно одно) -->
+        <div class="ml-7 mt-4">
+          <div class="text-[11px] font-medium text-slate-300 mb-1.5" data-i18n="ing.backends">Зарегистрированные подключения</div>
+          <div id="ing-backends" class="space-y-1.5"><div class="text-slate-600 text-xs">—</div></div>
+        </div>
+
+        <!-- ШАГ 2 — логи / Loki -->
+        <div class="mt-5 mb-2 flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 text-[11px] grid place-items-center shrink-0">2</span>
+          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s2">Логи в Loki</span></div>
+        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s2.sub">Дашборд читает трафик/атаки из Loki. Нужен один из вариантов:</p>
+        <div class="ml-7 space-y-1.5 text-[11px] text-slate-400 mb-3">
+          <div>· <b class="text-slate-300" data-i18n="ing.s2.a">Loki + Promtail уже в кластере</b> <span data-i18n="ing.s2.a2">— тогда просто дай дашборду доступ к этому Loki (укажи его URL в настройках/при деплое дашборда).</span></div>
+          <div>· <b class="text-slate-300" data-i18n="ing.s2.b">Loki только на дашборде</b> <span data-i18n="ing.s2.b2">— тогда поставь Promtail в кластер, чтобы он слал логи ingress-nginx в Loki дашборда. URL ниже:</span></div>
+        </div>
+        <div class="ml-7">
+          <label class="block text-[11px]" style="color:var(--muted)"><span data-i18n="ing.f.loki">Loki push URL дашборда</span><input id="ing-loki" placeholder="http://loki.dashboard:3100" oninput="ingCmd()" class="input mono mt-1 max-w-md"></label>
+          <div class="flex items-stretch gap-2 mt-2">
+            <pre id="ing-promtail" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-sky-300"></pre>
+            <button onclick="ingCopyCmd('ing-promtail')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+          </div>
+        </div>
+
+        <!-- ШАГ 3 — values: где таргет -->
+        <div class="mt-5 mb-2 flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 text-[11px] grid place-items-center shrink-0">3</span>
+          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s3">values.yaml — где указывается таргет</span></div>
+        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s3.sub">Таргет ingress — это и есть пара «namespace + ConfigMap контроллера». Те же значения, что в команде выше:</p>
+        <div class="ml-7 flex items-stretch gap-2">
+          <pre id="ing-values" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-slate-300"></pre>
+          <button onclick="ingCopyCmd('ing-values')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+        </div>
       </div>
 
       <div id="ingress-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
@@ -807,25 +876,72 @@
   </div><!-- /view-settings -->
 
   <div id="view-logs" class="hidden">
-    <section class="card p-4">
-      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-        <div><h2 class="text-sm font-medium" data-i18n="logs.title">Live logs</h2>
-          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="logs.sub">Raw nginx lines from Loki, filtered by the current environment.</p></div>
-        <div class="flex items-center gap-1.5 flex-wrap">
-          <input id="lg-q" class="input" style="width:190px" placeholder="filter text…" oninput="lgDebounced()">
-          <select id="lg-stream" class="input" style="width:auto" onchange="loadLogs()">
-            <option value="access" data-i18n="logs.access">access</option>
-            <option value="error" data-i18n="logs.error">error</option>
-          </select>
-          <select id="lg-mins" class="input" style="width:auto" onchange="loadLogs()">
-            <option value="15">15m</option><option value="60">1h</option><option value="360">6h</option>
-          </select>
-          <label class="btn btn-ghost btn-xs" style="gap:5px"><input type="checkbox" id="lg-follow" onchange="lgFollow()"><span data-i18n="logs.follow">follow</span></label>
-          <button onclick="loadLogs()" class="btn btn-xs" data-i18n="refresh">refresh</button>
+    <div class="lg-explorer">
+      <!-- LEFT: source picker -->
+      <aside class="card p-3 lg-aside">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-[12px] font-semibold text-slate-200" data-i18n="logs.sources">Sources</h3>
+          <button onclick="lgLoadTree()" class="text-[11px] text-slate-500 hover:text-slate-300" title="refresh">↻</button>
         </div>
-      </div>
-      <div id="lg-out" class="mono text-[11.5px] overflow-auto" style="background:#0a0e14;border:1px solid var(--border);border-radius:10px;padding:10px;max-height:70vh;white-space:pre-wrap;line-height:1.5">загрузка…</div>
-    </section>
+        <div id="lg-tree" class="space-y-1 text-[12px]"><div class="text-slate-600 text-xs">загрузка…</div></div>
+        <div class="mt-3 pt-2 border-t" style="border-color:var(--border)">
+          <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1" data-i18n="logs.views">Saved views</div>
+          <div id="lg-views" class="space-y-1"></div>
+        </div>
+      </aside>
+
+      <!-- RIGHT: filters + histogram + rows -->
+      <section class="card p-3 lg-main">
+        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+          <div><h2 class="text-sm font-medium" data-i18n="logs.title">Live logs</h2></div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <select id="lg-mins" class="input" style="width:auto" onchange="lgRun()">
+              <option value="15">15m</option><option value="60">1h</option><option value="360">6h</option><option value="1440">24h</option>
+            </select>
+            <button id="lg-tail-btn" onclick="lgTailToggle()" class="btn btn-ghost btn-xs">▶ <span data-i18n="logs.follow">tail</span></button>
+            <button onclick="lgRun()" class="btn btn-xs" data-i18n="refresh">refresh</button>
+            <button onclick="lgRawToggle()" id="lg-rawmode-btn" class="btn btn-ghost btn-xs" title="raw / parsed">⇄ <span data-i18n="logs.parsed">parsed</span></button>
+            <button onclick="lgExport()" class="btn btn-ghost btn-xs">⬇ <span data-i18n="logs.export">export</span></button>
+          </div>
+        </div>
+
+        <!-- filter bar -->
+        <div class="lg-filterbar mb-2">
+          <div id="lg-chips" class="flex items-center gap-1.5 flex-wrap"></div>
+          <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
+            <div class="lg-addchip">
+              <select id="lg-cf-field" class="input" style="width:auto">
+                <option value="status">status</option><option value="method">method</option>
+                <option value="path">path</option><option value="ip">IP</option>
+                <option value="ua">UA</option><option value="country">country</option>
+                <option value="rt">latency≥(s)</option><option value="host">host</option>
+              </select>
+              <select id="lg-cf-op" class="input" style="width:auto">
+                <option value="eq">=</option><option value="neq">≠</option><option value="re">~</option>
+              </select>
+              <input id="lg-cf-val" class="input mono" style="width:150px" placeholder="value" onkeydown="if(event.key==='Enter')lgAddChip()">
+              <button onclick="lgAddChip()" class="btn btn-ghost btn-xs">+ <span data-i18n="logs.filter">filter</span></button>
+            </div>
+            <span class="lg-sep"></span>
+            <input id="lg-search" class="input mono" style="width:200px" placeholder="🔎 поиск в строках…" oninput="lgSearchDeb()">
+            <label class="btn btn-ghost btn-xs" style="gap:4px" title="regex"><input type="checkbox" id="lg-regex" onchange="lgRun()">.*</label>
+            <label class="btn btn-ghost btn-xs" style="gap:4px"><input type="checkbox" id="lg-attacks" onchange="lgRun()"><span data-i18n="logs.attacks">attacks</span></label>
+            <button onclick="lgViewSave()" class="btn btn-ghost btn-xs" title="save current view">💾</button>
+            <button onclick="lgRawEditToggle()" class="btn btn-ghost btn-xs" title="raw LogQL">{ }</button>
+          </div>
+          <input id="lg-raw" class="input mono hidden mt-1.5" style="width:100%" placeholder='raw LogQL — {app="ingress-nginx"} | json …' oninput="lgRun()">
+        </div>
+
+        <!-- histogram -->
+        <div id="lg-hist" class="lg-hist mb-2" title="drag to zoom (coming)"></div>
+        <div id="lg-stats" class="text-[11px] text-slate-500 mb-1"></div>
+
+        <!-- rows -->
+        <div id="lg-table" class="lg-table">
+          <div class="text-slate-600 text-xs p-2">загрузка…</div>
+        </div>
+      </section>
+    </div>
   </div><!-- /view-logs -->
 
   <footer class="text-center text-[11px] mb-2 mono" style="color:var(--faint)">soc · auto-refresh 15s</footer>
@@ -914,7 +1030,17 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets","nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets",
+  "ing.setup":"Setup cluster","ing.setup.h":"Connect a cluster","ing.setup.sub":"Three steps: deploy blocklist-api into the cluster, wire logs into Loki, and make sure the values target points at your ingress-nginx.",
+  "ing.s1":"Install blocklist-api (Helm)","ing.s1.sub":"The chart carries the RBAC to patch the ingress-nginx ConfigMap — a web form can't, Helm can. Run it with cluster-admin.","ing.s1.after":"After install, point the dashboard at the API: BLOCKLIST_API_URL=https://<hostname>",
+  "ing.connect":"After install — verify the dashboard can reach this API:","ing.connect.hint":"Host and token are taken from the fields above. Save registers this connection in the list below — it becomes active immediately.",
+  "ing.test":"Test connection","ing.backends":"Registered connections","сохраняю…":"saving…","ошибка":"error",
+  "укажи hostname выше":"enter a hostname above","проверяю":"checking","доступен, токен принят":"reachable, token accepted","нет связи":"no connection","токен не принят":"token rejected",
+  "сохранено и активно":"saved and active","активно":"active","сделать активным":"make active","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","Удалить это подключение?":"Delete this connection?",
+  "ing.f.ns":"Install namespace","ing.f.host":"block-api hostname","ing.f.cns":"Controller namespace","ing.f.ccm":"Controller ConfigMap","ing.f.ip":"Dashboard IP (whitelist)","ing.f.token":"Token","ing.gen":"generate","ing.f.loki":"Dashboard Loki push URL",
+  "ing.s2":"Logs into Loki","ing.s2.sub":"The dashboard reads traffic/attacks from Loki. You need one of:","ing.s2.a":"Loki + Promtail already in the cluster","ing.s2.a2":"— then just give the dashboard access to that Loki (set its URL in the dashboard config/deploy).","ing.s2.b":"Loki only on the dashboard","ing.s2.b2":"— then install Promtail in the cluster so it ships ingress-nginx logs to the dashboard's Loki. URL below:",
+  "ing.s3":"values.yaml — where the target is set","ing.s3.sub":"The ingress target IS the controller's namespace + ConfigMap pair. Same values as the command above:",
+  "nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.global":"Global",
   "cft.h":"Cloudflare targets","cft.sub":"A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).","cft.new":"New CF target",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
@@ -922,7 +1048,8 @@ const I18N={en:{
   "save":"Save","delete":"Delete","edit":"Edit","env.name":"Name","env.loki":"Loki URL","env.loki.hint":"(blank = shared Loki + env label)","env.cf":"Cloudflare for this environment","env.ing":"ingress-nginx (k8s) for this environment",
   "env.ing.hint":"No cluster endpoint here: blocklist-api runs inside the cluster and patches this ConfigMap via its ServiceAccount. The dashboard only talks to blocklist-api (set by BLOCKLIST_API_URL at deploy).",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
-  "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
+  "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"tail","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
+  "logs.sources":"Sources","logs.views":"Saved views","logs.parsed":"parsed","logs.export":"export","logs.filter":"filter","logs.attacks":"attacks",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
   "p403.where":"Available targets:","p403.addrule":"Add rule",
@@ -931,7 +1058,15 @@ const I18N={en:{
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.","nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.",
+  "ing.setup":"Подключить кластер","ing.setup.h":"Подключить кластер","ing.setup.sub":"Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.",
+  "ing.s1":"Установить blocklist-api (Helm)","ing.s1.sub":"Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.","ing.s1.after":"После установки укажи дашборду адрес API: BLOCKLIST_API_URL=https://<хостнейм>",
+  "ing.connect":"После установки — проверь, что дашборд достучится до этого API:","ing.connect.hint":"Хост и токен берутся из полей выше. Save регистрирует это подключение в списке ниже — активным становится сразу.",
+  "ing.test":"Проверить соединение","ing.backends":"Зарегистрированные подключения",
+  "ing.f.ns":"Namespace установки","ing.f.host":"Хостнейм block-api","ing.f.cns":"Namespace контроллера","ing.f.ccm":"ConfigMap контроллера","ing.f.ip":"IP дашборда (whitelist)","ing.f.token":"Token","ing.gen":"сгенерить","ing.f.loki":"Loki push URL дашборда",
+  "ing.s2":"Логи в Loki","ing.s2.sub":"Дашборд читает трафик/атаки из Loki. Нужен один из вариантов:","ing.s2.a":"Loki + Promtail уже в кластере","ing.s2.a2":"— тогда просто дай дашборду доступ к этому Loki (укажи его URL в настройках/при деплое дашборда).","ing.s2.b":"Loki только на дашборде","ing.s2.b2":"— тогда поставь Promtail в кластер, чтобы он слал логи ingress-nginx в Loki дашборда. URL ниже:",
+  "ing.s3":"values.yaml — где указывается таргет","ing.s3.sub":"Таргет ingress — это и есть пара «namespace + ConfigMap контроллера». Те же значения, что в команде выше:",
+  "nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.global":"Глобальные",
   "cft.h":"Cloudflare-таргеты","cft.sub":"Именованный аккаунт/зона Cloudflare, который привязывается к группам и 403-правилам как любой таргет. Токен write-only (хранится на сервере, показывается только как «задан»).","cft.new":"Новый CF-таргет",
   "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
@@ -939,7 +1074,8 @@ const I18N={en:{
   "set.global.sub":"LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), и группа по умолчанию. ENV — дефолты, тут переопределяются.",
   "save":"Сохранить","delete":"Удалить","env.name":"Название","env.loki":"Loki URL","env.loki.hint":"(пусто = общий Loki + метка env)","env.cf":"Cloudflare для этого окружения","env.ing":"ingress-nginx (k8s) для этого окружения",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
-  "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
+  "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"доступ","logs.error":"ошибки","logs.follow":"хвост","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
+  "logs.sources":"Источники","logs.views":"Сохранённые виды","logs.parsed":"таблица","logs.export":"экспорт","logs.filter":"фильтр","logs.attacks":"атаки",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
   "p403.where":"Доступные таргеты:","p403.addrule":"Добавить правило",
@@ -960,6 +1096,8 @@ function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_l
 // ── live RU→EN translation (en default; ru shows source). Covers dynamically
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
+  "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
+  "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
   "окно:":"window:","🔍 поиск IP → профиль":"🔍 search IP → profile","загрузка…":"loading…","загрузка":"loading",
   "ошибка:":"error:","ошибка":"error","ошибка проверки:":"check error:","не удалось:":"failed:","сохраняю…":"saving…",
   "сохранено":"saved","сохранить":"save","Сохранить":"Save","удалить":"delete","удалён":"deleted","отмена":"cancel",
@@ -1083,6 +1221,98 @@ const RU2EN={
   // status badge (uppercased) + chart legends + misc
   "СПОКОЙНО":"CALM","ВНИМАНИЕ":"NOTICE","ТРЕВОГА":"ALERT","КРИТИЧНО":"CRITICAL",
   "статусы:":"statuses:","всего":"total","реальный":"real","новые блоки":"new blocks","денлист":"denylist",
+  // ── batch 3: audit sweep — dynamic strings that were leaking Russian in EN ──
+  // §0: ingress-API registry (were misplaced in I18N, consumed via _trText→RU2EN)
+  "нет ingress-таргетов":"no ingress targets","укажи hostname выше":"enter a hostname above","проверяю":"checking",
+  "доступен, токен принят":"reachable, token accepted","нет связи":"no connection","токен не принят":"token rejected",
+  "сохранено и активно":"saved and active","сделать активным":"make active","Удалить это подключение?":"Delete this connection?",
+  "пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save",
+  "нет данных о хосте":"no host data","нет токена":"no token","токен задан":"token set","таргет":"target",
+  // §5: dashboard / search / forms
+  "Изменить название и иконку":"Edit name and icon","Спросить словами: «404 на /admin за 30 минут»":"Ask in words: “404 on /admin in 30 minutes”",
+  "хост (example.com)":"host (example.com)","за какое время":"over what period","IP или CIDR (напр. 203.0.113.0/24)":"IP or CIDR (e.g. 203.0.113.0/24)",
+  "перечитать денлист в ingress (после kubectl apply)":"re-read the denylist in ingress (after kubectl apply)","поиск по IP/причине…":"search by IP/reason…",
+  "окно анализа":"analysis window","форс-перепроверка ИИ (игнор кэша)":"force AI re-check (ignore cache)","окно":"window",
+  "выгрузить текущую форму как JSON":"export the current form as JSON","напр. WP-login brute":"e.g. WP-login brute",
+  "кого бы забанило (dry-run, без бана)":"who would be banned (dry-run, no ban)","IP (напр. 203.0.113.45)":"IP (e.g. 203.0.113.45)",
+  "Куда применять: к какой группе таргетов (нод/ingress). Пусто = все.":"Where to apply: which target group (nodes/ingress). Empty = all.",
+  "добавить, даже если апка считает паттерн слишком широким":"add even if the app thinks the pattern is too broad",
+  "Вместо создания нового правила дописать паттерн в существующее (одно правило = пачка путей)":"Append the pattern to an existing rule instead of creating a new one (one rule = a batch of paths)",
+  "🔎 поиск в строках…":"🔎 search in lines…","монитор трафика и атак":"traffic & attack monitor","спокойно":"calm","тревога":"alert","Отмена":"Cancel",
+  "скрытые карточки:":"hidden cards:","— не определено":"— undefined","⚠ атака":"⚠ attack","карта не загрузилась (CDN недоступен)":"map failed to load (CDN unavailable)",
+  "ошибка карты:":"map error:","✓ доверенный:":"✓ trusted:","☁ Это адрес":"☁ This is the address of",
+  ", а не реального посетителя. Бан бесполезен — реальный клиент скрыт за фларой (в":", not the real visitor. Banning is useless — the real client is hidden behind Cloudflare (in",
+  "). Смотри реальный IP в запросах ниже.":"). See the real IP in the requests below.",
+  "4xx кроме 403 — 404/422/429 и т.п. (не блок, ошибки запроса)":"4xx except 403 — 404/422/429 etc. (not a block, request errors)","сеть:":"network:",
+  "⛔ бан бесполезен (Cloudflare)":"⛔ ban useless (Cloudflare)","⛔ заблокировать на ingress":"⛔ block on ingress",
+  "Будет возвращаться 403 для этого источника.":"It will return 403 for this source.","(активно правил:":"(active rules:","Не удалось:":"Failed:",
+  "IP или CIDR для бана:":"IP or CIDR to ban:","только автобан":"auto-ban only",
+  "blocklist-api не настроен (BLOCKLIST_API_URL пуст) — кнопки блокировки отключены.":"blocklist-api not configured (BLOCKLIST_API_URL empty) — block buttons disabled.",
+  "ошибка загрузки денлиста":"denylist load error","✓ просмотрено":"✓ reviewed","пометить":"mark","снять отметку «просмотрено»":"unmark “reviewed”",
+  "пометить просмотренным":"mark as reviewed","сканер":"scanner","юзер":"user","подозрит.":"susp.","профиль / вся инфа":"profile / all info",
+  "хитов 4xx":"4xx hits","хитов":"hits","подозрительно:":"suspicious:","подозрительная активность":"suspicious activity","считаю…":"computing…",
+  "чисто — реальных сканеров нет за окно (":"clean — no real scanners in window (","за Cloudflare (реальный IP скрыт)":"behind Cloudflare (real IP hidden)",
+  "ошибка загрузки":"load error","Снять ВСЕ блокировки с ingress?":"Remove ALL blocks from ingress?",
+  "(статический deny-список приложения не затрагивается)":"(the app's static deny-list is untouched)","Каждый будет получать 403.":"Each will get 403.",
+  "Активных правил:":"Active rules:","ошибок 4xx":"4xx errors","чисто — аномальных 4xx нет за окно (":"clean — no anomalous 4xx in window (",
+  "Все уже оценены — жми «Переоценить» для форс-перепроверки.":"All already assessed — hit “Re-assess” to force a recheck.","подозрительных IP на ingress?":"suspicious IPs on ingress?",
+  "… (несколько секунд)":"… (a few seconds)","Полный отчёт: проверки SSL, заголовков, безопасности, DNS, портов, стека.":"Full report: SSL, headers, security, DNS, ports, stack checks.",
+  "Атака":"Attack","Ошибка:":"Error:","⤓ экспорт всех IP":"⤓ export all IPs","ошибка запроса":"request error","отдано:":"served:",
+  "забанить IP из результата на ingress (403)":"ban result IPs on ingress (403)","поиск…":"search…","все коды (":"all codes (",
+  "уже забанен на ingress (правило":"already banned on ingress (rule","из «показать запросы»":"from “show requests”","IP уже забанены на ingress.":"IPs already banned on ingress.",
+  "новых IP на ingress?":"new IPs on ingress?","уже забанены — пропущу)":"already banned — will skip)",
+  "пропущено (доверенные/приватные):":"skipped (trusted/private):","уже было:":"already present:","Сначала «Найти» — нет результатов для экспорта":"Hit “Find” first — no results to export",
+  "🤖 разбираю запрос… (LLM)":"🤖 parsing the query… (LLM)","LLM понял так:":"LLM understood it as:","404 (перебор путей)":"404 (path brute-force)",
+  "5xx (сервер)":"5xx (server)","CRS-пейлоады (SQLi/XSS)":"CRS payloads (SQLi/XSS)","— было ~":"— was ~",", рост ×":", growth ×","(раньше почти не было)":"(almost none before)",
+  "⚠️ Часть трафика доходит до приложения — стоит разобраться (детали ниже).":"⚠️ Some traffic reaches the app — worth investigating (details below).",
+  "✅ Атака отбита: всплеск — это заблокированный трафик (deny/403), до сайта он не дошёл. Срочных действий не требуется.":"✅ Attack repelled: the spike is blocked traffic (deny/403), it never reached the site. No urgent action needed.",
+  "проходит":"passes","блокируется":"blocked","Лента AI-разборов":"AI insights feed","— клик, чтобы развернуть «почему»":"— click to expand “why”","мс":"ms",
+  "(топы за":"(tops over","— больше окно упирается в лимит Loki)":"— a larger window hits the Loki limit)","Дашборд не получает данные от backend (":"Dashboard isn't receiving data from the backend (",
+  "⚠ Замечено":"⚠ Noticed","✅ Рекомендации":"✅ Recommendations","ошибка генерации":"generation error","возобновить":"resume","пауза авто-обновления":"pause auto-refresh",
+  "свернуть/развернуть":"collapse/expand","удалено правило 403":"403 rule deleted","переключатель 403":"403 toggle","— нет данных о применении":"— no enforcement data",
+  "пока нет CF-таргетов. Нажми «+ CF target».":"no CF targets yet. Click “+ CF target”.","(задан — введи для замены)":"(set — enter to replace)","(обязательно)":"(required)",
+  "ID CF-таргета (напр. nginx-aaa-cloudflare):":"CF target ID (e.g. nginx-aaa-cloudflare):","не сохранилось:":"not saved:","Удалить CF-таргет «":"Delete CF target “",
+  "»? Он отвяжется от групп/правил. Список/правило в самом Cloudflare не удаляются автоматически.":"”? It will detach from groups/rules. The list/rule in Cloudflare itself is not deleted automatically.",
+  "нет ответа.":"no response.","сначала задай id канала и сохрани":"set the channel id first and save","✓ отправлено":"✓ sent",
+  "только через ENV (STORE=configmap — ConfigMap хранит открытым текстом)":"ENV only (STORE=configmap — ConfigMap stores plaintext)","нет Cloudflare-таргетов в targets.":"no Cloudflare targets in targets.",
+  "ошибка загрузки:":"load error:","blocklist-api не настроен (BLOCKLIST_API_URL пуст) — ноды недоступны.":"blocklist-api not configured (BLOCKLIST_API_URL empty) — nodes unavailable.",
+  "# ENROLL_SECRET не задан в blocklist-api — задай его, чтобы агенты могли регистрироваться.":"# ENROLL_SECRET not set in blocklist-api — set it so agents can register.",
+  "⚠ Задай PUBLIC_URL в blocklist-api (адрес, по которому VM достучатся до API) — без него команда неполная.":"⚠ Set PUBLIC_URL in blocklist-api (the address VMs reach the API at) — without it the command is incomplete.",
+  "»? Агент перестанет получать баны, пока не перерегистрируется.":"”? The agent will stop receiving bans until it re-registers.","уже есть":"already present",
+  "Добавлено частично:":"Partially added:","Отметь основные правила звёздочкой ★ во вкладках 403 и Автобан.":"Mark primary rules with a ★ in the 403 and Auto-ban tabs.",
+  "не удалось загрузить:":"failed to load:","🛡️ защищённые (в 403 добавить нельзя, общий список с автобаном):":"🛡️ protected (can't add to 403, shared list with auto-ban):","— меняются в":"— managed in",
+  ": 403 выключен — включить":": 403 off — enable",": нет связи с бэкендом":": no connection to the backend","дрейф":"drift",
+  ": дрейф рендера — нажми ↻ ресинк в Денлисте":": render drift — hit ↻ resync in Denylist",": 403 активен — выключить":": 403 active — disable",
+  "· найдено":"· found","ничего не найдено по «":"nothing found for “","симв.":"chars","(без имени)":"(no name)",
+  "добавить путь (как «Путь содержит», напр. /.env)":"add a path (like “Path contains”, e.g. /.env)","» уже есть — пропущено":"” already exists — skipped",
+  "в правиле не осталось ни одного пути — тогда удали правило целиком.":"no paths left in the rule — then delete the rule entirely.","Точный URI":"Exact URI",
+  "Wildcard (* = что угодно)":"Wildcard (* = anything)","/admin/*  или  *.sql":"/admin/*  or  *.sql","Regex (как nginx ~*)":"Regex (like nginx ~*)",
+  "✗ некорректный regex:":"✗ invalid regex:","✗ кавычка \" запрещена — сломает nginx":"✗ the \" quote is forbidden — it breaks nginx",
+  "⚠ поймает обычный путь «":"⚠ will catch a normal path “","» — отклонится (или включи force)":"” — will be rejected (or enable force)","🚫 забанит":"🚫 will ban","✓ пропустит":"✓ will pass",
+  "— (имя только для нового)":"— (name only for a new one)","не удалось сменить группу:":"failed to change group:","правило не найдено":"rule not found",
+  "• уже есть в «":"• already in “","✓ в «":"✓ in “","• такое правило уже есть — не дублирую":"• such a rule already exists — not duplicating","✓ создано":"✓ created",
+  "Выключить ВСЮ секцию 403?":"Disable the WHOLE 403 section?","Все правила по путям перестанут блокировать — сканеры снова будут проходить.":"All path rules will stop blocking — scanners will get through again.",
+  "Добавить базовый набор правил сканеров одним правилом «base-scanners»?":"Add the basic scanner rule set as one “base-scanners” rule?",
+  "(повторный засев обновит его, не создаст дубль)":"(re-seeding updates it, won't create a duplicate)","✓ базовый набор добавлен/обновлён.":"✓ basic set added/updated.",
+  "Если у тебя был свой ручной if в ингрессе — убери его, чтобы не дублировать.":"If you had your own manual if in the ingress — remove it to avoid duplication.",
+  "не удалось получить правила автобана":"failed to fetch auto-ban rules","выбери правило автобана → станет правилом 403":"pick an auto-ban rule → it becomes a 403 rule",
+  ") — кроме семейств":") — except families","— семейство, нельзя":"— a family, not allowed","пут.":"paths","✓ создано/обновлено:":"✓ created/updated:","пропущено:":"skipped:",
+  "» уже ловится правилом «":"” is already caught by rule “","Всё равно добавить отдельным правилом?":"Add as a separate rule anyway?","уже ловится":"already caught",
+  "не удалось добавить в 403:":"failed to add to 403:","список пуст — автобан считает все пути":"list empty — auto-ban counts all paths","не забудь «Сохранить»":"don't forget “Save”",
+  "забанено:":"banned:","(но это приватный/уже-denied статический диапазон)":"(but this is a private/already-denied static range)","и ещё":"and",
+  "сошлось по путям (24ч):":"matched by paths (24h):","примеры путей не найдены (активность старше 24ч)":"no path examples found (activity older than 24h)","⌛ истёк":"⌛ expired",
+  "· ≥N/окно":"· ≥N/window","ошибка загрузки логов:":"log load error:","событий автобана (последние сверху)":"auto-ban events (latest on top)","событий автобана пока нет":"no auto-ban events yet",
+  "Автобан ещё никого не банил (или kill-switch был выключен).":"Auto-ban hasn't banned anyone yet (or the kill-switch was off).","пути не сохранены":"paths not saved","снят":"removed","сошлось по путям":"matched by paths",
+  "➕ в основные (403 + автобан)":"➕ to primary (403 + auto-ban)","🚫 добавить в правило 403:":"🚫 add to a 403 rule:","⛔ в автобан (бан IP по порогу):":"⛔ to auto-ban (ban IP by threshold):",
+  "нет автобан-правил с путями.":"no auto-ban rules with paths.","создать правило →":"create a rule →","нет правила":"no rule","✓ уже есть":"✓ already there","✓ добавлено":"✓ added",
+  "не JSON:":"not JSON:","массив: загрузил первое, для пачки жми «Сохранить из JSON»":"array: loaded the first, for a batch hit “Save from JSON”","✓ загружено в форму":"✓ loaded into the form",
+  "такая группа уже есть":"such a group already exists","· прогон":"· run","назад: включено правил":"ago: rules enabled",", новых забанено":", newly banned",", уже в бане":", already banned",
+  ", отложено по лимиту":", deferred by limit","ВКЛЮЧЁН":"ON","— включённые правила банят на ingress каждые":"— enabled rules ban on ingress every","новых/проход).":"new/pass).",
+  "Включённые правила начнут РЕАЛЬНО банить IP на ingress каждые":"Enabled rules will REALLY start banning IPs on ingress every","новых за проход).":"new per pass).",
+  "Исключаются: доверенные, приватные, Cloudflare, уже забаненные.":"Excluded: trusted, private, Cloudflare, already banned.","Выключить можно этим же тумблером в любой момент.":"You can turn it off with the same toggle anytime.",
+  "уже в денлисте (пропущено)":"already in denylist (skipped)","0 новых IP под условие (≥":"0 new IPs match the condition (≥","Никого нового бы не забанило.":"Nobody new would be banned.",
+  "новых IP (≥":"new IPs (≥"," за ":" over ","с (≤":"s (≤","с (до":"s (up to","ИЛИ":"OR","(по 1 пути)":"(per 1 path)","(∑ путей)":"(∑ paths)","лого":"logo",
+  "файл больше 180KB — выбери поменьше":"file larger than 180KB — pick a smaller one","ошибка сохранения":"save error","не удалось сохранить":"failed to save",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
@@ -1150,26 +1380,165 @@ function renderTray(){
   }).join("");
 }
 
-// ── Logs viewer ───────────────────────────────────────────────────────────────
-let _lgTimer=null,_lgDeb=null;
-function lgDebounced(){ clearTimeout(_lgDeb); _lgDeb=setTimeout(loadLogs,400); }
-function lgFollow(){ loadLogs(); }
-async function loadLogs(){
-  const out=document.getElementById("lg-out"); if(!out)return;
-  const stream=document.getElementById("lg-stream").value,mins=document.getElementById("lg-mins").value,q=document.getElementById("lg-q").value;
+// ── Live Logs explorer ────────────────────────────────────────────────────────
+const _lg={sources:{},chips:[],search:"",regex:false,attacks:false,raw:"",minutes:15,
+           rawMode:false,tail:false,treeLoaded:false};
+let _lgTimer=null,_lgDeb=null,_lgTreeOpen={};
+function loadLogs(){ if(!_lg.treeLoaded)lgLoadTree(); lgLoadViews(); lgRun(); }
+function _lgBody(extra){ return Object.assign({sources:_lg.sources,chips:_lg.chips,search:_lg.search,
+  regex:_lg.regex,attacks_only:_lg.attacks,raw:_lg.raw,minutes:+document.getElementById("lg-mins").value||15,
+  env:_env||""}, extra||{}); }
+// ── source tree (labels → values) ──
+async function lgLoadTree(){
+  const el=document.getElementById("lg-tree");if(!el)return;
   try{
-    const d=await (await fetch(_withEnv(`/api/logs?stream=${encodeURIComponent(stream)}&minutes=${mins}&q=${encodeURIComponent(q)}`))).json();
-    if(d.enabled===false){ out.textContent=t("logs.off"); return; }
-    const lines=d.lines||[];
-    out.innerHTML=lines.length?lines.map(l=>{
-      const s=+l.status||0,c=s>=500?"#f87171":s>=400?"#fbbf24":s>=300?"#60a5fa":"#9aa4b6";
-      return `<div><span style="color:#5b6577">${esc(l.time||"")}</span> <span style="color:${c}">${esc(l.line||"")}</span></div>`;
-    }).join(""):`<span style="color:var(--faint)">${t("logs.empty")}</span>`;
-    if(document.getElementById("lg-follow").checked)out.scrollTop=out.scrollHeight;
-  }catch(e){ out.textContent="error: "+e.message; }
-  clearTimeout(_lgTimer);
-  if(_view==="logs"&&document.getElementById("lg-follow")&&document.getElementById("lg-follow").checked)_lgTimer=setTimeout(loadLogs,5000);
+    const d=await fetch(_withEnv("/api/log_labels")).then(r=>r.json());
+    if(d.enabled===false){ el.innerHTML=`<div class="text-slate-600 text-xs">Loki не настроен.</div>`; return; }
+    _lg.treeLoaded=true;
+    const labels=(d.labels||[]).filter(Boolean);
+    if(!labels.length){ el.innerHTML=`<div class="text-slate-600 text-xs">${_trText("нет лейблов")}</div>`; return; }
+    el.innerHTML=labels.map(l=>`<div>
+      <div class="lg-tree-lbl" onclick="lgTreeToggle('${esc(l)}')"><span id="lgchev-${esc(l)}">▸</span><span class="font-medium">${esc(l)}</span>
+        <span id="lgcount-${esc(l)}" class="ml-auto text-[10px] text-slate-600"></span></div>
+      <div id="lgvals-${esc(l)}" class="hidden"></div></div>`).join("");
+  }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
+async function lgTreeToggle(label){
+  const box=document.getElementById("lgvals-"+CSS.escape(label)),chev=document.getElementById("lgchev-"+CSS.escape(label));
+  const open=!box.classList.contains("hidden");
+  if(open){ box.classList.add("hidden"); chev.textContent="▸"; return; }
+  chev.textContent="▾"; box.classList.remove("hidden");
+  if(!box.dataset.loaded){
+    box.innerHTML=`<div class="lg-tree-val text-slate-600">…</div>`;
+    try{
+      const d=await fetch(_withEnv("/api/log_label_values?name="+encodeURIComponent(label))).then(r=>r.json());
+      const vals=(d.values||[]).slice(0,200);
+      const sel=new Set(_lg.sources[label]||[]);
+      box.innerHTML=vals.map(v=>`<label class="lg-tree-val"><input type="checkbox" ${sel.has(v)?"checked":""} onchange="lgSourceToggle('${esc(label)}','${esc(v).replace(/'/g,"\\'")}',this.checked)"><span class="mono truncate">${esc(v)}</span></label>`).join("")||`<div class="lg-tree-val text-slate-600">${_trText("пусто")}</div>`;
+      box.dataset.loaded="1";
+    }catch(e){ box.innerHTML=`<div class="lg-tree-val text-red-400">ошибка</div>`; }
+  }
+}
+function lgSourceToggle(label,val,on){
+  const arr=_lg.sources[label]||[];
+  _lg.sources[label]=on?[...new Set([...arr,val])]:arr.filter(x=>x!==val);
+  if(!_lg.sources[label].length)delete _lg.sources[label];
+  const c=document.getElementById("lgcount-"+CSS.escape(label)); if(c)c.textContent=(_lg.sources[label]||[]).length||"";
+  lgRun();
+}
+// ── filter chips ──
+const _LG_OPLBL={eq:"=",neq:"≠",re:"~",class:"",gte:"≥"};
+function lgRenderChips(){
+  const el=document.getElementById("lg-chips");if(!el)return;
+  el.innerHTML=_lg.chips.map((c,i)=>`<span class="lg-chip"><b>${esc(c.field)}</b>${_LG_OPLBL[c.op]||c.op} ${esc(String(c.value))}<button onclick="lgRemoveChip(${i})">✕</button></span>`).join("");
+}
+function lgAddChip(){
+  const f=document.getElementById("lg-cf-field").value,op=document.getElementById("lg-cf-op").value,v=document.getElementById("lg-cf-val").value.trim();
+  if(!v)return;
+  let chip={field:f,op:op,value:v};
+  if(f==="status"&&/^[2345]xx?$/i.test(v))chip={field:"status",op:"class",value:v[0]};
+  if(f==="rt")chip={field:"rt",op:"gte",value:v};
+  _lg.chips.push(chip); document.getElementById("lg-cf-val").value=""; lgRenderChips(); lgRun();
+}
+function lgRemoveChip(i){ _lg.chips.splice(i,1); lgRenderChips(); lgRun(); }
+function lgSearchDeb(){ clearTimeout(_lgDeb); _lgDeb=setTimeout(()=>{ _lg.search=document.getElementById("lg-search").value; lgRun(); },400); }
+function lgRawEditToggle(){ const el=document.getElementById("lg-raw"); el.classList.toggle("hidden"); if(!el.classList.contains("hidden"))el.focus(); }
+function lgRawToggle(){ _lg.rawMode=!_lg.rawMode; const b=document.getElementById("lg-rawmode-btn"); b.querySelector("span").textContent=_lg.rawMode?_trText("raw"):_trText("parsed"); lgRenderRows(); }
+// ── query + render ──
+function lgReadInputs(){ _lg.regex=document.getElementById("lg-regex").checked; _lg.attacks=document.getElementById("lg-attacks").checked; _lg.raw=document.getElementById("lg-raw").value.trim(); }
+let _lgRows=[];
+async function lgRun(){
+  lgReadInputs();
+  const tbl=document.getElementById("lg-table");if(!tbl)return;
+  try{
+    const [q,h]=await Promise.all([
+      fetch("/api/logs/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_lgBody({limit:400}))}).then(r=>r.json()),
+      fetch("/api/logs/histogram",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_lgBody())}).then(r=>r.json())
+    ]);
+    if(q.enabled===false){ tbl.innerHTML=`<div class="text-slate-600 text-xs p-2">Loki не настроен.</div>`; return; }
+    if(q.error){ tbl.innerHTML=`<div class="text-amber-400 text-xs p-2">⚠ ${esc(q.error)}</div>`; }
+    _lgRows=q.rows||[]; lgRenderRows(); lgRenderHist(h.points||[]);
+    const n=_lgRows.length, e4=_lgRows.filter(r=>(r.status||"")[0]==="4").length, e5=_lgRows.filter(r=>(r.status||"")[0]==="5").length;
+    document.getElementById("lg-stats").textContent=`${n} ${_trText("строк")} · 4xx ${n?Math.round(e4/n*100):0}% · 5xx ${n?Math.round(e5/n*100):0}%`;
+  }catch(e){ tbl.innerHTML=`<div class="text-red-400 text-xs p-2">error: ${esc(e.message)}</div>`; }
+  clearTimeout(_lgTimer);
+  if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgRun,5000);
+}
+function _lgStatusColor(s){const n=+s||0;return n>=500?"#f87171":n>=400?"#fbbf24":n>=300?"#60a5fa":n>=200?"#34d399":"#9aa4b6";}
+function lgRenderRows(){
+  const tbl=document.getElementById("lg-table");if(!tbl)return;
+  if(!_lgRows.length){ tbl.innerHTML=`<div class="text-slate-600 text-xs p-2">${_trText("нет строк под фильтр")}</div>`; return; }
+  if(_lg.rawMode){ tbl.innerHTML=_lgRows.map(r=>`<div class="lg-raw-line"><span style="color:#5b6577">${esc(r.time)}</span> <span style="color:${_lgStatusColor(r.status)}">${esc(r.line)}</span></div>`).join(""); return; }
+  const head=`<div class="lg-row head"><span>time</span><span>IP</span><span>method</span><span>st</span><span>path</span><span>ms</span><span></span></div>`;
+  tbl.innerHTML=head+_lgRows.map((r,i)=>{
+    const ms=r.rt?Math.round(parseFloat(r.rt)*1000):"";
+    return `<div class="lg-row" onclick="lgRowExpand(${i},this)">
+      <span class="mono" style="color:#5b6577">${esc(r.time)}</span>
+      <span class="mono">${r.country?flag(r.country)+" ":""}${esc(r.ip||"")}</span>
+      <span class="mono text-slate-400">${esc(r.method||"")}</span>
+      <span class="mono" style="color:${_lgStatusColor(r.status)}">${esc(r.status||"")}</span>
+      <span class="mono text-slate-300" title="${esc(r.path||"")}">${esc(r.path||"")}</span>
+      <span class="mono text-slate-500">${ms}</span>
+      <span class="text-slate-600">▸</span>
+    </div>`;
+  }).join("");
+}
+function lgRowExpand(i,el){
+  const r=_lgRows[i]; if(!r)return;
+  const nx=el.nextElementSibling;
+  if(nx&&nx.classList.contains("lg-detail")){ nx.remove(); return; }
+  const ip=esc(r.ip||"");
+  const d=document.createElement("div"); d.className="lg-detail";
+  d.innerHTML=`<div class="flex gap-1.5 mb-2 flex-wrap">
+      ${ip?`<button onclick="event.stopPropagation();lgBanIP('${ip}')" class="text-[11px] px-2 py-0.5 rounded bg-rose-600/30 text-rose-200 hover:bg-rose-600/50">⛔ ${_trText("забанить IP")}</button>`:""}
+      ${r.path?`<button onclick="event.stopPropagation();lgPathTo403('${esc(r.path).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50">🛂 ${_trText("путь в 403")}</button>`:""}
+      ${ip?`<button onclick="event.stopPropagation();quickSearch('${ip}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">👤 ${_trText("профиль")}</button>`:""}
+    </div>
+    <pre class="mono text-[11px] text-slate-400 whitespace-pre-wrap break-all">${esc((()=>{try{return JSON.stringify(JSON.parse(r.line),null,2);}catch(e){return r.line;}})())}</pre>`;
+  el.after(d);
+}
+async function lgBanIP(ip){
+  if(!await uiConfirm(_trText("забанить IP")+" "+ip+"?"))return;
+  const r=await _post("/api/block",{cidr:ip,reason:"from live logs",ttl:2592000});
+  uiAlert(r&&r.ok?("✓ "+_trText("забанен")+": "+ip):("не удалось: "+((r&&r.error)||"?")));
+}
+function lgPathTo403(path){ showView('p403'); uiAlert(_trText("открой 403 и добавь путь")+": "+path); }
+function lgRenderHist(points){
+  const el=document.getElementById("lg-hist");if(!el)return;
+  if(!points.length){ el.innerHTML=""; return; }
+  const max=Math.max(...points.map(p=>p.v),1);
+  el.innerHTML=points.map(p=>`<div class="bar" style="height:${Math.max(1,Math.round(p.v/max*100))}%" title="${new Date(p.t*1000).toLocaleTimeString()}: ${Math.round(p.v)}"></div>`).join("");
+}
+function lgTailToggle(){ _lg.tail=!_lg.tail; const b=document.getElementById("lg-tail-btn"); b.classList.toggle("btn-primary",_lg.tail); b.querySelector("span").textContent=_lg.tail?_trText("следим…"):_trText("tail"); if(_lg.tail)lgRun(); else clearTimeout(_lgTimer); }
+function lgExport(){
+  const data=_lg.rawMode?_lgRows.map(r=>r.line).join("\n"):JSON.stringify(_lgRows,null,2);
+  const blob=new Blob([data],{type:"text/plain"}); const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="soc-logs."+(_lg.rawMode?"log":"json"); a.click();
+}
+// ── saved views ──
+async function lgLoadViews(){
+  const el=document.getElementById("lg-views");if(!el)return;
+  try{ const d=await fetch("/api/log_views").then(r=>r.json()); _lgViews=d.views||[];
+    el.innerHTML=_lgViews.length?_lgViews.map((v,i)=>`<div class="flex items-center gap-1"><button onclick="lgViewApply(${i})" class="flex-1 text-left text-[11px] text-indigo-300 hover:text-indigo-200 truncate">${esc(v.name)}</button><button onclick="lgViewDel(${i})" class="text-[11px] text-rose-400/70 hover:text-rose-300">✕</button></div>`).join(""):`<div class="text-slate-600 text-[11px]">—</div>`;
+  }catch(e){}
+}
+let _lgViews=[];
+async function lgViewSave(){
+  const name=await uiPrompt(_trText("Название вида:")); if(!name)return;
+  lgReadInputs();
+  _lgViews.push({name:name.trim(),sources:_lg.sources,chips:_lg.chips,search:_lg.search,regex:_lg.regex,attacks:_lg.attacks,raw:_lg.raw,minutes:+document.getElementById("lg-mins").value||15});
+  await fetch("/api/log_views",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({views:_lgViews})}); lgLoadViews();
+}
+function lgViewApply(i){
+  const v=_lgViews[i]; if(!v)return;
+  _lg.sources=JSON.parse(JSON.stringify(v.sources||{})); _lg.chips=JSON.parse(JSON.stringify(v.chips||[]));
+  _lg.search=v.search||""; _lg.regex=!!v.regex; _lg.attacks=!!v.attacks; _lg.raw=v.raw||"";
+  document.getElementById("lg-search").value=_lg.search; document.getElementById("lg-regex").checked=_lg.regex;
+  document.getElementById("lg-attacks").checked=_lg.attacks; document.getElementById("lg-raw").value=_lg.raw;
+  if(v.minutes)document.getElementById("lg-mins").value=v.minutes;
+  lgRenderChips(); _lg.treeLoaded=false; lgLoadTree(); lgRun();
+}
+async function lgViewDel(i){ _lgViews.splice(i,1); await fetch("/api/log_views",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({views:_lgViews})}); lgLoadViews(); }
 const CNAMES={US:"США",UA:"Украина",RU:"Россия",GB:"Великобритания",DE:"Германия",FR:"Франция",NL:"Нидерланды",IE:"Ирландия",PL:"Польша",CA:"Канада",IN:"Индия",CN:"Китай",SG:"Сингапур",IT:"Италия",ES:"Испания",SE:"Швеция",FI:"Финляндия",CZ:"Чехия",RO:"Румыния",LV:"Латвия",LT:"Литва",EE:"Эстония",BY:"Беларусь",KZ:"Казахстан",TR:"Турция",BR:"Бразилия",JP:"Япония",KR:"Корея",AU:"Австралия",CH:"Швейцария",AT:"Австрия",BE:"Бельгия",DK:"Дания",NO:"Норвегия",PT:"Португалия",MD:"Молдова",GE:"Грузия",AM:"Армения",AZ:"Азербайджан",IL:"Израиль",AE:"ОАЭ",HK:"Гонконг",VN:"Вьетнам",ID:"Индонезия",MX:"Мексика",ZA:"ЮАР",BG:"Болгария",HU:"Венгрия",GR:"Греция"};
 function flag(cc){if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc))return"🏳️";return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));}
 function countryLabel(cc){if(!cc)return"— не определено";return flag(cc)+" "+(CNAMES[cc.toUpperCase()]||cc.toUpperCase());}
@@ -2183,6 +2552,104 @@ async function loadIngress(){
       :`<div class="text-slate-500 text-xs">${_trText("нет ingress-таргетов")}</div>`;
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
+// ── Ingress: «Подключить кластер» (генератор helm-команды + promtail + values) ──
+function ingSetupToggle(){ const b=document.getElementById("ing-setup"); b.classList.toggle("hidden"); if(!b.classList.contains("hidden")){ if(!document.getElementById("ing-token").value)ingGenToken(); else ingCmd(); bcReset(); loadIngBackends(); } }
+function _bcUrl(){ const h=_ingVal("ing-host",""); return h?(h.startsWith("http")?h.replace(/\/$/,""):"https://"+h.replace(/\/$/,"")):""; }
+function bcReset(){
+  document.getElementById("bc-result").textContent="";
+  document.getElementById("bc-save-btn").classList.add("hidden");
+  document.getElementById("bc-msg").textContent="";
+}
+// «Проверить соединение» — бьёт по хосту из поля «block-api hostname» (тому же,
+// что в сгенерированной helm-команде) + токену рядом, до того как что-то сохранено.
+async function bcTest(){
+  const url=_bcUrl(), tok=_ingVal("ing-token",""), res=document.getElementById("bc-result");
+  if(!url){ res.textContent="✗ "+_trText("укажи hostname выше"); res.className="text-[11px] text-rose-400"; return; }
+  res.textContent="… "+_trText("проверяю"); res.className="text-[11px] text-slate-400";
+  document.getElementById("bc-save-btn").classList.add("hidden");
+  try{
+    const r=await fetch("/api/ingress_apis/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,token:tok})}).then(x=>x.json());
+    if(r.ok){ res.textContent="✓ "+_trText("доступен, токен принят"); res.className="text-[11px] text-emerald-400"; document.getElementById("bc-save-btn").classList.remove("hidden"); }
+    else{ res.textContent="✗ "+(r.error||(!r.reachable?_trText("нет связи"):_trText("токен не принят"))); res.className="text-[11px] text-rose-400"; }
+  }catch(e){ res.textContent="✗ "+(e.message||e); res.className="text-[11px] text-rose-400"; }
+}
+// сохраняет проверенное подключение в реестр и сразу делает его активным
+async function bcSave(){
+  const msg=document.getElementById("bc-msg"), url=_bcUrl(), tok=_ingVal("ing-token","");
+  msg.textContent=_trText("сохраняю…"); msg.className="text-[11px] mt-1.5 text-slate-400";
+  try{
+    const save=await fetch("/api/ingress_apis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,token:tok})}).then(x=>x.json());
+    if(!save.ok){ msg.textContent="✗ "+(save.error||_trText("ошибка")); msg.className="text-[11px] mt-1.5 text-rose-400"; return; }
+    const act=await fetch("/api/ingress_apis/activate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:save.id})}).then(x=>x.json());
+    msg.textContent=act.ok?("✓ "+_trText("сохранено и активно")):("✗ "+(act.error||_trText("ошибка")));
+    msg.className="text-[11px] mt-1.5 "+(act.ok?"text-emerald-400":"text-rose-400");
+    loadIngBackends(); loadIngress();
+  }catch(e){ msg.textContent="✗ "+(e.message||e); msg.className="text-[11px] mt-1.5 text-rose-400"; }
+}
+// список зарегистрированных подключений (можно несколько; активно одно)
+async function loadIngBackends(){
+  const el=document.getElementById("ing-backends");if(!el)return;
+  try{
+    const d=await fetch("/api/ingress_apis").then(r=>r.json());
+    const items=d.items||[];
+    el.innerHTML=items.length?items.map(b=>{
+      const active=b.id===d.active;
+      return `<div class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${active?'border-emerald-600/40 bg-emerald-900/10':'border-slate-800 bg-slate-900/40'}">
+        <span class="w-1.5 h-1.5 rounded-full ${active?'bg-emerald-400':'bg-slate-600'} shrink-0"></span>
+        <span class="mono text-[12px] text-slate-200 truncate">${esc(b.url)}</span>
+        ${b.token_set?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">🔑</span>`:""}
+        ${active?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-300 shrink-0">${_trText('активно')}</span>`
+                :`<button onclick="ingBackendActivate('${esc(b.id)}')" class="text-[11px] text-indigo-300 hover:text-indigo-200 shrink-0">${_trText('сделать активным')}</button>`}
+        <button onclick="ingBackendDelete('${esc(b.id)}')" class="text-[11px] text-rose-400/80 hover:text-rose-300 shrink-0 ml-auto">${_trText('удалить')}</button>
+      </div>`;
+    }).join(""):`<div class="text-slate-600 text-xs">${_trText('пока нет — проверь соединение и нажми Save')}</div>`;
+  }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+}
+async function ingBackendActivate(id){
+  try{ await fetch("/api/ingress_apis/activate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); loadIngBackends(); loadIngress(); }
+  catch(e){ uiAlert("не удалось: "+(e.message||e)); }
+}
+async function ingBackendDelete(id){
+  if(!await uiConfirm(_trText("Удалить это подключение?")))return;
+  try{ await fetch("/api/ingress_apis/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); loadIngBackends(); loadIngress(); }
+  catch(e){ uiAlert("не удалось: "+(e.message||e)); }
+}
+function ingGenToken(){ const t=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,"0")).join(""); document.getElementById("ing-token").value=t; ingCmd(); }
+function _ingVal(id,dflt){ const el=document.getElementById(id); return ((el&&el.value)||dflt||"").trim(); }
+function ingCmd(){
+  const ns=_ingVal("ing-ns","soc"), host=_ingVal("ing-host","block-api.example.com"),
+        cns=_ingVal("ing-cns","ingress-nginx"), ccm=_ingVal("ing-ccm","ingress-nginx-controller"),
+        ip=_ingVal("ing-ip",""), tok=_ingVal("ing-token","<token>"), loki=_ingVal("ing-loki","");
+  const wl=ip?`${ip}/32`:"";
+  // helm-команда — реальные ключи чарта blocklist-api
+  const cmd=[`helm upgrade --install blocklist-api ./blocklist-api \\`,
+    `  -n ${ns} --create-namespace \\`,
+    `  --set token=${tok} \\`,
+    `  --set controllerNamespace=${cns} \\`,
+    `  --set controllerConfigMap=${ccm} \\`,
+    `  --set ingress.host=${host}${wl?` \\`:""}`,
+    wl?`  --set ingress.whitelistSourceRange=${wl}`:""].filter(Boolean).join("\n");
+  const cEl=document.getElementById("ing-cmd"); if(cEl)cEl.textContent=cmd;
+  // promtail — values для отправки логов ingress-nginx в Loki дашборда
+  const pEl=document.getElementById("ing-promtail");
+  if(pEl)pEl.textContent=
+`# promtail → Loki дашборда
+helm upgrade --install promtail grafana/promtail -n ${ns} \\
+  --set "config.clients[0].url=${loki||"http://<loki-дашборда>:3100"}/loki/api/v1/push" \\
+  --set "config.snippets.addScrapeJobLabel=true"
+# (собирает поды ${cns}; в Loki прилетят как job=ingress-nginx)`;
+  // values: где указывается таргет
+  const vEl=document.getElementById("ing-values");
+  if(vEl)vEl.textContent=
+`# blocklist-api/values.yaml — таргет ingress = ns + CM контроллера
+controllerNamespace: ${cns}
+controllerConfigMap: ${ccm}
+
+ingress:
+  enabled: true
+  host: ${host}${wl?`\n  whitelistSourceRange: "${wl}"`:""}`;
+}
+function ingCopyCmd(id){ const t=document.getElementById(id); if(t&&navigator.clipboard)navigator.clipboard.writeText(t.textContent); }
 function loadTargets(){ setTsub(_tsub); }
 function loadSettings(){ setSub(_sub); }
 

@@ -21,5 +21,7 @@ state.json
 positions.yaml
 /data/
 
-# local dev preview config (machine-specific paths)
-.claude/launch.json
+# local Claude state (preview launch config + any machine-specific bits).
+# NB: persistent memory lives OUTSIDE the repo (~/.claude/projects/…) and can't be
+# committed anyway — this just guards anything local under .claude/ in-repo.
+.claude/
