@@ -1096,7 +1096,8 @@ async def api_path_rule(request: Request):
     payload = {"id": body.get("id"), "name": body.get("name", ""),
                "pattern": body.get("pattern", ""),
                "enabled": bool(body.get("enabled", True)),
-               "force": bool(body.get("force", False))}
+               "force": bool(body.get("force", False)),
+               "group": body.get("group", "")}
     status, resp = _blocklist_call("POST", "/path_rule", payload)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 

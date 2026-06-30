@@ -191,9 +191,19 @@ def groups():
 
 
 # ── apply / status ────────────────────────────────────────────────────────────
-def apply(per_target_cidrs, patterns, path_enabled):
-    """Reconcile each configured target to its routed CIDR set.
+def _patterns_for(per_target_patterns, tid):
+    """Back-compat: callers may pass a per-target dict {tid:[pat]} OR a flat list
+    (same patterns for every target)."""
+    if isinstance(per_target_patterns, dict):
+        return per_target_patterns.get(tid, [])
+    return per_target_patterns or []
+
+
+def apply(per_target_cidrs, per_target_patterns, path_enabled):
+    """Reconcile each configured target to its routed CIDR set + its 403 patterns.
     per_target_cidrs: {target_id: [cidr, ...]} (already collapsed).
+    per_target_patterns: {target_id: [pattern, ...]} (routed by each rule's group);
+      a flat list is also accepted and applied to every target.
 
     Per-target failures are isolated: a remote target (e.g. Cloudflare) being down
     must NOT abort the ban or block other targets — the entry is still saved and the
@@ -201,19 +211,20 @@ def apply(per_target_cidrs, patterns, path_enabled):
     for t in targets():
         cidrs = per_target_cidrs.get(t["id"], [])
         try:
-            _adapter(t)[0](t, cidrs, patterns, path_enabled)
+            _adapter(t)[0](t, cidrs, _patterns_for(per_target_patterns, t["id"]), path_enabled)
             _last_errors[t["id"]] = None
         except Exception as e:
             _last_errors[t["id"]] = str(e)
             print("[enforce] target %s (%s) apply failed: %s" % (t["id"], t.get("type"), e), flush=True)
 
 
-def render_status(patterns, master):
+def render_status(per_target_patterns, master):
     """Aggregate 403-render health across targets that enforce paths (worst wins).
-    Also returns per-target detail for the dashboard."""
+    Also returns per-target detail for the dashboard. Accepts a per-target dict
+    {tid:[pat]} or a flat list (same patterns for every target)."""
     detail = {}
     for t in targets():
-        detail[t["id"]] = {"type": t["type"], **_adapter(t)[1](t, patterns, master)}
+        detail[t["id"]] = {"type": t["type"], **_adapter(t)[1](t, _patterns_for(per_target_patterns, t["id"]), master)}
     vals = list(detail.values()) or [{"controller_reachable": True,
                                       "rendered_present": True, "rendered_ok": True}]
     return {

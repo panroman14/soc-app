@@ -84,7 +84,6 @@ def _render(entries, path=None):
             print("[render] path_rules load failed, rendering without path-403:", e, flush=True)
             path = {"enabled": True, "rules": []}
     active = _active(entries)
-    patterns = [r["pattern"] for r in path.get("rules", []) if r.get("enabled")]
     # Resolve each DISTINCT group once (not per entry × per target) — big saving when
     # many bans share a group, since resolve_group walks targets + enrolled nodes.
     resolved = {}
@@ -92,9 +91,13 @@ def _render(entries, path=None):
         g = e.get("group")
         if g not in resolved:
             resolved[g] = set(enforce.resolve_group(g))
-    # per-target desired CIDR sets (path-403 patterns currently apply to all targets)
-    per_target = {tid: _cidrs_for_target(active, tid, resolved) for tid in enforce.all_target_ids()}
-    enforce.apply(per_target, patterns, bool(path.get("enabled", True)))
+    tids = enforce.all_target_ids()
+    # per-target desired CIDR sets (routed by each ban's group)
+    per_target = {tid: _cidrs_for_target(active, tid, resolved) for tid in tids}
+    # per-target 403 patterns: a path rule renders only to targets in its group
+    # (empty/unknown group → ALL, via resolve_group — keeps prior global behaviour).
+    per_target_patterns = _patterns_per_target(path, tids)
+    enforce.apply(per_target, per_target_patterns, bool(path.get("enabled", True)))
     # the overall active set (for counts / API responses)
     return safety.collapse([e["cidr"] for e in active])
 
@@ -323,6 +326,41 @@ def list_path_rules():
         return _load_path()
 
 
+def _patterns_per_target(path, tids):
+    """{target_id: [pattern,...]} — each enabled path rule routed to its group's
+    targets. Empty/unknown group resolves to ALL targets (resolve_group), so a rule
+    with no group applies everywhere (back-compat)."""
+    out = {tid: [] for tid in tids}
+    cache = {}
+    for r in path.get("rules", []):
+        if not r.get("enabled"):
+            continue
+        g = r.get("group") or ""
+        if g not in cache:
+            cache[g] = set(enforce.resolve_group(g))
+        for tid in tids:
+            if tid in cache[g]:
+                out[tid].append(r["pattern"])
+    return out
+
+
+def patterns_for_target(target_id, path=None):
+    """Enabled 403 patterns that apply to ONE target (used by the nginx-file pull
+    agent's /nginx_snippet). Routed by each rule's group; empty group = all."""
+    if path is None:
+        path = _load_path()
+    pats, cache = [], {}
+    for r in path.get("rules", []):
+        if not r.get("enabled"):
+            continue
+        g = r.get("group") or ""
+        if g not in cache:
+            cache[g] = set(enforce.resolve_group(g))
+        if target_id in cache[g]:
+            pats.append(r["pattern"])
+    return pats
+
+
 def path_render_status():
     """Health of the 403-path section: are the enabled rules actually present in
     the live controller server-snippet? Detects drift / a wiped managed section
@@ -330,14 +368,16 @@ def path_render_status():
     with _lock:
         path = _load_path()
         rules = path.get("rules", [])
-        patterns = [r["pattern"] for r in rules if r.get("enabled")]
+        enabled_n = sum(1 for r in rules if r.get("enabled"))
         master = bool(path.get("enabled", True))
-        st = enforce.render_status(patterns, master)
-        return {"enabled": master, "count": len(rules), "enabled_count": len(patterns), **st}
+        per_target_patterns = _patterns_per_target(path, enforce.all_target_ids())
+        st = enforce.render_status(per_target_patterns, master)
+        return {"enabled": master, "count": len(rules), "enabled_count": enabled_n, **st}
 
 
-def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by="dashboard"):
+def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by="dashboard", group=None):
     pattern = safety.validate_pattern(pattern, force=force)  # raises BlockError
+    group = (group or "").strip()       # "" = applies to ALL targets (back-compat)
     with _lock:
         entries, audit = _load_raw()
         path = _load_path()
@@ -347,7 +387,7 @@ def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by
             if not found:
                 raise safety.BlockError("правило не найдено: %s" % id)
             found.update({"name": name or found.get("name", ""),
-                          "pattern": pattern, "enabled": bool(enabled)})
+                          "pattern": pattern, "enabled": bool(enabled), "group": group})
         else:
             # dedup: identical pattern already exists → no-op, return it (no duplicate)
             dup = next((r for r in rules if r.get("pattern") == pattern), None)
@@ -355,7 +395,7 @@ def upsert_path_rule(id=None, name="", pattern="", enabled=True, force=False, by
                 return {"id": dup.get("id"), "rules": len(rules), "duplicate": True}
             id = _new_path_id(rules)
             rules.append({"id": id, "name": name, "pattern": pattern,
-                          "enabled": bool(enabled), "added_by": by, "ts": _now()})
+                          "enabled": bool(enabled), "group": group, "added_by": by, "ts": _now()})
         ev = _audit(audit, "path_rule", id, by, (name or pattern)[:80])
         _render(entries, path)
         ev["result"] = _enf_result()

@@ -306,6 +306,22 @@
       <div id="ban-targets" class="text-sm text-slate-400">загрузка…</div>
     </div>
 
+    <div class="card p-4 mb-4">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
+        <div>
+          <div class="text-sm font-semibold text-slate-200">🎯 Таргет-группы</div>
+          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Группа — это набор таргетов. Правила 403 и автобан применяются к выбранной группе. (Окружения уже сами по себе группы; тут — свои произвольные.)</div>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input id="grp-new" placeholder="имя группы, напр. nginx1" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 w-48" onkeydown="if(event.key==='Enter')grpNew()">
+          <button onclick="grpNew()" class="btn btn-ghost btn-xs">＋ группа</button>
+          <button onclick="grpSave()" class="btn btn-primary btn-xs">Save</button>
+        </div>
+      </div>
+      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
+      <div id="grp-msg" class="text-[11px] mt-2"></div>
+    </div>
+
     <section class="card p-4 mb-4">
       <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div>
@@ -480,6 +496,8 @@
           <input id="p403-raw" oninput="p403Preview()" placeholder="/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono w-full"/></div>
         <div><label class="text-[11px] text-slate-500 block mb-1" title="В какое правило дописать паттерн (одно правило = группа путей)">В правило</label>
           <select id="p403-target" onchange="p403TargetChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[170px]"></select></div>
+        <div><label class="text-[11px] text-slate-500 block mb-1" title="Куда применять (таргет-группа). Только для нового правила.">🎯 Таргет-группа</label>
+          <select id="p403-group" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[150px]"></select></div>
         <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="добавить, даже если апка считает паттерн слишком широким"><input type="checkbox" id="p403-force"/> force</label>
         <button onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600">Добавить</button>
         <span id="p403-msg" class="text-xs"></span>
@@ -787,6 +805,11 @@ const RU2EN={
   "Cloudflare не применяет 403 по пути (только IP):":"Cloudflare doesn't apply path-403 (IP only):",
   "Список строится автоматически: nginx-file — это подключённые ноды, cloudflare и ingress-cm — из настроек окружения.":"The list is built automatically: nginx-file = connected nodes, cloudflare and ingress-cm = from environment settings.",
   "настраивается:":"managed in:","В правило":"Into rule","В какое правило дописать паттерн (одно правило = группа путей)":"Which rule to append the pattern to (one rule = a group of paths)",
+  "все таргеты":"all targets","Таргет-группа":"Target group","к какой таргет-группе применяется это правило":"which target group this rule applies to","Куда применять (таргет-группа). Только для нового правила.":"Where to apply (target group). New rule only.",
+  "Таргет-группы":"Target groups","удалить группу":"delete group","+ таргет…":"+ target…","пусто":"empty",
+  "пока нет своих групп. Создай группу и добавь в неё таргеты.":"no custom groups yet. Create one and add targets.",
+  "Группа — это набор таргетов. Правила 403 и автобан применяются к выбранной группе. (Окружения уже сами по себе группы; тут — свои произвольные.)":"A group is a set of targets. 403 rules & auto-ban apply to the chosen group. (Environments are already groups; these are your own arbitrary ones.)",
+  "имя группы, напр. nginx1":"group name, e.g. nginx1","＋ группа":"＋ group",
   // ── 403 view static strings ──
   "Правила 403 — блокировка по пути":"403 rules — block by path","блокировка по пути":"block by path",
   "Пути, которые сразу отдают ":"Paths that immediately return ","Это ":"This is ","не бан IP":"not an IP ban",
@@ -2202,12 +2225,20 @@ async function addToMain(path,el){
   }
   if(_view==="p403")loadP403();
 }
+let _banGroupInfo={groups:{},targets:[],default_group:""};   // shared: 403 + auto-ban group pickers
+function _groupOptions(sel){
+  const names=Object.keys(_banGroupInfo.groups||{});
+  const all=`<option value="" ${!sel?'selected':''}>${_trText('все таргеты')}</option>`;
+  return all+names.map(g=>`<option value="${esc(g)}" ${String(sel)===String(g)?'selected':''}>${esc(g)}</option>`).join("");
+}
 async function loadP403(){
   try{
-    const [d,st,pp]=await Promise.all([
+    const [d,st,pp,bt]=await Promise.all([
       fetch("/api/path_rules").then(r=>r.json()),
       fetch("/api/path_status").then(r=>r.json()).catch(()=>null),
-      fetch("/api/protected_paths").then(r=>r.json()).catch(()=>({paths:[]}))]);
+      fetch("/api/protected_paths").then(r=>r.json()).catch(()=>({paths:[]})),
+      fetch("/api/ban_targets").then(r=>r.json()).catch(()=>null)]);
+    if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||""};
     await loadMainRules();
     renderP403(d);renderP403Status(st);p403ModeChange();renderP403Protected(pp.paths||[]);
     renderP403Applies();
@@ -2271,6 +2302,8 @@ function _p403RenderList(){
         <span class="text-sm text-slate-200 font-medium truncate">${esc(r.name||'(без имени)')}${isMain?' <span class="text-[10px] text-amber-400">основное</span>':''}</span>
         ${en?'':'<span class="text-[10px] text-amber-400 shrink-0">выкл</span>'}${by}${dt}
         <span class="text-[10px] text-slate-600 shrink-0 ml-auto">${plen}&nbsp;симв.</span>
+        <label class="flex items-center gap-1 shrink-0" title="${_trText('к какой таргет-группе применяется это правило')}"><span class="text-[10px] text-slate-500">🎯</span>
+          <select onchange="p403SetGroup('${esc(r.id)}',this.value)" class="text-[11px] bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-200 max-w-[130px]">${_groupOptions(r.group||"")}</select></label>
         <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0">паттерн&nbsp;▾</button>
         <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">✎&nbsp;ред.</button>
         <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20 shrink-0">удалить</button>
@@ -2411,9 +2444,17 @@ function p403FillTarget(){
 }
 function p403TargetChange(){
   const sel=document.getElementById("p403-target");if(!sel)return;
-  const isNew=sel.value==="__new__", name=document.getElementById("p403-name");
+  const isNew=sel.value==="__new__", name=document.getElementById("p403-name"), grp=document.getElementById("p403-group");
   name.disabled=!isNew; name.classList.toggle("opacity-40",!isNew);
   name.placeholder=isNew?"напр. env-файлы":"— (имя только для нового)";
+  if(grp){ grp.disabled=!isNew; grp.classList.toggle("opacity-40",!isNew);
+    if(grp.options.length===0||grp.dataset.k!==Object.keys(_banGroupInfo.groups).join(","))
+      { grp.innerHTML=_groupOptions(""); grp.dataset.k=Object.keys(_banGroupInfo.groups).join(","); } }
+}
+async function p403SetGroup(id,group){
+  const r=(_p403.rules||[]).find(x=>String(x.id)===String(id));if(!r)return;
+  const res=await _post("/api/path_rule",{id:r.id,name:r.name,pattern:r.pattern,enabled:r.enabled!==false,group});
+  if(res.ok)loadP403(); else uiAlert("не удалось сменить группу: "+(res.error||"?"));
 }
 async function p403Save(){
   const mode=document.getElementById("p403-mode").value;
@@ -2438,7 +2479,8 @@ async function p403Save(){
   }
   // новое правило
   const name=document.getElementById("p403-name").value.trim();
-  const res=await _post("/api/path_rule",{name,pattern,force});
+  const group=(document.getElementById("p403-group")||{}).value||"";
+  const res=await _post("/api/path_rule",{name,pattern,force,group});
   if(res.ok&&res.duplicate){msg.textContent="• такое правило уже есть — не дублирую";msg.className="text-xs text-amber-300";loadP403();return;}
   if(res.ok){msg.textContent="✓ создано";msg.className="text-xs text-emerald-300";
     document.getElementById("p403-name").value="";_clear();loadP403();}
@@ -2863,6 +2905,7 @@ async function loadAutoban(){
     renderAbRules(d.rules||[]);
     loadAbLog();
     loadBanTargets();
+    loadGroups();
   }catch(e){document.getElementById("ab-rules").innerHTML=`<div class="text-red-300 text-xs">ошибка загрузки: ${esc(e.message||String(e))}</div>`;}
 }
 
@@ -2873,6 +2916,63 @@ function fillBanGroupSelect(groups,dflt){
   const dl=dflt?`по умолчанию (${dflt})`:"по умолчанию";
   sel.innerHTML=`<option value="">${dl}</option>`+names.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
   sel.value=_banGroup;
+}
+// ── Таргет-группы (редактор BAN_GROUPS) ───────────────────────────────────────
+let _grpDraft=null;   // editable copy of explicit BAN_GROUPS {name:[target id,...]}
+async function loadGroups(){
+  const el=document.getElementById("grp-list");if(!el)return;
+  try{
+    const [st,bt]=await Promise.all([
+      fetch("/api/settings").then(r=>r.json()).catch(()=>null),
+      fetch("/api/ban_targets").then(r=>r.json()).catch(()=>null)]);
+    if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||""};
+    const raw=st&&st.settings&&st.settings.BAN_GROUPS&&st.settings.BAN_GROUPS.value;
+    _grpDraft=(raw&&typeof raw==="object")?JSON.parse(JSON.stringify(raw)):{};
+    renderGroups();
+  }catch(e){ el.innerHTML=`<span class="text-rose-300">ошибка: ${esc(e.message||e)}</span>`; }
+}
+function _targetType(tid){const t=(_banGroupInfo.targets||[]).find(x=>x.id===tid);return t?t.type:"";}
+function renderGroups(){
+  const el=document.getElementById("grp-list");if(!el)return;
+  if(!_grpDraft){el.textContent="—";return;}
+  const names=Object.keys(_grpDraft);
+  const allTargets=(_banGroupInfo.targets||[]).filter(t=>t.type!=="noop");
+  if(!names.length){el.innerHTML=`<div class="text-slate-600 text-xs">${_trText('пока нет своих групп. Создай группу и добавь в неё таргеты.')}</div>`;return;}
+  el.innerHTML=names.map(g=>{
+    const members=_grpDraft[g]||[];
+    const chips=members.map(tid=>{
+      const ty=_targetType(tid);
+      return `<span class="chip">${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(ty)}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
+    }).join(" ")||`<span class="text-[11px] text-slate-600">${_trText('пусто')}</span>`;
+    const avail=allTargets.filter(t=>!members.includes(t.id));
+    const opts=avail.map(t=>`<option value="${esc(t.id)}">${esc(t.id)} · ${esc(t.type)}</option>`).join("");
+    return `<div class="bg-slate-900/40 border border-slate-800 rounded p-2">
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="mono text-slate-200 text-[13px]">${esc(g)}</span>
+        <button onclick="grpDelete('${esc(g)}')" class="ml-auto text-[11px] text-rose-300 hover:bg-rose-500/10 rounded px-1.5 py-0.5">${_trText('удалить группу')}</button>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap">${chips}
+        ${avail.length?`<select onchange="if(this.value){grpAddTarget('${esc(g)}',this.value);}" class="text-[11px] bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-300"><option value="">${_trText('+ таргет…')}</option>${opts}</select>`:""}
+      </div></div>`;
+  }).join("");
+}
+function grpNew(){
+  const inp=document.getElementById("grp-new"),name=(inp.value||"").trim();
+  if(!name)return; if(!_grpDraft)_grpDraft={};
+  if(_grpDraft[name]){uiAlert("такая группа уже есть");return;}
+  _grpDraft[name]=[]; inp.value=""; renderGroups();
+}
+function grpDelete(g){ if(_grpDraft){delete _grpDraft[g];renderGroups();} }
+function grpAddTarget(g,tid){ if(!_grpDraft[g])_grpDraft[g]=[]; if(!_grpDraft[g].includes(tid))_grpDraft[g].push(tid); renderGroups(); }
+function grpRemoveTarget(g,tid){ if(_grpDraft[g])_grpDraft[g]=_grpDraft[g].filter(x=>x!==tid); renderGroups(); }
+async function grpSave(){
+  const msg=document.getElementById("grp-msg"); msg.textContent="сохраняю…"; msg.className="text-[11px] mt-2 text-slate-400";
+  try{
+    const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates:{BAN_GROUPS:JSON.stringify(_grpDraft||{})}})});
+    const d=await r.json();
+    if(d.ok){msg.textContent="✓ сохранено";msg.className="text-[11px] mt-2 text-emerald-400";loadGroups();if(_view==="autoban")loadBanTargets();}
+    else{msg.textContent="✗ "+(d.error||"ошибка");msg.className="text-[11px] mt-2 text-rose-400";}
+  }catch(e){msg.textContent="✗ "+e.message;msg.className="text-[11px] mt-2 text-rose-400";}
 }
 function _targetSource(t){
   if(t.type==="nginx-file")return _trText("нода")+(t.env?" · env "+esc(t.env):"");

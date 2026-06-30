@@ -144,7 +144,9 @@ def nginx_snippet(request: Request, target: str = ""):
     blocks = store.list_active(target or None)
     cidrs = safety.collapse([b["cidr"] for b in blocks])
     path = store.list_path_rules()
-    patterns = [r["pattern"] for r in path.get("rules", []) if r.get("enabled")]
+    # only the 403 patterns whose group routes to THIS node (empty group = all)
+    patterns = store.patterns_for_target(target or "", path) if target else \
+        [r["pattern"] for r in path.get("rules", []) if r.get("enabled")]
     return {"target": target or None, "count": len(cidrs),
             "http": render.geo_body(cidrs),
             "server": render.if_body(patterns, bool(path.get("enabled", True)))}
@@ -371,7 +373,7 @@ async def path_rule(request: Request):
         res = store.upsert_path_rule(
             id=body.get("id"), name=body.get("name", ""),
             pattern=body.get("pattern", ""), enabled=bool(body.get("enabled", True)),
-            force=bool(body.get("force", False)))
+            force=bool(body.get("force", False)), group=body.get("group", ""))
         return {"ok": True, **res}
     except safety.BlockError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
