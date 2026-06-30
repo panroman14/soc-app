@@ -56,6 +56,7 @@
   h2.sec{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:1.4rem 0 .7rem}
   .bar-bg{height:6px;border-radius:3px;background:#1a212c}
   .card-hidden{display:none!important}
+  .llm-off [data-llm]{display:none!important}   /* LLM off → hide every AI mention */
   #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
   #whoswhat > .card::-webkit-resizer{background:#2a3340}
   @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s}.sidebar.open{left:0}.main{padding:14px}}
@@ -126,8 +127,8 @@
     <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Латентность p95, c</h3><canvas id="chartLatency" height="140"></canvas></div>
   </section>
 
-  <h2 class="sec">AI-аналитик</h2>
-  <section class="space-y-4">
+  <h2 class="sec" data-llm data-i18n="ai.title">AI analyst</h2>
+  <section class="space-y-4" data-llm>
     <div class="grid lg:grid-cols-3 gap-4">
       <div id="insight-current" class="lg:col-span-2 card p-5"></div>
       <div class="card p-5">
@@ -234,8 +235,8 @@
     <div id="suspects" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
   </section>
 
-  <h2 class="sec">Лента AI-инсайтов</h2>
-  <section class="card p-4 mb-8"><div id="insight-history" class="max-h-[520px] overflow-y-auto pr-1"></div></section>
+  <h2 class="sec" data-llm data-i18n="ai.feed">AI insights feed</h2>
+  <section class="card p-4 mb-8" data-llm><div id="insight-history" class="max-h-[520px] overflow-y-auto pr-1"></div></section>
   </div><!-- /view-dash -->
 
   <div id="view-autoban" class="hidden">
@@ -555,6 +556,11 @@
       </div>
       <p class="text-[11px] text-slate-500 mb-3">LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), группа по умолчанию. ENV — дефолты, тут переопределяются.</p>
       <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">🔒 CONFIG_LOCK=env — конфиг только из переменных окружения, редактирование через GUI отключено.</div>
+      <div class="bg-slate-950/40 border border-slate-800 rounded-lg p-3 mb-4 flex items-center justify-between">
+        <div><div class="text-xs font-medium text-slate-300" data-i18n="llm.label">LLM analysis</div>
+          <div class="text-[11px]" style="color:var(--faint)" data-i18n="llm.hint">When off, all AI mentions disappear from the dashboard.</div></div>
+        <button id="set-llm-toggle" onclick="toggleLLM()" class="btn btn-xs">🤖 —</button>
+      </div>
       <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
       <div id="set-msg" class="text-[11px] mt-3"></div>
     </section>
@@ -635,11 +641,13 @@ const I18N={en:{
   "nav.dash":"Dashboard","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
+  "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Дашборд","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
+  "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
 }};
 let _lang=localStorage.getItem("soc_lang")||"en";
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
@@ -1337,11 +1345,11 @@ function chip(label,ok,detail){
   return `<span class="px-2.5 py-1 rounded-md text-xs font-medium border ${c} flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>${label}${detail?`<span class="text-slate-500">· ${detail}</span>`:""}</span>`;
 }
 function renderLLMToggle(enabled){
-  const b=document.getElementById("llm-toggle");if(!b)return;
-  b.textContent="🤖 LLM: "+(enabled?"вкл":"выкл");
-  b.className="px-2.5 py-1.5 rounded-lg text-xs border "+(enabled
-    ?"border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-    :"border-slate-700 text-slate-500 hover:bg-slate-800");
+  const sb=document.getElementById("llm-toggle");
+  if(sb)sb.textContent=enabled?"🤖 on":"🤖 off";
+  const sg=document.getElementById("set-llm-toggle");
+  if(sg){ sg.textContent=enabled?t("llm.on"):t("llm.off");
+    sg.style.color=enabled?"var(--ok)":"var(--faint)"; }
 }
 async function toggleLLM(){
   const b=document.getElementById("llm-toggle");
@@ -1354,8 +1362,8 @@ async function toggleLLM(){
 function renderStatus(st){
   const fr=a=>a==null?"—":(a<60?a+"с":Math.floor(a/60)+"м");
   renderLLMToggle(st.llm_enabled!==false);
-  const llmChip=st.llm_enabled===false?chip("LLM (выкл)",null)
-                :chip("LLM (Gemma)",st.llm_up===null?null:st.llm_up);
+  document.body.classList.toggle("llm-off", st.llm_enabled===false);
+  const llmChip=st.llm_enabled===false?"":chip("LLM (Gemma)",st.llm_up===null?null:st.llm_up);
   const lk=st.loki;
   let lokiOk=st.loki_up, lokiDetail;
   if(lk){
@@ -2538,9 +2546,9 @@ async function loadBanTargets(){
   try{
     const d=await fetch("/api/ban_targets").then(r=>r.json());
     if(d.enabled===false){el.innerHTML=`<span class="text-slate-500">blocklist-api не настроен — баны отключены.</span>`;return;}
-    const tg=d.targets||[], groups=d.groups||{}, errs=d.last_errors||{};
+    const tg=(d.targets||[]).filter(t=>t.type!=="noop"), groups=d.groups||{}, errs=d.last_errors||{};
     fillBanGroupSelect(groups,d.default_group||"");
-    if(!tg.length){el.innerHTML=`<span class="text-slate-500">таргеты не заданы (BAN_TARGETS).</span>`;return;}
+    if(!tg.length){el.innerHTML=`<span class="text-slate-500">таргеты не заданы — забань ноду в окружение или включи Cloudflare у env.</span>`;return;}
     const rows=tg.map(t=>{
       const err=errs[t.id];
       const dot=err?"#ef4444":"#10b981";
@@ -2562,7 +2570,7 @@ async function checkBanTargets(){
   btn.disabled=true; const old=btn.textContent; btn.textContent="проверяю…";
   try{
     const d=await fetch("/api/ban_targets/check").then(r=>r.json());
-    const checks=d.checks||[];
+    const checks=(d.checks||[]).filter(c=>c.type!=="noop");
     el.innerHTML=checks.map(c=>{
       const dot=c.ok?"#10b981":"#ef4444";
       let detail="";
@@ -2709,7 +2717,7 @@ async function abDelete(id){
 }
 // Only treat the hash as a view name for known views — the dashboard uses the hash
 // for its own win/host params (parseHash below), which showView('dash') would wipe.
-{const _h=location.hash.slice(1); if(["autoban","p403","nodes","settings"].includes(_h))showView(_h);}
+{const _h=location.hash.slice(1); if(["autoban","p403","nodes","journal","logs","settings"].includes(_h))showView(_h);}
 
 // активна ли вкладка: не на паузе И страница на экране (скрытая вкладка не грузит Loki)
 const isActive=()=>!paused&&document.visibilityState==="visible";
