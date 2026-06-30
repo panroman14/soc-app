@@ -584,7 +584,7 @@
         <h2 class="text-sm font-medium text-slate-200">⚙️ Глобальные настройки</h2>
         <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
       </div>
-      <p class="text-[11px] text-slate-500 mb-3">LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), группа по умолчанию. ENV — дефолты, тут переопределяются.</p>
+      <p class="text-[11px] mb-3" style="color:var(--faint)" data-i18n="set.global.sub">LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.</p>
       <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">🔒 CONFIG_LOCK=env — конфиг только из переменных окружения, редактирование через GUI отключено.</div>
       <div class="card p-3 mb-4 flex items-center justify-between">
         <div><div class="text-xs font-medium text-slate-300" data-i18n="llm.label">LLM analysis</div>
@@ -673,6 +673,7 @@ const I18N={en:{
   "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.notify":"Notifications","set.global":"Global",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
+  "set.global.sub":"LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
@@ -681,6 +682,7 @@ const I18N={en:{
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.notify":"Уведомления","set.global":"Глобальные",
   "env.h":"Окружения","env.new":"Новое окружение","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
+  "set.global.sub":"LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), и группа по умолчанию. ENV — дефолты, тут переопределяются.",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
@@ -1888,7 +1890,7 @@ async function saveNotify(){
 }
 
 // ── Глобальные настройки (ENV + GUI) ──────────────────────────────────────────
-const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare (дефолт/фолбэк)",ingress:"☸️ ingress-nginx (дефолт)",bans:"⛔ Баны: targets / groups"};
+const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare (default / fallback)",ingress:"☸️ ingress-nginx (default)",bans:"⛔ Bans: targets / groups"};
 let _setLocked=false;
 async function loadGlobal(){
   const wrap=document.getElementById("set-groups");
@@ -1905,7 +1907,7 @@ async function loadGlobal(){
     wrap.innerHTML=groups.map(g=>{
       const rows=byGroup[g].map(k=>settingRow(k,s[k])).join("");
       const extra=g==="cloudflare"?`<button onclick="checkCF()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 mt-1">Проверить подключение</button><div id="set-cf-check" class="text-[11px] mt-1"></div>`:"";
-      return `<div class="card p-3">
+      return `<div class="card p-3"${g==="llm"?" data-llm":""}>
         <h3 class="text-xs font-medium text-slate-300 mb-2">${_setGroupMeta[g]||g}</h3>
         <div class="space-y-2">${rows}</div>${extra}</div>`;
     }).join("");

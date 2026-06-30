@@ -353,10 +353,10 @@ def api_settings():
     """Unified config view: LLM (backend-local, in app_settings) + Cloudflare / bans /
     ingress (proxied from blocklist-api). Secrets are redacted to a boolean."""
     llm_view = {
-        "LLM_URL":   {"group": "llm", "type": "str", "label": "LLM endpoint (Ollama/OpenAI-совм.)",
+        "LLM_URL":   {"group": "llm", "type": "str", "label": "LLM endpoint (Ollama/OpenAI-compatible)",
                       "locked": False, "source": "override" if db.setting_get("llm_url") else "env",
                       "value": llm.base_url()},
-        "LLM_MODEL": {"group": "llm", "type": "str", "label": "LLM модель",
+        "LLM_MODEL": {"group": "llm", "type": "str", "label": "LLM model",
                       "locked": False, "source": "override" if db.setting_get("llm_model") else "env",
                       "value": llm.model()},
     }
