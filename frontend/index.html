@@ -86,6 +86,18 @@
   .setnav-btn:hover{background:#ffffff08;color:var(--text)}
   .setnav-btn.on{background:var(--accent-weak);border-color:#4d8dff33;color:var(--accent2)}
   @media(max-width:760px){.setwrap{grid-template-columns:1fr}.setnav{flex-direction:row;overflow:auto}}
+  /* in-app modal dialogs (replace native alert/confirm/prompt) */
+  #modal-root.hidden{display:none}
+  .modal-bg{position:fixed;inset:0;z-index:100;background:#05070bcc;backdrop-filter:blur(2px);display:grid;place-items:center;padding:20px;animation:mfade .12s ease}
+  @keyframes mfade{from{opacity:0}to{opacity:1}}
+  .modal-box{width:100%;max-width:440px;padding:18px 18px 14px;animation:mpop .14s ease}
+  @keyframes mpop{from{transform:translateY(6px) scale(.98);opacity:.6}to{transform:none;opacity:1}}
+  .modal-h{font-size:14px;font-weight:650;margin-bottom:8px}
+  .modal-msg{font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.55}
+  .modal-f{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  /* section toggled by a switch */
+  .env-sec{margin-top:10px}
+  .env-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
   /* toggle switch */
   .sw{width:38px;height:21px;border-radius:20px;background:#2a3340;position:relative;transition:.15s;cursor:pointer;flex:0 0 auto;border:0;display:inline-block}
   .sw.on{background:var(--accent)}
@@ -635,6 +647,8 @@
   </div>
 </div>
 
+<div id="modal-root" class="hidden"></div>
+
 <script>
 const SEV = {
   ok:{label:"спокойно",cls:"bg-emerald-500/10 text-emerald-300 border-emerald-500/30",dot:"#10b981"},
@@ -643,6 +657,30 @@ const SEV = {
   critical:{label:"критично",cls:"bg-red-500/10 text-red-300 border-red-500/40",dot:"#ef4444"},
 };
 const fmt=n=>n==null?"—":(n>=1000?(n/1000).toFixed(n>=10000?0:1)+"k":Math.round(n));
+
+// ── in-app dialogs (replace native alert/confirm/prompt) ──────────────────────
+function _showModal({title,body,buttons}){
+  return new Promise(resolve=>{
+    const root=document.getElementById("modal-root");
+    const close=v=>{ root.classList.add("hidden"); root.innerHTML=""; document.removeEventListener("keydown",onkey); resolve(v); };
+    const pick=b=>close(b.value==="__input__"?(root.querySelector("#_mi")?root.querySelector("#_mi").value:null):b.value);
+    function onkey(e){ if(e.key==="Escape"){const b=buttons.find(x=>x.esc); if(b){e.preventDefault();pick(b);}} else if(e.key==="Enter"){const b=buttons.find(x=>x.enter); if(b){e.preventDefault();pick(b);}} }
+    root.innerHTML=`<div class="modal-bg"><div class="modal-box card" role="dialog" aria-modal="true">${title?`<div class="modal-h">${esc(title)}</div>`:""}<div>${body}</div><div class="modal-f"></div></div></div>`;
+    const f=root.querySelector(".modal-f");
+    buttons.forEach(b=>{ const btn=document.createElement("button"); btn.type="button";
+      btn.className="btn"+(b.kind==="primary"?" btn-primary":"")+(b.kind==="danger"?" btn-danger":""); btn.textContent=b.label;
+      btn.onclick=()=>pick(b); f.appendChild(btn); });
+    root.classList.remove("hidden");
+    root.querySelector(".modal-bg").addEventListener("click",e=>{ if(e.target.classList.contains("modal-bg")){const b=buttons.find(x=>x.esc); if(b)pick(b);} });
+    document.addEventListener("keydown",onkey);
+    const inp=root.querySelector("#_mi");
+    if(inp){ inp.focus(); inp.select&&inp.select(); } else (root.querySelector(".btn-primary")||f.lastChild)?.focus();
+  });
+}
+const _CANCEL=()=>_lang==="ru"?"Отмена":"Cancel";
+function uiAlert(msg,title){ return _showModal({title:title||"",body:`<div class="modal-msg">${esc(msg)}</div>`,buttons:[{label:"OK",kind:"primary",value:true,enter:true,esc:true}]}); }
+function uiConfirm(msg,title){ return _showModal({title:title||"",body:`<div class="modal-msg">${esc(msg)}</div>`,buttons:[{label:_CANCEL(),value:false,esc:true},{label:"OK",kind:"primary",value:true,enter:true}]}); }
+function uiPrompt(msg,ph,val){ return _showModal({title:"",body:`<div class="modal-msg">${esc(msg)}</div><input id="_mi" class="input" style="margin-top:10px" placeholder="${esc(ph||"")}" value="${esc(val||"")}">`,buttons:[{label:_CANCEL(),value:null,esc:true},{label:"OK",kind:"primary",value:"__input__",enter:true}]}); }
 const pct=n=>n==null?"—":(n*100).toFixed(1)+"%";
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000-ts);return s<60?s+"с":Math.floor(s/60)+"м";};
 const dt=ts=>{if(!ts)return"—";const d=new Date(ts*1000);const p=n=>String(n).padStart(2,"0");return `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;};
@@ -674,6 +712,7 @@ const I18N={en:{
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.notify":"Notifications","set.global":"Global",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
   "set.global.sub":"LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.",
+  "save":"Save","delete":"Delete","env.name":"Name","env.loki":"Loki URL","env.loki.hint":"(blank = shared Loki + env label)","env.cf":"Cloudflare for this environment","env.ing":"ingress-nginx (k8s) for this environment",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
@@ -683,6 +722,7 @@ const I18N={en:{
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.notify":"Уведомления","set.global":"Глобальные",
   "env.h":"Окружения","env.new":"Новое окружение","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
   "set.global.sub":"LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), и группа по умолчанию. ENV — дефолты, тут переопределяются.",
+  "save":"Сохранить","delete":"Удалить","env.name":"Название","env.loki":"Loki URL","env.loki.hint":"(пусто = общий Loki + метка env)","env.cf":"Cloudflare для этого окружения","env.ing":"ingress-nginx (k8s) для этого окружения",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
@@ -1030,7 +1070,7 @@ async function openProfile(ip){
       </div>
       <div class="mt-3 flex gap-2">
         <button onclick="openRequests({ip:'${esc(ip)}'},'Запросы · ${esc(ip)}')" class="text-xs px-2 py-1 rounded bg-slate-700/40 text-slate-300 hover:bg-slate-700/60">показать запросы</button>
-        ${p.trusted?"":(isCfIp(ip)?`<button onclick="alert('Это IP Cloudflare, не реальный посетитель — бан бесполезен. Реальный клиент скрыт за фларой.')" class="text-xs px-2 py-1 rounded bg-slate-700/50 text-orange-300 border border-orange-500/30">⛔ бан бесполезен (Cloudflare)</button>`:`<button onclick="blockIP('${esc(ip)}','профиль IP')" class="text-xs px-2 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ заблокировать на ingress</button>`)}
+        ${p.trusted?"":(isCfIp(ip)?`<button onclick="uiAlert('Это IP Cloudflare, не реальный посетитель — бан бесполезен. Реальный клиент скрыт за фларой.')" class="text-xs px-2 py-1 rounded bg-slate-700/50 text-orange-300 border border-orange-500/30">⛔ бан бесполезен (Cloudflare)</button>`:`<button onclick="blockIP('${esc(ip)}','профиль IP')" class="text-xs px-2 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ заблокировать на ingress</button>`)}
       </div>`;
   }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
 }
@@ -1045,10 +1085,10 @@ async function _post(path,payload){
   return r.json();
 }
 async function blockIP(cidr,reason,ttl){
-  if(!confirm("Заблокировать "+cidr+" на ingress?\nБудет возвращаться 403 для этого источника."))return;
+  if(!await uiConfirm("Заблокировать "+cidr+" на ingress?\nБудет возвращаться 403 для этого источника."))return;
   const res=await _post("/api/block",{cidr:cidr,reason:reason||"",ttl:(ttl==null?2592000:ttl),group:_banGroup||undefined});
-  if(res.ok){alert("Заблокировано: "+(res.cidr||cidr)+" (активно правил: "+(res.active??"?")+")");renderBlocklist();}
-  else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok){uiAlert("Заблокировано: "+(res.cidr||cidr)+" (активно правил: "+(res.active??"?")+")");renderBlocklist();}
+  else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 async function blockManual(){
   const cidr=document.getElementById("bl_cidr").value.trim();
@@ -1061,15 +1101,15 @@ async function blockManual(){
   if(res.ok){msg.textContent="✓ "+(res.cidr||cidr);msg.className="text-xs text-emerald-300";document.getElementById("bl_cidr").value="";document.getElementById("bl_reason").value="";renderBlocklist();}
   else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-red-300";}
 }
-function quickBan(){
-  const ip=prompt(_lang==="ru"?"IP или CIDR для бана:":"IP or CIDR to ban:");
+async function quickBan(){
+  const ip=await uiPrompt(_lang==="ru"?"IP или CIDR для бана:":"IP or CIDR to ban:");
   if(ip&&ip.trim())blockIP(ip.trim(),"manual (topbar)",2592000);
 }
 function quickSearch(v){ v=(v||"").trim(); if(v)openProfile(v); }
 async function unblockCIDR(cidr){
-  if(!confirm("Снять блок с "+cidr+"?"))return;
+  if(!await uiConfirm("Снять блок с "+cidr+"?"))return;
   const res=await _post("/api/unblock",{cidr:cidr});
-  if(res.ok)renderBlocklist(); else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok)renderBlocklist(); else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 let _blAll=null, _blPage=0, _blEnabled=true, _blMode="all";
 const _BL_PER=12;
@@ -1199,22 +1239,22 @@ async function renderBanCandidates(_try){
 }
 async function resyncNow(){
   const res=await _post("/api/resync",{});
-  if(res.ok){alert("Ресинк выполнен. Активных правил: "+(res.active??"?"));renderBlocklist();}
-  else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok){uiAlert("Ресинк выполнен. Активных правил: "+(res.active??"?"));renderBlocklist();}
+  else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 async function unbanAll(){
-  if(!confirm("Снять ВСЕ блокировки с ingress?\n(статический deny-список приложения не затрагивается)"))return;
+  if(!await uiConfirm("Снять ВСЕ блокировки с ingress?\n(статический deny-список приложения не затрагивается)"))return;
   const res=await _post("/api/unblock_all",{});
-  if(res.ok){alert("Снято блокировок: "+(res.removed??0));renderBlocklist();renderBanCandidates();}
-  else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok){uiAlert("Снято блокировок: "+(res.removed??0));renderBlocklist();renderBanCandidates();}
+  else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 async function banAllCandidates(){
-  if(!_banCandObjs.length){alert("Список пуст — банить некого.");return;}
-  if(!confirm("Забанить ВСЕХ "+_banCandObjs.length+" IP на ingress?\nКаждый будет получать 403."))return;
+  if(!_banCandObjs.length){uiAlert("Список пуст — банить некого.");return;}
+  if(!await uiConfirm("Забанить ВСЕХ "+_banCandObjs.length+" IP на ingress?\nКаждый будет получать 403."))return;
   const items=_banCandObjs.map(x=>({cidr:x.ip,reason:_banReason(x)}));
   const res=await _post("/api/block_bulk",{items,ttl:2592000,group:_banGroup||undefined});
-  if(res.ok){alert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено: "+res.skipped.length):"")+"\nАктивных правил: "+(res.active??"?"));renderBanCandidates();renderBlocklist();}
-  else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok){uiAlert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено: "+res.skipped.length):"")+"\nАктивных правил: "+(res.active??"?"));renderBanCandidates();renderBlocklist();}
+  else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 async function renderSuspects(_try){
   _try=_try||0;
@@ -1251,7 +1291,7 @@ async function judgeSuspects(force){
   const bw=(document.getElementById("sc_win")||{}).value||"1h";
   let ips=_suspectObjs.slice(0,10).map(x=>x.ip);
   if(force) ips.forEach(ip=>delete _verdictMap[ip]); else ips=ips.filter(ip=>!_verdictMap[ip]);
-  if(!ips.length){alert(force?"Список пуст.":"Все уже оценены — жми «Переоценить» для форс-перепроверки.");return;}
+  if(!ips.length){uiAlert(force?"Список пуст.":"Все уже оценены — жми «Переоценить» для форс-перепроверки.");return;}
   if(force)renderSuspects();
   const label=btn?btn.textContent:"";
   if(btn)btn.disabled=true;
@@ -1266,12 +1306,12 @@ async function judgeSuspects(force){
   if(btn){btn.disabled=false;btn.textContent=label;}
 }
 async function banAllSuspects(){
-  if(!_suspectObjs.length){alert("Список пуст.");return;}
-  if(!confirm("Забанить ВСЕХ "+_suspectObjs.length+" подозрительных IP на ingress?"))return;
+  if(!_suspectObjs.length){uiAlert("Список пуст.");return;}
+  if(!await uiConfirm("Забанить ВСЕХ "+_suspectObjs.length+" подозрительных IP на ingress?"))return;
   const items=_suspectObjs.map(x=>({cidr:x.ip,reason:_banReason(x)}));
   const res=await _post("/api/block_bulk",{items,ttl:2592000,group:_banGroup||undefined});
-  if(res.ok){alert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено: "+res.skipped.length):"")+"\nАктивных правил: "+(res.active??"?"));renderSuspects();renderBlocklist();}
-  else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok){uiAlert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено: "+res.skipped.length):"")+"\nАктивных правил: "+(res.active??"?"));renderSuspects();renderBlocklist();}
+  else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 function wcRender(job,data){
   if(!data||data.error) return `<div class="text-slate-600 text-xs">${esc(job)}: ${esc((data&&data.error)||"—")}</div>`;
@@ -1416,25 +1456,25 @@ function isCfIp(ip){if(!ip)return false;ip=String(ip);if(ip.includes(":")){const
 function cfBadge(ip){return isCfIp(ip)?`<span class="px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 text-[10px] border border-orange-500/30 shrink-0" title="IP Cloudflare — не реальный посетитель, банить бесполезно (реальный в CF-Connecting-IP)">☁ Cloudflare</span>`:"";}
 async function orBanIPs(){
   const ips=[...new Set((window._orRows||[]).map(r=>r.ip).filter(Boolean))];
-  if(!ips.length){alert("Нет IP в результате");return;}
+  if(!ips.length){uiAlert("Нет IP в результате");return;}
   let blocks=[];
   try{const d=await fetch("/api/blocklist").then(r=>r.json());
-    if(!d.enabled){alert("blocklist-api не настроен — бан недоступен.");return;}
+    if(!d.enabled){uiAlert("blocklist-api не настроен — бан недоступен.");return;}
     blocks=d.blocks||[];
   }catch(e){}
   const isBanned=ip=>blocks.some(b=>ipInCidr(ip,b.cidr||""));
   const matchOf=ip=>(blocks.find(b=>ipInCidr(ip,b.cidr||""))||{}).cidr;
   const already=ips.filter(isBanned), fresh=ips.filter(ip=>!isBanned(ip));
   if(ips.length===1){
-    if(already.length){alert("ℹ️ "+ips[0]+" уже забанен на ingress (правило "+matchOf(ips[0])+").");return;}
+    if(already.length){uiAlert("ℹ️ "+ips[0]+" уже забанен на ingress (правило "+matchOf(ips[0])+").");return;}
     return blockIP(ips[0],"из «показать запросы»");
   }
-  if(!fresh.length){alert("Все "+ips.length+" IP уже забанены на ingress.");return;}
-  if(!confirm("Забанить "+fresh.length+" новых IP на ingress?"+(already.length?("\n("+already.length+" уже забанены — пропущу)"):"")+"\nКаждый будет получать 403."))return;
+  if(!fresh.length){uiAlert("Все "+ips.length+" IP уже забанены на ingress.");return;}
+  if(!await uiConfirm("Забанить "+fresh.length+" новых IP на ingress?"+(already.length?("\n("+already.length+" уже забанены — пропущу)"):"")+"\nКаждый будет получать 403."))return;
   const items=fresh.map(ip=>({cidr:ip,reason:"из «показать запросы»"}));
   const res=await _post("/api/block_bulk",{items,ttl:2592000,group:_banGroup||undefined});
-  if(res.ok){alert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено (доверенные/приватные): "+res.skipped.length):"")+(already.length?(", уже было: "+already.length):"")+"\nАктивных правил: "+(res.active??"?"));renderBlocklist();}
-  else alert("Не удалось: "+(res.error||"ошибка"));
+  if(res.ok){uiAlert("Забанено: "+(res.blocked?res.blocked.length:0)+(res.skipped&&res.skipped.length?(", пропущено (доверенные/приватные): "+res.skipped.length):"")+(already.length?(", уже было: "+already.length):"")+"\nАктивных правил: "+(res.active??"?"));renderBlocklist();}
+  else uiAlert("Не удалось: "+(res.error||"ошибка"));
 }
 let lastExplorer=[];
 async function runExplorer(){
@@ -1450,7 +1490,7 @@ async function runExplorer(){
 }
 function exportExplorerIPs(){
   const ips=[...new Set(lastExplorer.map(r=>r.ip).filter(Boolean))];
-  if(!ips.length){alert("Сначала «Найти» — нет результатов для экспорта");return;}
+  if(!ips.length){uiAlert("Сначала «Найти» — нет результатов для экспорта");return;}
   exportList(ips,"denylist-explorer.txt");
 }
 async function runNL(){
@@ -1784,46 +1824,53 @@ function renderEnvs(){
 function envCard(e){
   const cf=e.cloudflare||{}, ing=e.ingress||{}, id=esc(e.id);
   return `<div class="card p-3" data-env="${id}">
-    <div class="flex items-center justify-between mb-2">
-      <div class="text-sm text-slate-200 font-medium">${esc(e.name||e.id)} <span class="mono text-[11px] text-slate-500">${id}</span></div>
+    <div class="env-row mb-3">
+      <div class="text-sm font-medium">${esc(e.name||e.id)} <span class="mono text-[11px]" style="color:var(--faint)">${id}</span></div>
       <div class="flex gap-1">
-        <button onclick="envSave('${id}')" class="text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Сохранить</button>
-        <button onclick="envDelete('${id}')" class="text-[11px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10">удалить</button></div>
+        <button onclick="envSave('${id}')" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+        <button onclick="envDelete('${id}')" class="btn btn-danger btn-xs" data-i18n="delete">Delete</button></div>
     </div>
-    <div class="grid sm:grid-cols-2 gap-3 text-[11px] text-slate-400">
-      <label class="block">Название<input data-f="name" value="${esc(e.name||'')}" class="w-full mt-0.5 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"></label>
-      <label class="block">Loki URL <span class="text-slate-600">(пусто = общий Loki + метка env)</span><input data-f="loki_url" value="${esc(e.loki_url||'')}" placeholder="http://loki:3100" class="w-full mt-0.5 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"></label>
+    <div class="grid sm:grid-cols-2 gap-3 text-[11px]" style="color:var(--muted)">
+      <label class="block"><span data-i18n="env.name">Name</span><input data-f="name" value="${esc(e.name||'')}" class="input mt-1"></label>
+      <label class="block"><span data-i18n="env.loki">Loki URL</span> <span style="color:var(--faint)" data-i18n="env.loki.hint">(blank = shared Loki + env label)</span><input data-f="loki_url" value="${esc(e.loki_url||'')}" placeholder="http://loki:3100" class="input mono mt-1"></label>
     </div>
-    <div class="mt-2 border-t border-slate-800 pt-2">
-      <label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" data-f="cf_enabled" ${cf.enabled?'checked':''}> ☁️ Cloudflare для этого env</label>
-      <div class="grid sm:grid-cols-2 gap-2 mt-1">
-        <input data-f="cf_token" type="password" placeholder="${cf.token_set?'•••• токен задан (введите, чтобы заменить)':'CF API token'}" class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-        <select data-f="cf_mode" class="w-full text-[11px] bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><option ${cf.mode==='ip-list'?'selected':''}>ip-list</option><option ${cf.mode==='access-rules'?'selected':''}>access-rules</option></select>
+    <div class="mt-3 pt-3" style="border-top:1px solid var(--border)">
+      <div class="env-row"><span class="text-[12px]">☁️ <span data-i18n="env.cf">Cloudflare for this environment</span></span>
+        <button type="button" class="sw${cf.enabled?' on':''}" data-f="cf_enabled" onclick="envSw(this,'cfblk-${id}')" aria-label="toggle Cloudflare"><i></i></button></div>
+      <div id="cfblk-${id}" class="env-sec grid sm:grid-cols-2 gap-2${cf.enabled?'':' hidden'}">
+        <input data-f="cf_token" type="password" placeholder="${cf.token_set?'•••• token set (type to replace)':'CF API token'}" class="input mono">
+        <select data-f="cf_mode" class="input"><option ${cf.mode==='ip-list'?'selected':''}>ip-list</option><option ${cf.mode==='access-rules'?'selected':''}>access-rules</option></select>
       </div>
     </div>
-    <div class="mt-2 border-t border-slate-800 pt-2">
-      <label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" data-f="ing_enabled" ${ing.enabled?'checked':''}> ☸️ ingress-nginx (k8s) для этого env</label>
-      <div class="grid sm:grid-cols-2 gap-2 mt-1">
-        <input data-f="ing_ns" value="${esc(ing.ns||'')}" placeholder="namespace" class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-        <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
+    <div class="mt-3 pt-3" style="border-top:1px solid var(--border)">
+      <div class="env-row"><span class="text-[12px]">☸️ <span data-i18n="env.ing">ingress-nginx (k8s) for this environment</span></span>
+        <button type="button" class="sw${ing.enabled?' on':''}" data-f="ing_enabled" onclick="envSw(this,'ingblk-${id}')" aria-label="toggle ingress"><i></i></button></div>
+      <div id="ingblk-${id}" class="env-sec grid sm:grid-cols-2 gap-2${ing.enabled?'':' hidden'}">
+        <input data-f="ing_ns" value="${esc(ing.ns||'')}" placeholder="namespace" class="input mono">
+        <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="input mono">
       </div>
     </div>
   </div>`;
 }
-function envNew(){
-  const id=prompt("ID окружения (латиница, напр. prod / dev):"); if(!id)return;
-  _envs.push({id:id.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-'),name:id,cloudflare:{},ingress:{}}); renderEnvs();
+function envSw(btn,blockId){ btn.classList.toggle("on"); const b=document.getElementById(blockId); if(b)b.classList.toggle("hidden",!btn.classList.contains("on")); }
+async function envNew(){
+  const id=await uiPrompt(_lang==="ru"?"ID окружения (латиница, напр. prod / dev):":"Environment ID (latin, e.g. prod / dev):");
+  if(!id||!id.trim())return;
+  _envs.push({id:id.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-'),name:id.trim(),cloudflare:{},ingress:{}}); renderEnvs();
 }
-function _envField(id,f){ const c=document.querySelector(`[data-env="${id}"]`),el=c&&c.querySelector(`[data-f="${f}"]`); return !el?undefined:(el.type==="checkbox"?el.checked:el.value); }
+function _envField(id,f){ const c=document.querySelector(`[data-env="${id}"]`),el=c&&c.querySelector(`[data-f="${f}"]`);
+  if(!el)return undefined;
+  if(el.classList.contains("sw"))return el.classList.contains("on");
+  return el.type==="checkbox"?el.checked:el.value; }
 async function envSave(id){
   const body={id,name:_envField(id,"name"),loki_url:_envField(id,"loki_url"),
     cloudflare:{enabled:_envField(id,"cf_enabled"),token:_envField(id,"cf_token"),mode:_envField(id,"cf_mode")},
     ingress:{enabled:_envField(id,"ing_enabled"),ns:_envField(id,"ing_ns"),cm:_envField(id,"ing_cm")}};
   const d=await (await fetch("/api/environments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
-  if(d.ok)loadEnvs(); else alert("не сохранилось: "+(d.error||"ошибка"));
+  if(d.ok)loadEnvs(); else uiAlert("не сохранилось: "+(d.error||"ошибка"));
 }
 async function envDelete(id){
-  if(!confirm("Удалить окружение «"+id+"»? Ноды/баны останутся, но потеряют его CF/Loki-конфиг."))return;
+  if(!await uiConfirm("Удалить окружение «"+id+"»? Ноды/баны останутся, но потеряют его CF/Loki-конфиг."))return;
   await fetch("/api/environments/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); loadEnvs();
 }
 
@@ -1876,9 +1923,9 @@ function nfDelChannel(i){ _nfSync(); _nf.channels.splice(i,1); renderNotify(); }
 function nfAddRule(){ _nfSync(); _nf.rules.push({enabled:true,events:["ban_failed"],env:"",min_severity:"warning",channel:(_nf.channels[0]||{}).id||""}); renderNotify(); }
 function nfDelRule(i){ _nfSync(); _nf.rules.splice(i,1); renderNotify(); }
 async function nfTest(id){
-  if(!id){ alert("сначала задай id канала и сохрани"); return; }
+  if(!id){ uiAlert("сначала задай id канала и сохрани"); return; }
   const d=await (await fetch("/api/notify/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:id})})).json();
-  alert(d.ok?"✓ отправлено":"✗ "+(d.error||"ошибка"));
+  uiAlert(d.ok?"✓ отправлено":"✗ "+(d.error||"ошибка"));
 }
 async function saveNotify(){
   _nfSync();
@@ -2037,7 +2084,7 @@ function copyInstallCmd(){
   navigator.clipboard&&navigator.clipboard.writeText(t);
 }
 async function deleteNode(id){
-  if(!confirm("Отозвать токен ноды «"+id+"»? Агент перестанет получать баны, пока не перерегистрируется."))return;
+  if(!await uiConfirm("Отозвать токен ноды «"+id+"»? Агент перестанет получать баны, пока не перерегистрируется."))return;
   await fetch("/api/nodes/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
   loadNodes();
 }
@@ -2063,7 +2110,7 @@ async function addToMain(path,el){
   // если что-то не настроено — подскажем
   if((p&&!p.ok&&!p.already)||(a&&!a.ok&&!a.already)){
     const probs=[]; if(p&&!p.ok&&!p.already)probs.push("403: "+(p.error||"?")); if(a&&!a.ok&&!a.already)probs.push("автобан: "+(a.error||"?"));
-    setTimeout(()=>alert("Добавлено частично:\n"+probs.join("\n")+"\n\nОтметь основные правила звёздочкой ★ во вкладках 403 и Автобан."),100);
+    setTimeout(()=>uiAlert("Добавлено частично:\n"+probs.join("\n")+"\n\nОтметь основные правила звёздочкой ★ во вкладках 403 и Автобан."),100);
   }
   if(_view==="p403")loadP403();
 }
@@ -2206,10 +2253,10 @@ function p403EditAdd(id){
 async function p403EditSave(id){
   const st=_p403EditState[id]; if(!st)return;
   const parts=st.parts.map(p=>p.trim()).filter(Boolean);
-  if(!parts.length){alert("в правиле не осталось ни одного пути — тогда удали правило целиком.");return;}
+  if(!parts.length){uiAlert("в правиле не осталось ни одного пути — тогда удали правило целиком.");return;}
   const pattern="("+parts.join("|")+")";
   const res=await _post("/api/path_rule",{id,name:st.name,pattern,enabled:st.enabled});
-  if(res.ok)loadP403(); else alert("не удалось: "+(res.error||"?"));
+  if(res.ok)loadP403(); else uiAlert("не удалось: "+(res.error||"?"));
 }
 // ── генератор паттернов: человек пишет путь/wildcard → regex для nginx ~* ──────
 const P403_BENIGN=["/","/index.html","/index.php","/home","/login","/account/login","/api/users","/api/v1/orders","/dashboard","/static/app.js","/assets/main.css","/favicon.ico","/robots.txt","/images/logo.png"];
@@ -2294,25 +2341,25 @@ async function p403Save(){
     document.getElementById("p403-name").value="";_clear();loadP403();}
   else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
 }
-async function p403Toggle(id,enabled){const res=await _post("/api/path_rule/toggle",{id,enabled});if(res.ok)loadP403();else alert("не удалось: "+(res.error||"?"));}
-async function p403Delete(id){if(!confirm("Удалить правило 403?"))return;const res=await _post("/api/path_rule/delete",{id});if(res.ok)loadP403();else alert("не удалось: "+(res.error||"?"));}
+async function p403Toggle(id,enabled){const res=await _post("/api/path_rule/toggle",{id,enabled});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
+async function p403Delete(id){if(!await uiConfirm("Удалить правило 403?"))return;const res=await _post("/api/path_rule/delete",{id});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
 async function p403Master(){
   const on=_p403&&_p403.enabled!==false;
-  if(on&&!confirm("Выключить ВСЮ секцию 403?\nВсе правила по путям перестанут блокировать — сканеры снова будут проходить."))return;
+  if(on&&!await uiConfirm("Выключить ВСЮ секцию 403?\nВсе правила по путям перестанут блокировать — сканеры снова будут проходить."))return;
   const res=await _post("/api/path_master",{enabled:!on});
-  if(res.ok)loadP403();else alert("не удалось: "+(res.error||"?"));
+  if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));
 }
 async function p403Seed(){
-  if(!confirm("Добавить базовый набор правил сканеров одним правилом «base-scanners»?\n(повторный засев обновит его, не создаст дубль)"))return;
+  if(!await uiConfirm("Добавить базовый набор правил сканеров одним правилом «base-scanners»?\n(повторный засев обновит его, не создаст дубль)"))return;
   const res=await _post("/api/path_seed",{});
-  if(res.ok){loadP403();alert("✓ базовый набор добавлен/обновлён.\nЕсли у тебя был свой ручной if в ингрессе — убери его, чтобы не дублировать.");}
-  else alert("не удалось: "+(res.error||"?"));
+  if(res.ok){loadP403();uiAlert("✓ базовый набор добавлен/обновлён.\nЕсли у тебя был свой ручной if в ингрессе — убери его, чтобы не дублировать.");}
+  else uiAlert("не удалось: "+(res.error||"?"));
 }
 function _p403CloseSeedMenu(){const m=document.getElementById("p403-seed-menu");if(m)m.remove();document.removeEventListener("click",_p403SeedOutside,true);}
 function _p403SeedOutside(e){const m=document.getElementById("p403-seed-menu");if(m&&!m.contains(e.target))_p403CloseSeedMenu();}
 async function p403SeedAutoban(btn){
   _p403CloseSeedMenu();
-  let rules=[];try{rules=await ensureAbRules();}catch(e){alert("не удалось получить правила автобана");return;}
+  let rules=[];try{rules=await ensureAbRules();}catch(e){uiAlert("не удалось получить правила автобана");return;}
   const rc=btn.getBoundingClientRect();
   const m=document.createElement("div");m.id="p403-seed-menu";
   m.className="fixed z-[60] card border-slate-700 p-1.5 text-xs shadow-xl max-h-[320px] overflow-auto";
@@ -2337,8 +2384,8 @@ async function p403SeedAutobanGo(ids){
     const c=(res.created||[]).length, sk=(res.skipped||[]);
     let m="✓ создано/обновлено: "+c+(c?(" ("+(res.created||[]).join(", ")+")"):"");
     if(sk.length)m+="\nпропущено: "+sk.map(x=>x.name+" ("+x.reason+")").join(", ");
-    alert(m);}
-  else alert("не удалось: "+(res.error||"?"));
+    uiAlert(m);}
+  else uiAlert("не удалось: "+(res.error||"?"));
 }
 async function p403AddPath(path,el){
   const pat=_pathToPattern(path);
@@ -2346,14 +2393,14 @@ async function p403AddPath(path,el){
   try{
     const d=await fetch("/api/path_rules").then(r=>r.json());
     const hit=(d.rules||[]).filter(r=>r.enabled!==false).find(r=>{try{return new RegExp(r.pattern,"i").test(path);}catch(e){return false;}});
-    if(hit&&!confirm("Путь «"+path+"» уже ловится правилом «"+(hit.name||hit.id)+"».\nВсё равно добавить отдельным правилом?")){
+    if(hit&&!await uiConfirm("Путь «"+path+"» уже ловится правилом «"+(hit.name||hit.id)+"».\nВсё равно добавить отдельным правилом?")){
       if(el){el.innerHTML="уже ловится";el.disabled=true;}return;}
   }catch(e){}
   const res=await _post("/api/path_rule",{name:"путь "+String(path).slice(0,40),pattern:pat});
   if(res.ok&&res.duplicate){if(el){el.innerHTML="уже есть";el.disabled=true;}return;}
   if(el){el.innerHTML=res.ok?"✓ 403":"✗";el.disabled=true;if(res.ok)el.className+=" text-rose-300";}
   if(res.ok&&_view==="p403")loadP403();
-  if(!res.ok)alert("не удалось добавить в 403: "+(res.error||"?"));
+  if(!res.ok)uiAlert("не удалось добавить в 403: "+(res.error||"?"));
 }
 function abMtypeChange(){
   const mt=document.getElementById("ab-mtype").value, fam=mt==="family";
@@ -2487,12 +2534,12 @@ function _renderAbLogPage(){
   el.innerHTML=body+pager;
 }
 async function abLogUnban(cidr,btn){
-  if(!confirm("Разбанить "+cidr+"?"))return;
+  if(!await uiConfirm("Разбанить "+cidr+"?"))return;
   if(btn){btn.disabled=true;btn.textContent="…";}
   try{const r=await fetch("/api/unblock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cidr})}).then(x=>x.json());
     if(r.ok){loadAbLog();if(typeof renderBlocklist==="function")renderBlocklist();}
-    else{alert("Не удалось: "+(r.error||"ошибка"));if(btn){btn.disabled=false;btn.textContent="↩ разбан";}}
-  }catch(e){alert("Ошибка: "+(e.message||e));if(btn){btn.disabled=false;btn.textContent="↩ разбан";}}
+    else{uiAlert("Не удалось: "+(r.error||"ошибка"));if(btn){btn.disabled=false;btn.textContent="↩ разбан";}}
+  }catch(e){uiAlert("Ошибка: "+(e.message||e));if(btn){btn.disabled=false;btn.textContent="↩ разбан";}}
 }
 // готовые пути по группам — клик добавляет в условие текущего правила
 const AB_PRESETS=[
@@ -2796,10 +2843,10 @@ function renderArm(executor){
 async function toggleArm(){
   const turningOn=!_abArmed;
   if(turningOn){
-    if(!confirm(`Включить автобан?\n\nВключённые правила начнут РЕАЛЬНО банить IP на ingress каждые ${_abInterval}с (до ${_abMaxTick} новых за проход).\nИсключаются: доверенные, приватные, Cloudflare, уже забаненные.\n\nВыключить можно этим же тумблером в любой момент.`))return;
+    if(!await uiConfirm(`Включить автобан?\n\nВключённые правила начнут РЕАЛЬНО банить IP на ingress каждые ${_abInterval}с (до ${_abMaxTick} новых за проход).\nИсключаются: доверенные, приватные, Cloudflare, уже забаненные.\n\nВыключить можно этим же тумблером в любой момент.`))return;
   }
   try{const d=await fetch("/api/autoban/arm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({armed:turningOn})}).then(r=>r.json());
-    _abArmed=!!d.armed;renderArm(d.executor);if(_abArmed)setTimeout(loadAutoban,2000);}catch(e){alert("не удалось: "+(e.message||e));}
+    _abArmed=!!d.armed;renderArm(d.executor);if(_abArmed)setTimeout(loadAutoban,2000);}catch(e){uiAlert("не удалось: "+(e.message||e));}
 }
 function abFormPayload(){
   const mt=document.getElementById("ab-mtype").value;
@@ -2891,12 +2938,12 @@ function renderAbRules(rules){
 }
 async function abToggle(id,enabled){
   try{await fetch("/api/autoban/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,enabled})});loadAutoban();}
-  catch(e){alert("не удалось: "+(e.message||e));}
+  catch(e){uiAlert("не удалось: "+(e.message||e));}
 }
 async function abDelete(id){
-  if(!confirm("Удалить правило #"+id+"?"))return;
+  if(!await uiConfirm("Удалить правило #"+id+"?"))return;
   try{await fetch("/api/autoban/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});if(_abEditId===id)abResetForm();loadAutoban();}
-  catch(e){alert("не удалось: "+(e.message||e));}
+  catch(e){uiAlert("не удалось: "+(e.message||e));}
 }
 // Only treat the hash as a view name for known views — the dashboard uses the hash
 // for its own win/host params (parseHash below), which showView('dash') would wipe.
