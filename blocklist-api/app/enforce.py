@@ -115,15 +115,32 @@ def _env_targets():
         return []
     out = []
     for e in envs:
-        cf = e.get("cloudflare") or {}
-        if cf.get("enabled") and cf.get("token"):
-            out.append({"id": "cf:" + e["id"], "type": "cloudflare", "env": e["id"],
-                        "mode": cf.get("mode") or ""})
+        # Cloudflare is no longer synthesized from envs — it lives in the cf_targets
+        # registry (migrated once via cf_targets.migrate_from_envs). See _cf_targets().
         ing = e.get("ingress") or {}
         if ing.get("enabled"):
             out.append({"id": "ingress:" + e["id"], "type": "ingress-cm", "env": e["id"],
                         "ns": ing.get("ns") or "", "cm": ing.get("cm") or ""})
     return out
+
+
+def _cf_targets():
+    """Named Cloudflare targets from the registry (decoupled from environments). A
+    migrated entry keeps its `env` so it stays in that env's group; GUI-created ones
+    have no env and are attached explicitly."""
+    try:
+        from . import cf_targets
+        cf_targets.migrate_from_envs()        # idempotent; runs once
+        out = []
+        for tid, e in cf_targets.all_full().items():
+            t = {"id": tid, "type": "cloudflare", "mode": e.get("mode") or ""}
+            if e.get("env"):
+                t["env"] = e["env"]
+            out.append(t)
+        return out
+    except Exception as ex:
+        print("[enforce] cf_targets load failed:", ex, flush=True)
+        return []
 
 
 def targets():
@@ -140,6 +157,10 @@ def targets():
                         "group": n.get("group") or "", "env": n.get("group") or "", "enrolled": True})
             have.add(n["id"])
     for t in _env_targets():
+        if t["id"] not in have:
+            out.append(t)
+            have.add(t["id"])
+    for t in _cf_targets():
         if t["id"] not in have:
             out.append(t)
             have.add(t["id"])

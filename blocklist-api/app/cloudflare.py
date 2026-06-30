@@ -55,10 +55,23 @@ _resolved = {}  # target_id -> {token, account_id, zone_id, mode, list_name, rul
 
 
 def _cfg(target):
-    """Resolve a target's CF config. A per-env target (`env` set) uses THAT env's
-    Cloudflare config + token (from the environments registry). Otherwise fall back to
-    the global GUI/ENV settings. The token is never taken from the exposed target dict."""
-    from . import settings, environments
+    """Resolve a target's CF config + token. Resolution order:
+      1. the named cf_targets registry (matched by target id) — the source of truth;
+      2. a per-env Cloudflare config (legacy `env` set) — fallback during migration;
+      3. the global GUI/ENV settings.
+    The token is never taken from the exposed target dict."""
+    from . import settings, environments, cf_targets
+    reg = cf_targets.get(target.get("id")) if target.get("id") else None
+    if reg and reg.get("token"):
+        return {
+            "token": reg.get("token"),
+            "mode": target.get("mode") or reg.get("mode") or settings.get("CF_MODE"),
+            "zone_id": reg.get("zone_id") or "",
+            "zone_name": reg.get("zone_name") or "",
+            "account_id": reg.get("account_id") or "",
+            "list_name": reg.get("list_name") or settings.get("CF_LIST_NAME"),
+            "rule_desc": reg.get("rule_desc") or ("soc %s" % target.get("id")),
+        }
     env = target.get("env")
     cf = environments.get_cf(env) if env else None
     if cf:

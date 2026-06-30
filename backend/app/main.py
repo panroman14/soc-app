@@ -449,6 +449,29 @@ async def api_environments_delete(request: Request):
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
+# ── named Cloudflare targets (registry) ─────────────────────────────────────────
+@app.get("/api/cf_targets")
+def api_cf_targets():
+    if not config.BLOCKLIST_API_URL:
+        return JSONResponse({"enabled": False, "targets": []})
+    _, body = _blocklist_call("GET", "/cf_targets")
+    return JSONResponse({"enabled": True, **(body or {})})
+
+
+@app.post("/api/cf_targets")
+async def api_cf_targets_save(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/cf_targets", body)
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
+
+
+@app.post("/api/cf_targets/delete")
+async def api_cf_targets_delete(request: Request):
+    body = await request.json()
+    status, resp = _blocklist_call("POST", "/cf_targets/delete", {"id": body.get("id", "")})
+    return JSONResponse(resp or {"ok": False}, status_code=status or 502)
+
+
 @app.get("/api/notify_config")
 def api_notify_config():
     if not config.BLOCKLIST_API_URL:

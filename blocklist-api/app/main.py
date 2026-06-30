@@ -127,6 +127,38 @@ def check_targets(id: str = ""):
     return {"checks": out}
 
 
+# ── named Cloudflare targets (registry, decoupled from environments) ────────────
+@app.get("/cf_targets")
+def cf_targets_list():
+    from . import cf_targets
+    cf_targets.migrate_from_envs()        # one-time migration of legacy per-env CF
+    return {"targets": cf_targets.public_view()}
+
+
+@app.post("/cf_targets")
+async def cf_targets_upsert(request: Request):
+    from . import cf_targets
+    body = await request.json()
+    try:
+        res = cf_targets.upsert(body.get("id") or "", body)
+        store.resync()                    # re-render so the target picks up current bans
+        return {"ok": True, **res}
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/cf_targets/delete")
+async def cf_targets_delete(request: Request):
+    from . import cf_targets
+    body = await request.json()
+    ok = cf_targets.delete(body.get("id") or "")
+    if ok:
+        store.resync()
+    return {"ok": ok}
+
+
 @app.get("/nginx_snippet")
 def nginx_snippet(request: Request, target: str = ""):
     """Rendered nginx config for a target's CIDR set — pulled by soc-nginx-agent on
