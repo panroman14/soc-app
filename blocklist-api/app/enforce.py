@@ -208,12 +208,11 @@ def resolve_group(group):
 
 
 def groups():
-    """All known group names → resolved target ids (incl. the implicit default)."""
-    out = {g: resolve_group(g) for g in _effective_groups()}
-    default = settings.get("BAN_GROUP_DEFAULT")
-    if default:                          # never inject a blank/None group key
-        out.setdefault(default, resolve_group(default))
-    return out
+    """All real group names → resolved target ids. We do NOT synthesize a named
+    "default" group: that only ever confused the UI (a phantom group every target
+    appeared to belong to). A manual ban with no group still applies to all targets
+    via resolve_group(None) — that's the "all targets" action, not a group."""
+    return {g: resolve_group(g) for g in _effective_groups()}
 
 
 # ── apply / status ────────────────────────────────────────────────────────────

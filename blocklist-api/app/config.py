@@ -73,7 +73,7 @@ ENFORCE = [x.strip() for x in _env("ENFORCE", _ENFORCE_DEFAULT).split(",") if x.
 
 BAN_TARGETS = _env_json("BAN_TARGETS", [{"id": t, "type": t} for t in ENFORCE])
 BAN_GROUPS = _env_json("BAN_GROUPS", {})        # group -> [target id]; {} = all-to-all
-BAN_GROUP_DEFAULT = _env("BAN_GROUP_DEFAULT", "default")
+BAN_GROUP_DEFAULT = _env("BAN_GROUP_DEFAULT", "")   # "" = no named default group; a group-less ban applies to all targets
 
 # --- where the rendered nginx snippet goes (ingress-nginx controller CM) ---
 CONTROLLER_NS = _env("CONTROLLER_NS", "ingress-nginx")
