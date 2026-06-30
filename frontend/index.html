@@ -880,7 +880,7 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов — задаются в BAN_TARGETS blocklist-api (внутри кластера).":"no ingress targets — defined in blocklist-api BAN_TARGETS (in-cluster).","nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets","nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.global":"Global",
   "cft.h":"Cloudflare targets","cft.sub":"A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).","cft.new":"New CF target",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
@@ -2141,7 +2141,7 @@ async function loadIngress(){
     el.innerHTML=ing.length?ing.map(t=>`<div class="bg-slate-950/50 border border-slate-800 rounded-lg p-3 flex items-center gap-2">
       <svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#326CE5" d="M12 2 3.6 6v8L12 22l8.4-8V6L12 2z"/><circle cx="12" cy="12" r="3.1" fill="#fff"/></svg>
       <span class="mono text-sm text-slate-200">${esc(t.id)}</span>${t.env?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">env: ${esc(t.env)}</span>`:""}</div>`).join("")
-      :`<div class="text-slate-500 text-xs">${_trText("нет ingress-таргетов — задаются в BAN_TARGETS blocklist-api (внутри кластера).")}</div>`;
+      :`<div class="text-slate-500 text-xs">${_trText("нет ingress-таргетов")}</div>`;
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
 function loadTargets(){ setTsub(_tsub); }
@@ -2729,20 +2729,29 @@ function _p403RenderList(){
     const dt=r.ts?`<span class="text-[10px] text-slate-600 shrink-0">${_p403fmtDate(r.ts)}</span>`:"";
     const plen=(r.pattern||"").length;
     const isMain=String(_mainRules.path_id)===String(r.id);
-    return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded px-3 py-2 ${en?'':'opacity-60'}">
-      <div class="flex items-center gap-2">
-        <button onclick="p403Toggle('${esc(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
-        <button onclick="setMainRule('path','${esc(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
-        <span class="text-sm text-slate-200 font-medium truncate">${esc(r.name||'(без имени)')}${isMain?' <span class="text-[10px] text-amber-400">основное</span>':''}</span>
-        ${en?'':'<span class="text-[10px] text-amber-400 shrink-0">выкл</span>'}${by}${dt}
-        <span class="text-[10px] text-slate-600 shrink-0 ml-auto">${plen}&nbsp;симв.</span>
-        <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 shrink-0">паттерн&nbsp;▾</button>
-        <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">✎&nbsp;ред.</button>
-        <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20 shrink-0">удалить</button>
+    const meta=[r.added_by?esc(r.added_by):"",r.ts?_p403fmtDate(r.ts):"",plen+" симв."].filter(Boolean).join(" · ");
+    return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded-lg px-3.5 py-3 ${en?'':'opacity-60'}">
+      <div class="flex items-start gap-2.5">
+        <button onclick="p403Toggle('${esc(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button onclick="setMainRule('path','${esc(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
+            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>
+            ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">основное</span>':''}
+          </div>
+          <div class="text-[10px] text-slate-500 mt-0.5">${meta}</div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">паттерн&nbsp;▾</button>
+          <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
+          <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
+        </div>
       </div>
-      ${_attachUI(r,'p403')}
-      ${_appliesLineRule(r, true)}
-      <div id="pat-${esc(r.id)}" class="hidden mono text-[11px] text-slate-400 break-all mt-1.5 bg-slate-950/60 rounded p-2 max-h-44 overflow-auto">${esc(r.pattern||"")}</div>
+      <div class="mt-2 pt-2 border-t border-slate-800/60">
+        ${_attachUI(r,'p403')}
+        ${_appliesLineRule(r, true)}
+      </div>
+      <div id="pat-${esc(r.id)}" class="hidden mono text-[11px] text-slate-400 break-all mt-2 bg-slate-950/60 rounded p-2 max-h-44 overflow-auto">${esc(r.pattern||"")}</div>
       <div id="ed-${esc(r.id)}" class="hidden mt-2 border-t border-slate-800 pt-2"></div>
     </div>`;}).join("");
 }
