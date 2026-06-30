@@ -274,18 +274,22 @@
 
   <h2 class="sec">Денлист <span class="text-slate-500 font-normal">/ блокировки на ingress</span></h2>
   <section class="card p-4 mb-8">
-    <div class="flex items-center gap-2 mb-3 flex-wrap">
-      <input id="bl_cidr" placeholder="IP или CIDR (напр. 203.0.113.0/24)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-64" />
-      <input id="bl_reason" placeholder="причина" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-48" />
-      <select id="bl_ttl" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-300">
+    <!-- ряд 1: добавить блокировку -->
+    <div class="flex items-center gap-2 mb-2 flex-wrap">
+      <input id="bl_cidr" placeholder="IP или CIDR (напр. 203.0.113.0/24)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 flex-1 min-w-[180px] max-w-xs" />
+      <input id="bl_reason" placeholder="причина" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-40" />
+      <select id="bl_ttl" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-300 shrink-0">
         <option value="2592000" selected>30д</option><option value="0">навсегда</option><option value="3600">1ч</option><option value="86400">24ч</option><option value="604800">7д</option>
       </select>
-      <button onclick="blockManual()" class="text-sm px-3 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ Заблокировать</button>
-      <button onclick="unbanAll()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700">↩ Разбанить всех</button>
-      <button onclick="resyncNow()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700" title="перечитать денлист в ingress (после kubectl apply)">↻ Ресинк</button>
-      <div id="bl_mode" class="flex gap-1 ml-auto"></div>
-      <input id="bl_search" oninput="_blPage=0;_renderBlPage()" placeholder="поиск по IP/причине…" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 w-56" />
-      <span id="bl_msg" class="text-xs"></span>
+      <button onclick="blockManual()" class="text-sm px-3 py-1 rounded bg-red-600/80 text-white hover:bg-red-600 shrink-0">⛔ Заблокировать</button>
+    </div>
+    <!-- ряд 2: операции над списком + фильтр -->
+    <div class="flex items-center gap-2 mb-3 flex-wrap border-t border-slate-800/60 pt-2.5">
+      <button onclick="unbanAll()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0">↩ Разбанить всех</button>
+      <button onclick="resyncNow()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0" title="перечитать денлист в ingress (после kubectl apply)">↻ Ресинк</button>
+      <div id="bl_mode" class="flex gap-1 shrink-0"></div>
+      <input id="bl_search" oninput="_blPage=0;_renderBlPage()" placeholder="поиск по IP/причине…" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 flex-1 min-w-[160px] max-w-xs ml-auto" />
+      <span id="bl_msg" class="text-xs shrink-0"></span>
     </div>
     <div id="blocklist" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div>
   </section>
@@ -677,12 +681,38 @@
       <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
     </section>
 
-    <!-- ── ingress-cm таргеты (read-only) ── -->
+    <!-- ── ingress-cm таргеты + Setup cluster ── -->
     <section id="tsec-ingress" class="hidden card p-4">
-      <div class="mb-3">
-        <h2 class="text-sm font-medium text-slate-200">☸️ <span data-i18n="ing.h">Ingress</span></h2>
-        <p class="text-[11px] text-slate-500 mt-0.5" data-i18n="ing.sub">ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.</p>
+      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div>
+          <h2 class="text-sm font-medium text-slate-200">☸️ <span data-i18n="ing.h">Ingress</span></h2>
+          <p class="text-[11px] text-slate-500 mt-0.5" data-i18n="ing.sub">ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.</p>
+        </div>
+        <button onclick="ingSetupToggle()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium shrink-0">⎈ <span data-i18n="ing.setup">Setup cluster</span></button>
       </div>
+
+      <div id="ing-setup" class="hidden mb-4 card p-3" style="background:#0e1424">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-medium text-slate-300" data-i18n="ing.setup.h">Deploy blocklist-api into the cluster (Helm)</h3>
+          <button onclick="ingSetupToggle()" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3" data-i18n="ing.setup.sub">The chart carries the RBAC to patch the ingress-nginx ConfigMap. Fill the values, copy the command, run it with cluster-admin.</p>
+        <div class="grid sm:grid-cols-2 gap-2.5 text-[11px]" style="color:var(--muted)">
+          <label class="block"><span data-i18n="ing.f.ns">Install namespace</span><input id="ing-ns" value="soc" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.host">block-api hostname</span><input id="ing-host" value="block-api.example.com" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.cns">Controller namespace</span><input id="ing-cns" value="ingress-nginx" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ccm">Controller ConfigMap</span><input id="ing-ccm" value="ingress-nginx-controller" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ip">Dashboard IP (whitelist)</span><input id="ing-ip" placeholder="203.0.113.10" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.token">Token</span>
+            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="text-[11px] px-2 rounded bg-slate-700 text-slate-200 shrink-0" data-i18n="ing.gen">gen</button></span></label>
+        </div>
+        <div class="flex items-stretch gap-2 mt-3">
+          <pre id="ing-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300"></pre>
+          <button onclick="ingCopyCmd()" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+        </div>
+        <p class="text-[11px] text-amber-400/80 mt-2" data-i18n="ing.setup.after">After install, point the dashboard at the API: set BLOCKLIST_API_URL=https://&lt;hostname&gt;</p>
+      </div>
+
       <div id="ingress-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
     </section>
 
@@ -1110,7 +1140,9 @@ function renderTray(){
   const lbl=_lang==="ru"?"скрытые карточки:":"hidden cards:";
   tray.innerHTML=`<span style="color:var(--faint)">${lbl}</span>`+_hiddenCards.map(k=>{
     const title=(I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k;
-    return `<span class="tray-chip" data-k="${esc(k)}" onclick="showCard(this.dataset.k)">+ ${esc(title)}</span>`;
+    // короткий ярлык: до тире/двоеточия (отбрасываем длинные подсказки) + лимит
+    const short=title.split(/—|–|:|·|\//)[0].trim().slice(0,24);
+    return `<span class="tray-chip" data-k="${esc(k)}" onclick="showCard(this.dataset.k)" title="${esc(title)}">+ ${esc(short)}</span>`;
   }).join("");
 }
 
