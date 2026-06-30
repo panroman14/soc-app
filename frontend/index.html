@@ -927,6 +927,7 @@ const RU2EN={
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
   "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
+  "осталось до авто-разбана":"time left until auto-unban","истекает…":"expiring…",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
@@ -1309,15 +1310,17 @@ function _renderBlPage(){
   const pages=Math.ceil(list.length/_BL_PER);
   if(_blPage>=pages)_blPage=pages-1; if(_blPage<0)_blPage=0;
   const page=list.slice(_blPage*_BL_PER,_blPage*_BL_PER+_BL_PER);
-  const ttlTxt=e=>{if(!e.ttl)return"навсегда";const left=e.ts+e.ttl-Math.floor(Date.now()/1000);return left<=0?"истекает":(left<3600?Math.ceil(left/60)+"м":Math.ceil(left/3600)+"ч");};
   const rows=page.map(e=>{
    const abRule=_blIsAutoban(e)?abRuleFromReason(e.reason):null;
    const abChip=abRule?`<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] border border-indigo-500/30 shrink-0" title="забанено автобаном по правилу">🤖 ${esc(abRule)}</span>`:"";
+   const ttl=e.ttl?`<span class="bl-ttl mono text-[11px] shrink-0" data-exp="${e.ts+e.ttl}" title="${_trText('осталось до авто-разбана')}">…</span>`
+                  :`<span class="text-[11px] shrink-0" style="color:var(--faint)">∞ ${_trText('навсегда')}</span>`;
    return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
       <span class="mono text-slate-200 w-40 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc((e.cidr||'').split('/')[0])}')">${esc(e.cidr)}</span>
       ${cfBadge((e.cidr||'').split('/')[0])}${abChip}
       <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="${esc(e.reason||"")}">${esc(e.reason||"")}</span>
-      <span class="text-[11px] text-slate-500 shrink-0">${esc(e.added_by||"")} · ${dt(e.ts)} · ${ttlTxt(e)}</span>
+      <span class="text-[11px] text-slate-500 shrink-0">${esc(e.added_by||"")} · ${dt(e.ts)}</span>
+      ${ttl}
       <button onclick="unblockCIDR('${esc(e.cidr)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700 shrink-0">разбан</button>
     </div>`;}).join("");
   const pager=pages>1?`<div class="flex items-center justify-between mt-2 text-[11px] text-slate-500">
@@ -1326,6 +1329,31 @@ function _renderBlPage(){
       <button onclick="_blPage++;_renderBlPage()" ${_blPage>=pages-1?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_blPage>=pages-1?"opacity-40":"hover:bg-slate-700"}">→</button>
     </div>`:`<div class="text-[11px] text-slate-500 mt-2">${list.length} активных</div>`;
   el.innerHTML=rows+pager;
+  _blTick(); _blStartCountdown();
+}
+// live TTL countdown (#10): tick every second, no re-fetch
+let _blTimer=null;
+function _fmtCountdown(left){
+  if(left<=0)return _trText("истекает…");
+  const d=Math.floor(left/86400),h=Math.floor(left%86400/3600),m=Math.floor(left%3600/60),s=left%60;
+  if(d>0)return d+"d "+h+"h"; if(h>0)return h+"h "+String(m).padStart(2,"0")+"m";
+  if(m>0)return m+"m "+String(s).padStart(2,"0")+"s"; return s+"s";
+}
+function _blTick(){
+  const now=Math.floor(Date.now()/1000); let anyLive=false;
+  document.querySelectorAll(".bl-ttl[data-exp]").forEach(el=>{
+    const left=(+el.dataset.exp||0)-now; anyLive=true;
+    el.textContent="⏳ "+_fmtCountdown(left);
+    el.style.color=left<=0?"var(--crit)":left<60?"var(--crit)":left<600?"var(--warn)":"var(--faint)";
+  });
+  return anyLive;
+}
+function _blStartCountdown(){
+  if(_blTimer)return;
+  _blTimer=setInterval(()=>{
+    if(_view!=="dash"||!document.querySelector(".bl-ttl[data-exp]")){ clearInterval(_blTimer); _blTimer=null; return; }
+    _blTick();
+  },1000);
 }
 
 // --- escalation ladder (#9) ---
