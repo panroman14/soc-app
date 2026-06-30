@@ -1352,6 +1352,32 @@ async def api_path_rule(request: Request):
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
+@app.get("/api/branding")
+def api_branding_get():
+    """Custom dashboard branding (title / subtitle / logo). Logo is a small data: URI."""
+    return db.setting_get("branding", {}) or {}
+
+
+@app.post("/api/branding")
+async def api_branding_set(request: Request):
+    body = await request.json()
+    title = (body.get("title") or "").strip()[:60]
+    subtitle = (body.get("subtitle") or "").strip()[:120]
+    icon = body.get("icon") or ""
+    # only accept a small inline image data URI; reject anything else / oversized
+    if icon:
+        if not isinstance(icon, str) or not icon.startswith("data:image/") or len(icon) > 256_000:
+            return JSONResponse({"ok": False, "error": "иконка должна быть картинкой data:image и < ~190KB"},
+                                status_code=400)
+    cur = db.setting_get("branding", {}) or {}
+    cur.update({"title": title, "subtitle": subtitle})
+    # icon: empty string in payload means "leave as is"; explicit null clears it
+    if "icon" in body:
+        cur["icon"] = icon
+    db.setting_set("branding", cur)
+    return {"ok": True, **cur}
+
+
 @app.post("/api/path_rule/delete")
 async def api_path_rule_delete(request: Request):
     body = await request.json()

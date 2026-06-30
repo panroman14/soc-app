@@ -137,10 +137,11 @@
 <body class="min-h-screen">
 <div class="app">
   <aside class="sidebar" id="sidebar">
-    <div class="flex items-center gap-2.5 px-1 pb-3 mb-2 border-b" style="border-color:var(--border)">
-      <div class="w-9 h-9 rounded-xl grid place-items-center" style="background:linear-gradient(160deg,#4d8dff2e,#7c5cff1a);border:1px solid #4d8dff45;color:var(--accent2);box-shadow:0 6px 18px -8px #4d8dff77">
+    <div class="group relative flex items-center gap-2.5 px-1 pb-3 mb-2 border-b" style="border-color:var(--border)">
+      <div id="brand-icon" class="w-9 h-9 rounded-xl grid place-items-center overflow-hidden shrink-0" style="background:linear-gradient(160deg,#4d8dff2e,#7c5cff1a);border:1px solid #4d8dff45;color:var(--accent2);box-shadow:0 6px 18px -8px #4d8dff77">
         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></div>
-      <div><div class="font-semibold tracking-tight leading-none">SOC</div><div class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tagline">traffic & attack monitor</div></div>
+      <div class="min-w-0"><div id="brand-title" class="font-semibold tracking-tight leading-none truncate">SOC</div><div id="brand-sub" class="text-[11px] mt-0.5 truncate" style="color:var(--faint)" data-i18n="tagline">traffic & attack monitor</div></div>
+      <button onclick="brandEdit()" title="Изменить название и иконку" class="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition text-slate-500 hover:text-slate-200 text-xs leading-none p-1">✎</button>
     </div>
     <div class="nav-grp" data-i18n="grp.monitor">Monitor</div>
     <button id="navtab-dash" onclick="showView('dash')" class="navitem active"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span><span data-i18n="nav.dash">Overview</span></button>
@@ -769,6 +770,32 @@
       <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
     </div>
     <div id="modal-body" class="space-y-1.5"></div>
+  </div>
+</div>
+
+<div id="brand-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)brandClose()">
+  <div class="card w-full max-w-sm p-5 space-y-3">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-slate-200">Название и иконка</h3>
+      <button onclick="brandClose()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
+    </div>
+    <label class="block text-[12px] text-slate-400">Заголовок
+      <input id="brand-in-title" maxlength="60" placeholder="SOC" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
+    <label class="block text-[12px] text-slate-400">Подпись
+      <input id="brand-in-sub" maxlength="120" placeholder="монитор трафика и атак" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
+    <div class="flex items-center gap-3">
+      <div id="brand-prev" class="w-11 h-11 rounded-xl grid place-items-center overflow-hidden shrink-0 bg-slate-900 border border-slate-700 text-slate-600 text-[10px]">лого</div>
+      <label class="flex-1 text-[12px] text-slate-400">Иконка (PNG/SVG, &lt;190KB)
+        <input id="brand-in-file" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" onchange="brandFile(this)" class="mt-1 block w-full text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200"></label>
+    </div>
+    <div id="brand-err" class="text-[11px] text-rose-400 hidden"></div>
+    <div class="flex items-center justify-between pt-1">
+      <button onclick="brandClearIcon()" class="text-[12px] text-slate-400 hover:text-slate-200">убрать иконку</button>
+      <div class="flex gap-2">
+        <button onclick="brandClose()" class="text-[12px] px-3 py-1.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">Отмена</button>
+        <button onclick="brandSave()" class="text-[12px] px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-500">Сохранить</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3642,12 +3669,56 @@ async function abDelete(id){
 {const _h=location.hash.slice(1); if(["autoban","p403","nodes","journal","logs","settings"].includes(_h))showView(_h);}
 
 // активна ли вкладка: не на паузе И страница на экране (скрытая вкладка не грузит Loki)
+// ── кастомный брендинг (заголовок / подпись / иконка), хранится на бэке ──────────
+let _branding={}, _brandDefIcon="", _brandPendIcon=null;
+function applyBranding(){
+  const t=document.getElementById("brand-title"), s=document.getElementById("brand-sub"), ic=document.getElementById("brand-icon");
+  if(!_brandDefIcon&&ic)_brandDefIcon=ic.innerHTML;   // запомнили дефолтный SVG один раз
+  if(t){ t.removeAttribute("data-i18n");t.textContent=_branding.title||"SOC"; }
+  if(s){ if(_branding.subtitle){s.textContent=_branding.subtitle;s.removeAttribute("data-i18n");}else{s.setAttribute("data-i18n","tagline");} }
+  if(ic){ ic.innerHTML=_branding.icon?`<img src="${_branding.icon}" class="w-full h-full object-cover" alt="logo">`:_brandDefIcon; }
+  if(_branding.title)document.title=_branding.title+" Dashboard";
+  if(typeof applyI18n==="function")applyI18n();
+}
+async function loadBranding(){
+  try{ _branding=await fetch("/api/branding").then(r=>r.json())||{}; }catch(e){ _branding={}; }
+  applyBranding();
+}
+function brandEdit(){
+  document.getElementById("brand-in-title").value=_branding.title||"";
+  document.getElementById("brand-in-sub").value=_branding.subtitle||"";
+  _brandPendIcon=null;
+  const pv=document.getElementById("brand-prev");
+  pv.innerHTML=_branding.icon?`<img src="${_branding.icon}" class="w-full h-full object-cover">`:"лого";
+  document.getElementById("brand-err").classList.add("hidden");
+  document.getElementById("brand-modal").classList.remove("hidden");
+}
+function brandClose(){ document.getElementById("brand-modal").classList.add("hidden"); }
+function _brandErr(m){ const e=document.getElementById("brand-err");e.textContent=m;e.classList.remove("hidden"); }
+function brandFile(inp){
+  const f=inp.files&&inp.files[0]; if(!f)return;
+  if(f.size>180*1024){ _brandErr("файл больше 180KB — выбери поменьше");inp.value="";return; }
+  const r=new FileReader();
+  r.onload=()=>{ _brandPendIcon=r.result; document.getElementById("brand-prev").innerHTML=`<img src="${r.result}" class="w-full h-full object-cover">`; document.getElementById("brand-err").classList.add("hidden"); };
+  r.readAsDataURL(f);
+}
+function brandClearIcon(){ _brandPendIcon=""; document.getElementById("brand-prev").innerHTML="лого"; }
+async function brandSave(){
+  const payload={title:document.getElementById("brand-in-title").value.trim(),subtitle:document.getElementById("brand-in-sub").value.trim()};
+  if(_brandPendIcon!==null)payload.icon=_brandPendIcon;   // только если трогали файл
+  try{
+    const r=await _post("/api/branding",payload);
+    if(r&&r.ok===false){ _brandErr(r.error||"ошибка сохранения");return; }
+    _branding={title:r.title||"",subtitle:r.subtitle||"",icon:r.icon||""};
+    applyBranding(); brandClose();
+  }catch(e){ _brandErr("не удалось сохранить"); }
+}
 const isActive=()=>!paused&&document.visibilityState==="visible";
 const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();initCards();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();
+applyI18n();initCards();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();loadBranding();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
