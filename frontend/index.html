@@ -56,9 +56,9 @@
   .card-hidden{display:none!important}
   .llm-off [data-llm]{display:none!important}   /* LLM off → hide every AI mention */
   h2.sec{display:flex;align-items:center;gap:8px}
-  .card-hide{margin-left:auto;width:18px;height:18px;border-radius:5px;border:1px solid var(--border2);color:var(--faint);
-    background:transparent;cursor:pointer;font-size:12px;line-height:1;opacity:0;transition:.12s}
-  h2.sec:hover .card-hide{opacity:1}.card-hide:hover{color:var(--crit);border-color:#f8717155}
+  .card-hide{margin-left:auto;width:20px;height:20px;border-radius:6px;border:1px solid var(--border2);color:var(--faint);
+    background:transparent;cursor:pointer;font-size:13px;line-height:1;opacity:.45;transition:.12s;flex-shrink:0}
+  h2.sec:hover .card-hide{opacity:.9}.card-hide:hover{color:var(--crit);border-color:#f8717155;opacity:1}
   .tray-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:7px;border:1px dashed var(--border2);
     color:var(--muted);cursor:pointer}.tray-chip:hover{color:var(--text);border-color:var(--accent)}
   #whoswhat > .card{resize:both;overflow:auto;min-height:5rem;min-width:200px;max-width:100%}
@@ -294,7 +294,8 @@
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
           <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
-          <div class="text-[12px] text-slate-500 mt-0.5">Cloudflare / nginx / ingress — задаются переменными BAN_TARGETS / BAN_GROUPS</div>
+          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx-file — это подключённые ноды, cloudflare и ingress-cm — из настроек окружения.</div>
+          <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">Ноды</a> · <a onclick="showView('settings');setSub('env')" class="text-indigo-300 cursor-pointer">Настройки → Окружения</a></div>
         </div>
         <div class="flex items-center gap-2">
           <label class="text-[11px] text-slate-500">ручной бан в группу:</label>
@@ -449,13 +450,17 @@
       <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 class="text-base font-semibold text-slate-200">🚫 Правила 403 — блокировка по пути</h2>
-          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span> на nginx (сканеры/эксплойты: <span class="mono">/.env</span>, <span class="mono">/wp-login</span>, jndi…). Это <b>не бан IP</b> — режется сам путь, на всех доменах. Рендерится в ingress, как денлист.</p>
+          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span> (сканеры/эксплойты: <span class="mono">/.env</span>, <span class="mono">/wp-login</span>, jndi…). Это <b>не бан IP</b> — режется сам путь, на всех доменах окружения.</p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span id="p403-render" class="text-[12px]"></span>
           <span id="p403-master-lbl" class="text-[12px] text-slate-400">секция:</span>
           <button id="p403-master" onclick="p403Master()" class="text-sm px-3 py-1.5 rounded bg-slate-700 text-slate-200">…</button>
         </div>
+      </div>
+      <div class="mt-3 pt-3 border-t border-slate-800/70 flex items-start gap-2 flex-wrap text-[12px]">
+        <span class="text-slate-500 shrink-0">📍 <span data-i18n="p403.where">Where it applies:</span></span>
+        <span id="p403-applies" class="flex items-center gap-1.5 flex-wrap text-slate-400">…</span>
       </div>
     </section>
 
@@ -473,7 +478,7 @@
           </select></div>
         <div class="flex-1 min-w-[200px]"><label id="p403-raw-lbl" class="text-[11px] text-slate-500 block mb-1">Путь</label>
           <input id="p403-raw" oninput="p403Preview()" placeholder="/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono w-full"/></div>
-        <div><label class="text-[11px] text-slate-500 block mb-1">Куда</label>
+        <div><label class="text-[11px] text-slate-500 block mb-1" title="В какое правило дописать паттерн (одно правило = группа путей)">В правило</label>
           <select id="p403-target" onchange="p403TargetChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[170px]"></select></div>
         <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="добавить, даже если апка считает паттерн слишком широким"><input type="checkbox" id="p403-force"/> force</label>
         <button onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600">Добавить</button>
@@ -722,6 +727,7 @@ const I18N={en:{
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
+  "p403.where":"Where it applies:",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
@@ -733,6 +739,7 @@ const I18N={en:{
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
+  "p403.where":"Где применяется:",
 }};
 let _lang=localStorage.getItem("soc_lang")||"en";
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
@@ -751,7 +758,7 @@ const RU2EN={
   "ошибка:":"error:","ошибка":"error","ошибка проверки:":"check error:","не удалось:":"failed:","сохраняю…":"saving…",
   "сохранено":"saved","сохранить":"save","Сохранить":"Save","удалить":"delete","удалён":"deleted","отмена":"cancel",
   "обновить":"refresh","проверяю…":"checking…","Проверить подключение":"Check connection","тест":"test","вкл":"on","выкл":"off",
-  "включить":"enable","выключить":"disable","включено":"enabled","активно":"active","пауза":"pause","нет данных":"no data",
+  "включить":"enable","выключить":"disable","включено":"enabled","включена":"enabled","выключена":"disabled","активно":"active","пауза":"pause","нет данных":"no data",
   "никогда":"never","назад":"ago","всего":"total","Всего:":"Total:","Заблок.:":"Blocked:","причина":"reason","группы:":"groups:",
   "дефолтная группа:":"default group:","группа по умолч.":"default group","по умолчанию":"default","все":"all","все домены":"all domains",
   "мониторинг трафика и атак":"traffic & attack monitoring","подключение…":"connecting…","онлайн":"online","офлайн":"offline",
@@ -773,6 +780,33 @@ const RU2EN={
   "дашборд":"dashboard","роль":"role","важность ≥":"severity ≥","(любой)":"(any)",
   "Пока нет каналов — добавь Slack или Telegram выше.":"No channels yet — add Slack or Telegram above.",
   "Пока нет правил — добавь правило, чтобы события попадали в канал.":"No rules yet — add one so events reach a channel.","blocklist-api не настроен.":"blocklist-api not configured.",
+  "IP + 403-пути":"IP + 403 paths","только IP":"IP only","нода":"node",
+  "нет nginx/ingress таргетов — добавь ноду или включи ingress у env.":"no nginx/ingress targets — add a node or enable ingress for the env.",
+  "Cloudflare не применяет 403 по пути (только IP):":"Cloudflare doesn't apply path-403 (IP only):",
+  "Список строится автоматически: nginx-file — это подключённые ноды, cloudflare и ingress-cm — из настроек окружения.":"The list is built automatically: nginx-file = connected nodes, cloudflare and ingress-cm = from environment settings.",
+  "настраивается:":"managed in:","В правило":"Into rule","В какое правило дописать паттерн (одно правило = группа путей)":"Which rule to append the pattern to (one rule = a group of paths)",
+  // ── 403 view static strings ──
+  "Правила 403 — блокировка по пути":"403 rules — block by path","блокировка по пути":"block by path",
+  "Пути, которые сразу отдают ":"Paths that immediately return ","Это ":"This is ","не бан IP":"not an IP ban",
+  "(сканеры/эксплойты:":"(scanners/exploits:"," — режется сам путь, на всех доменах окружения.":" — the path itself is cut, on all domains of the environment.",
+  "содержит":"contains","секция:":"section:","поиск по имени / паттерну…":"search by name / pattern…",
+  "сгенерится regex:":"generated regex:","проверь на примере — забанит или нет:":"test on an example — blocked or not:",
+  "засеять из правил автобана":"seed from auto-ban rules","базовый набор сканеров":"basic scanner set","автобана":"auto-ban","Автобане":"Auto-ban","(подстрока)":"(substring)",
+  "напр. env-файлы":"e.g. env files","новое":"new","＋ новое правило":"＋ new rule","— меняются в ":"— managed in ",
+  "пусто — добавь правило, засей из автобана или базовый набор.":"empty — add a rule, seed from auto-ban, or use the basic set.",
+  "🛡️ защищённые (в 403 добавить нельзя, общий список с автобаном): ":"🛡️ protected (can't add to 403, shared list with auto-ban): ",
+  // ── auto-ban view static strings ──
+  "Механизм автобана":"Auto-ban engine","ручной бан в группу:":"manual ban to group:","Защищённые пути":"Protected paths",
+  "— автобан их НИКОГДА не банит, и в 403 их добавить НЕЛЬЗЯ (общий предохранитель)":"— auto-ban NEVER bans these, and they CAN'T be added to 403 (shared safety net)",
+  "+ добавить":"+ add","/новый/путь":"/new/path","Готовые пути":"Preset paths",
+  "— клик добавит путь в условие правила (ИЛИ)":"— click adds the path to the rule condition (OR)",
+  "кого бы забанило · реального бана нет":"who would be banned · no real ban","кого бы забанило":"who would be banned",
+  "Секреты / dotfiles":"Secrets / dotfiles","Админки / БД":"Admin panels / DB","Конфиги / бэкапы":"Configs / backups","CVE / роутеры / RCE":"CVE / routers / RCE",
+  "blocklist-api не настроен — баны отключены.":"blocklist-api not configured — bans disabled.",
+  "таргеты не заданы — забань ноду в окружение или включи Cloudflare у env.":"no targets — assign a node to an environment or enable Cloudflare for the env.",
+  "дефолтная группа:":"default group:","Превью":"Preview",
+  "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
+  "Исполнитель не подключён — реального бана нет.":"Executor not wired — no real ban.","Заполни условие и нажми «Превью».":"Fill the condition and hit “Preview”.",
   "Журнал действий":"Action journal","все действия":"all actions","баны":"bans","разбаны":"unbans","истёкшие (TTL)":"expired (TTL)",
   "только с ошибкой":"errors only","применено":"applied","нет записей под фильтр.":"no records for this filter.",
   "Настройки":"Settings","Окружения":"Environments","Уведомления":"Notifications","Глобальные":"Global","Глобальные настройки":"Global settings",
@@ -855,7 +889,7 @@ function startTranslator(){
 
 // ── card manager (hide / restore dashboard sections) ──────────────────────────
 let _hiddenCards=JSON.parse(localStorage.getItem("soc_hidden_cards")||"[]");
-function _cardKey(h){ return h.getAttribute("data-i18n")||h.dataset.card||h.textContent.replace("×","").trim().slice(0,40); }
+function _cardKey(h){ return h.getAttribute("data-i18n")||h.dataset.card||h.textContent.replace(/[×▾▸]/g,"").replace(/\s+/g," ").trim().slice(0,40); }
 function _saveCards(){ localStorage.setItem("soc_hidden_cards",JSON.stringify(_hiddenCards)); }
 function _applyCard(h,key){
   const hidden=_hiddenCards.includes(key);
@@ -885,7 +919,7 @@ function renderTray(){
   const lbl=_lang==="ru"?"скрытые карточки:":"hidden cards:";
   tray.innerHTML=`<span style="color:var(--faint)">${lbl}</span>`+_hiddenCards.map(k=>{
     const title=(I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k;
-    return `<span class="tray-chip" onclick="showCard(${JSON.stringify(k)})">+ ${esc(title)}</span>`;
+    return `<span class="tray-chip" data-k="${esc(k)}" onclick="showCard(this.dataset.k)">+ ${esc(title)}</span>`;
   }).join("");
 }
 
@@ -1952,10 +1986,10 @@ async function saveNotify(){
 // ── Глобальные настройки (ENV + GUI) ──────────────────────────────────────────
 const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare (default / fallback)",ingress:"☸️ ingress-nginx (default)",bans:"⛔ Bans: targets / groups"};
 let _setLocked=false;
-const _setGrpOpen={};  // remembers collapse state across re-renders
+const _setGrpOpen=JSON.parse(localStorage.getItem("soc_setgrp_open")||"{}");  // collapse state, persisted across reloads
 function setGrpToggle(btn,bodyId){ const on=!btn.classList.contains("on"); btn.classList.toggle("on",on);
   const b=document.getElementById(bodyId); if(b)b.classList.toggle("hidden",!on);
-  const g=bodyId.replace("setgrp-",""); _setGrpOpen[g]=on; }
+  const g=bodyId.replace("setgrp-",""); _setGrpOpen[g]=on; localStorage.setItem("soc_setgrp_open",JSON.stringify(_setGrpOpen)); }
 async function loadGlobal(){
   const wrap=document.getElementById("set-groups");
   try{
@@ -2146,7 +2180,22 @@ async function loadP403(){
       fetch("/api/protected_paths").then(r=>r.json()).catch(()=>({paths:[]}))]);
     await loadMainRules();
     renderP403(d);renderP403Status(st);p403ModeChange();renderP403Protected(pp.paths||[]);
+    renderP403Applies();
   }catch(e){document.getElementById("p403-list").innerHTML='<div class="text-rose-400 text-xs">не удалось загрузить: '+esc(e.message||e)+'</div>';}
+}
+async function renderP403Applies(){
+  const el=document.getElementById("p403-applies");if(!el)return;
+  try{
+    const d=await fetch("/api/ban_targets").then(r=>r.json());
+    if(d.enabled===false){ el.innerHTML=`<span class="text-slate-500">${_trText('blocklist-api не настроен.')}</span>`; return; }
+    const path=(d.targets||[]).filter(t=>t.type==="nginx-file"||t.type==="ingress-cm");
+    const cf=(d.targets||[]).filter(t=>t.type==="cloudflare");
+    let html=path.length
+      ? path.map(t=>`<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono">${esc(t.id)} <span class="text-emerald-500/70">${esc(t.type)}</span></span>`).join("")
+      : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
+    if(cf.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cf.map(t=>esc(t.id)).join(", ")}</span>`;
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML=`<span class="text-slate-500">—</span>`; }
 }
 function renderP403Protected(paths){
   const el=document.getElementById("p403-protected");if(!el)return;
@@ -2795,6 +2844,12 @@ function fillBanGroupSelect(groups,dflt){
   sel.innerHTML=`<option value="">${dl}</option>`+names.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
   sel.value=_banGroup;
 }
+function _targetSource(t){
+  if(t.type==="nginx-file")return _trText("нода")+(t.env?" · env "+esc(t.env):"");
+  if(t.type==="cloudflare")return "Cloudflare"+(t.env?" · env "+esc(t.env):"");
+  if(t.type==="ingress-cm")return "ingress"+(t.env?" · env "+esc(t.env):"");
+  return t.env?("env "+esc(t.env)):"";
+}
 async function loadBanTargets(){
   const el=document.getElementById("ban-targets");if(!el)return;
   try{
@@ -2807,12 +2862,16 @@ async function loadBanTargets(){
       const err=errs[t.id];
       const dot=err?"#ef4444":"#10b981";
       const inGroups=Object.keys(groups).filter(g=>(groups[g]||[]).includes(t.id));
-      return `<div class="flex items-center gap-2 py-1">
+      const blocksPath=(t.type==="nginx-file"||t.type==="ingress-cm");
+      const src=_targetSource(t);
+      return `<div class="flex items-center gap-2 py-1 flex-wrap">
         <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
         <span class="text-slate-200 mono">${esc(t.id)}</span>
         <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(t.type)}</span>
         ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
-        <span class="text-[11px] text-slate-600">группы: ${inGroups.map(esc).join(", ")||"—"}</span>
+        <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Применяет и баны IP, и правила 403 по пути':'Применяет только баны IP — 403-пути Cloudflare не умеет'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
+        <span class="text-[11px] text-slate-600">${_trText('группы:')} ${inGroups.map(esc).join(", ")||"—"}</span>
+        ${src?`<span class="text-[11px] text-slate-600">· ${src}</span>`:""}
         ${err?`<span class="text-[11px] text-red-300">${esc(err)}</span>`:""}
       </div>`;}).join("");
     el.innerHTML=rows+`<div class="text-[11px] text-slate-600 mt-1">дефолтная группа: <span class="mono">${esc(d.default_group||"default")}</span></div>`;
