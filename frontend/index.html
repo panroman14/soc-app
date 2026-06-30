@@ -350,7 +350,7 @@
       </div>
     </div>
 
-    <section class="card p-4 mb-4">
+    <section id="ab-esc-sec" class="card p-4 mb-4">
       <div class="env-row mb-1">
         <div><span class="text-sm font-medium text-slate-200">📈 <span data-i18n="esc.h">Escalation ladder</span></span>
           <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="esc.sub">Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.</p></div>
@@ -383,7 +383,7 @@
       <div id="ban-targets" class="text-sm text-slate-400">загрузка…</div>
     </div>
 
-    <section class="card p-4 mb-4">
+    <section id="ab-prot-sec" class="card p-4 mb-4">
       <div class="flex items-center gap-2 cursor-pointer select-none" onclick="abProtToggle()">
         <span id="ab-prot-chev" style="color:var(--faint)">▸</span>
         <span class="text-sm font-medium text-slate-200">🛡️ Защищённые пути</span>
@@ -528,7 +528,7 @@
     </div>
 
     <h2 class="sec">Правила автобана</h2>
-    <section class="card p-4 mb-4"><div id="ab-rules" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div></section>
+    <section id="ab-rules-sec" class="card p-4 mb-4"><div id="ab-rules" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div></section>
 
     <h2 class="sec">Проверить IP <span class="text-slate-600 font-normal normal-case tracking-normal">— забанен ли и за что</span></h2>
     <section class="card p-4 mb-4">
@@ -3436,7 +3436,16 @@ function abFillGroups(){
   sel.innerHTML=`<option value="">${_trText("все таргеты")}</option>`+_abGroups.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
   if(cur)sel.value=cur;
 }
+// Эскалацию и «защищённые пути» (вспомогательные) опускаем под список правил —
+// чтобы сверху сразу были правила автобана. Делается один раз.
+let _abReordered=false;
+function _abReorder(){
+  if(_abReordered)return;
+  const r=document.getElementById("ab-rules-sec"),e=document.getElementById("ab-esc-sec"),p=document.getElementById("ab-prot-sec");
+  if(r&&e&&p){ r.after(e,p); _abReordered=true; }
+}
 async function loadAutoban(){
+  _abReorder();
   try{
     const d=await fetch("/api/autoban/rules").then(r=>r.json());
     _abWindows=d.windows||_abWindows; _abFamilies=d.families||[]; _abArmed=!!d.armed;
