@@ -723,6 +723,7 @@ const I18N={en:{
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
   "set.global.sub":"LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.",
   "save":"Save","delete":"Delete","edit":"Edit","env.name":"Name","env.loki":"Loki URL","env.loki.hint":"(blank = shared Loki + env label)","env.cf":"Cloudflare for this environment","env.ing":"ingress-nginx (k8s) for this environment",
+  "env.ing.hint":"No cluster endpoint here: blocklist-api runs inside the cluster and patches this ConfigMap via its ServiceAccount. The dashboard only talks to blocklist-api (set by BLOCKLIST_API_URL at deploy).",
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
@@ -733,6 +734,7 @@ const I18N={en:{
   "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.notify":"Уведомления","set.global":"Глобальные",
   "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
+  "env.ing.hint":"Эндпоинт кластера тут не нужен: blocklist-api работает внутри кластера и патчит этот ConfigMap через свой ServiceAccount. Дашборд общается только с blocklist-api (адрес задаётся в BLOCKLIST_API_URL при деплое).",
   "set.global.sub":"LLM-эндпоинт, дефолтный Cloudflare/ingress (фолбэк, если у env нет своего), и группа по умолчанию. ENV — дефолты, тут переопределяются.",
   "save":"Сохранить","delete":"Удалить","env.name":"Название","env.loki":"Loki URL","env.loki.hint":"(пусто = общий Loki + метка env)","env.cf":"Cloudflare для этого окружения","env.ing":"ingress-nginx (k8s) для этого окружения",
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
@@ -1903,9 +1905,12 @@ function envCard(e){
     <div class="mt-3 pt-3" style="border-top:1px solid var(--border)">
       <div class="env-row"><span class="text-[12px]">☸️ <span data-i18n="env.ing">ingress-nginx (k8s) for this environment</span></span>
         <button type="button" class="sw${ing.enabled?' on':''}" data-f="ing_enabled" onclick="envSw(this,'ingblk-${id}')" aria-label="toggle ingress"><i></i></button></div>
-      <div id="ingblk-${id}" class="env-sec grid sm:grid-cols-2 gap-2${ing.enabled?'':' hidden'}">
-        <input data-f="ing_ns" value="${esc(ing.ns||'')}" placeholder="namespace" class="input mono">
-        <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="input mono">
+      <div id="ingblk-${id}" class="env-sec${ing.enabled?'':' hidden'}">
+        <div class="grid sm:grid-cols-2 gap-2">
+          <input data-f="ing_ns" value="${esc(ing.ns||'')}" placeholder="namespace" class="input mono">
+          <input data-f="ing_cm" value="${esc(ing.cm||'')}" placeholder="configmap" class="input mono">
+        </div>
+        <p class="text-[10px] mt-1.5 leading-snug" style="color:var(--faint)" data-i18n="env.ing.hint">No cluster endpoint here: blocklist-api runs inside the cluster and patches this ConfigMap via its ServiceAccount. The dashboard only talks to blocklist-api (set by BLOCKLIST_API_URL at deploy).</p>
       </div>
     </div>
     <div class="env-row mt-3 pt-3" style="border-top:1px solid var(--border)">
