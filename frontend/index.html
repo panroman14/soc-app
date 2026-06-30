@@ -564,7 +564,11 @@
     </section>
 
     <section class="card p-4 mb-4">
-      <h3 class="text-sm font-medium text-slate-300 mb-2">Добавить правило</h3>
+      <div class="env-row">
+        <h3 class="text-sm font-medium text-slate-300 flex items-center gap-1.5"><span id="p403-form-chev" style="color:var(--faint)">▸</span><span data-i18n="p403.addrule">Add rule</span></h3>
+        <button onclick="p403FormToggle()" class="btn btn-primary btn-xs"><span>＋</span><span data-i18n="p403.addrule">Add rule</span></button>
+      </div>
+      <div id="p403-form-body" class="hidden mt-3">
       <div class="flex flex-wrap items-end gap-2">
         <div><label class="text-[11px] text-slate-500 block mb-1">Имя</label>
           <input id="p403-name" placeholder="напр. env-файлы" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 w-44"/></div>
@@ -598,6 +602,7 @@
       </div>
       <div class="mt-2 text-[11px] text-slate-500"><button onclick="p403SeedAutoban(this)" class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">засеять из правил автобана ▾</button><button onclick="p403Seed()" class="ml-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">базовый набор сканеров</button></div>
       <div id="p403-protected" class="mt-2 text-[11px] text-slate-500"></div>
+      </div><!-- /p403-form-body -->
     </section>
 
     <section class="card p-4">
@@ -830,7 +835,7 @@ const I18N={en:{
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
-  "p403.where":"Where it applies:",
+  "p403.where":"Where it applies:","p403.addrule":"Add rule",
   "tf.h":"Threat feeds","tf.sub":"Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.","tf.every":"Refresh every (h)","tf.now":"Refresh now","tf.add":"＋ feed","tf.presets":"presets:",
   "crs.h":"WAF / CRS triggers","crs.sub":"/ OWASP ModSecurity — anomaly score exceeded",
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
@@ -846,7 +851,7 @@ const I18N={en:{
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
-  "p403.where":"Где применяется:",
+  "p403.where":"Где применяется:","p403.addrule":"Добавить правило",
   "tf.h":"Threat-фиды","tf.sub":"Импорт внешних блок-листов (Spamhaus, Tor, свои IP/CIDR) и бан в группу. Самосинхронизация: ушедшие из фида записи истекают сами.","tf.every":"Обновлять каждые (ч)","tf.now":"Обновить сейчас","tf.add":"＋ фид","tf.presets":"пресеты:",
   "crs.h":"WAF / CRS срабатывания","crs.sub":"/ OWASP ModSecurity — превышен anomaly score",
   "esc.h":"Лестница эскалации","esc.sub":"Повторные нарушители (забанены снова после истечения прошлого бана) получают всё более длинный бан. Выкл = у каждого правила свой фиксированный TTL.","esc.ladder":"Лестница TTL (1-е, 2-е, 3-е… нарушение)","esc.memory":"Прощать через (дней)",
@@ -2621,6 +2626,11 @@ function p403FillTarget(){
   if(prev&&Array.from(sel.options).some(o=>o.value===prev))sel.value=prev;
   else sel.value=main?String(main.id):"__new__";
   p403TargetChange();
+}
+function p403FormToggle(force){
+  const b=document.getElementById("p403-form-body"),ch=document.getElementById("p403-form-chev");
+  const open=force!=null?force:b.classList.contains("hidden");
+  b.classList.toggle("hidden",!open); if(ch)ch.textContent=open?"▾":"▸";
 }
 function p403TargetChange(){
   const sel=document.getElementById("p403-target");if(!sel)return;
