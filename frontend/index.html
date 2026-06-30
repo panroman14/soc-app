@@ -557,10 +557,6 @@
           <button id="p403-master" onclick="p403Master()" class="text-sm px-3 py-1.5 rounded bg-slate-700 text-slate-200">…</button>
         </div>
       </div>
-      <div class="mt-3 pt-3 border-t border-slate-800/70 flex items-start gap-2 flex-wrap text-[12px]">
-        <span class="text-slate-500 shrink-0">📍 <span data-i18n="p403.where">Where it applies:</span></span>
-        <span id="p403-applies" class="flex items-center gap-1.5 flex-wrap text-slate-400">…</span>
-      </div>
     </section>
 
     <section class="card p-4 mb-4">
@@ -841,7 +837,7 @@ const I18N={en:{
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"follow","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
-  "p403.where":"Where it applies:","p403.addrule":"Add rule",
+  "p403.where":"Available targets:","p403.addrule":"Add rule",
   "tf.h":"Threat feeds","tf.sub":"Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.","tf.every":"Refresh every (h)","tf.now":"Refresh now","tf.add":"＋ feed","tf.presets":"presets:",
   "crs.h":"WAF / CRS triggers","crs.sub":"/ OWASP ModSecurity — anomaly score exceeded",
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
@@ -857,7 +853,7 @@ const I18N={en:{
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"access","logs.error":"error","logs.follow":"следить","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
-  "p403.where":"Где применяется:","p403.addrule":"Добавить правило",
+  "p403.where":"Доступные таргеты:","p403.addrule":"Добавить правило",
   "tf.h":"Threat-фиды","tf.sub":"Импорт внешних блок-листов (Spamhaus, Tor, свои IP/CIDR) и бан в группу. Самосинхронизация: ушедшие из фида записи истекают сами.","tf.every":"Обновлять каждые (ч)","tf.now":"Обновить сейчас","tf.add":"＋ фид","tf.presets":"пресеты:",
   "crs.h":"WAF / CRS срабатывания","crs.sub":"/ OWASP ModSecurity — превышен anomaly score",
   "esc.h":"Лестница эскалации","esc.sub":"Повторные нарушители (забанены снова после истечения прошлого бана) получают всё более длинный бан. Выкл = у каждого правила свой фиксированный TTL.","esc.ladder":"Лестница TTL (1-е, 2-е, 3-е… нарушение)","esc.memory":"Прощать через (дней)",
@@ -2432,7 +2428,7 @@ async function loadP403(){
     if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||""};
     await loadMainRules();
     renderP403(d);renderP403Status(st);p403ModeChange();renderP403Protected(pp.paths||[]);
-    renderP403Applies();
+    if(typeof renderP403Applies==="function"){_targetsData=bt||_targetsData;_p403RenderList();}
   }catch(e){document.getElementById("p403-list").innerHTML='<div class="text-rose-400 text-xs">не удалось загрузить: '+esc(e.message||e)+'</div>';}
 }
 // ── единый резолвер «правило → группа → конкретные таргеты» (для подписей) ──────
@@ -2540,12 +2536,27 @@ function renderP403Protected(paths){
   if(!paths||!paths.length){el.innerHTML="";return;}
   el.innerHTML='🛡️ защищённые (в 403 добавить нельзя, общий список с автобаном): '+paths.map(p=>`<span class="mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(p)}</span>`).join(" ")+' <span class="text-slate-600">— меняются в <a onclick="showView(\'autoban\')" class="text-indigo-300 cursor-pointer">Автобане</a></span>';
 }
+const _P403_BK={"nginx-file":"nginx","ingress-cm":"ingress","cloudflare":"CF","noop":"noop"};
 function renderP403Status(st){
   const el=document.getElementById("p403-render");if(!el)return;
   if(!st||st.rendered_ok===undefined){el.textContent="";return;}
-  if(!st.controller_reachable){el.innerHTML='<span class="text-amber-300">⚠ нет связи с ingress</span>';return;}
+  const det=st.targets&&typeof st.targets==="object"?st.targets:null;
+  // показываем по одному чипу на каждый реальный бэкенд (nginx / cf / ingress), а не выдуманный ingress
+  if(det&&Object.keys(det).length){
+    const chips=Object.entries(det).map(([id,t])=>{
+      const bk=_P403_BK[t.type]||t.type;
+      if(!t.controller_reachable)return `<span class="text-amber-300" title="${esc(id)}: нет связи">⚠ ${esc(bk)}: нет связи</span>`;
+      return t.rendered_ok
+        ? `<span class="text-emerald-300" title="${esc(id)}">✓ ${esc(bk)} OK</span>`
+        : `<span class="text-rose-300" title="${esc(id)}: дрейф — нажми ↻ ресинк">✗ ${esc(bk)}: дрейф</span>`;
+    });
+    el.innerHTML=chips.join(' <span class="text-slate-700">·</span> ');
+    return;
+  }
+  // фолбэк, если бэкенд не отдал детализацию по таргетам
+  if(!st.controller_reachable){el.innerHTML='<span class="text-amber-300">⚠ нет связи с бэкендом</span>';return;}
   el.innerHTML=st.rendered_ok
-    ? '<span class="text-emerald-300">✓ рендер в ingress OK</span>'
+    ? '<span class="text-emerald-300">✓ рендер OK</span>'
     : '<span class="text-rose-300">✗ не отрендерено — нажми ↻ ресинк в Денлисте</span>';
 }
 function renderP403(d){
