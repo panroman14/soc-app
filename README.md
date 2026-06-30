@@ -2,15 +2,28 @@
 
 Self-hosted, AI-assisted SOC for **nginx / ingress-nginx** traffic. It ships access
 & error logs into Loki, aggregates attack/traffic signals, runs them through a local
-LLM (Gemma on Ollama) for plain-language insight + anomaly detection, serves a web
-dashboard with Prometheus metrics, and **applies IP/path bans to one or more
+LLM (Gemma on Ollama) for plain-language insight + robust anomaly detection, serves a
+web dashboard with Prometheus metrics, and **applies IP/path bans to one or more
 enforcement targets — Cloudflare, plain nginx, or Kubernetes ingress-nginx — routed
 by group.**
 
 Think *Datadog for nginx bans*: stand up one central collector, then drop a one-line
-agent onto each nginx VM — it self-enrolls, appears in the **Ноды** tab with live host
+agent onto each nginx VM — it self-enrolls, appears in the **Nodes** tab with live host
 load, and starts enforcing bans. Almost everything is configurable from the dashboard
-(**Настройки**), with environment variables as the defaults underneath.
+(**Settings**), with environment variables as the defaults underneath. The UI is
+English by default with a one-click **RU/EN** toggle.
+
+**Highlights**
+
+- 🎯 **Grouped, multi-target enforcement** — Cloudflare (IP list + WAF) · plain nginx · ingress-nginx, routed per ban by **target group** (built in a GUI).
+- 🌐 **Environments** — each environment is its own bundle: nodes, Cloudflare token, Loki, rules and alert channels; switch in the top bar.
+- ⛔ **Auto-ban engine** — rules by path / regex / signature-family / **request-rate** / **country (GeoIP)**, with dry-run preview before you arm it.
+- 📡 **Threat-intel feeds** — import Spamhaus / Tor / custom IP-CIDR lists into a ban group (self-syncing via TTL).
+- 🚫 **403 path rules** — block scanner paths at the nginx/ingress layer, scoped per target group.
+- 🛡️ **WAF / CRS panel** — per-IP OWASP ModSecurity offenders with attack-family chips and one-click ban.
+- 🔎 **IP intelligence** — GeoIP flag, ASN/org, datacenter/VPN/Tor reputation in the IP profile drawer.
+- 🔔 **Notifications** — Slack / Telegram, with per-event × env × severity routing rules.
+- 🤖 **LLM analyst** — insights + suspect triage; a global toggle hides every AI mention when off.
 
 ```
  nginx VM(s)                              central VM
@@ -98,8 +111,23 @@ BAN_GROUPS  = {"default":["edge-cf"], "origins":["web1"], "all":["edge-cf","web1
 ```
 
 These (and the CF token, ingress ConfigMap name, LLM endpoint, …) are editable from
-the dashboard — see Configuration. The auto-ban rule form and manual-ban panel both
-expose a group selector.
+the dashboard — see Configuration. The **target-group builder** (Auto-ban view) lets
+you create groups and assign targets visually; the auto-ban rule form, the 403 rule
+form, and the manual-ban panel all expose a group selector.
+
+---
+
+## Detection & response
+
+| Capability | Where | What it does |
+|---|---|---|
+| **Auto-ban rules** | Auto-ban | Ban IPs that match a condition ≥ N times over a window. Condition types: `path contains` · `regex` · `signature family` (scanner/payload) · **`rate`** (any path) · optional **status** and **country (GeoIP)** filters. Each rule targets a group + a ban TTL. Disarmed by default — **dry-run preview** shows who *would* be banned before you arm it. |
+| **403 path rules** | 403 rules | Return `403` for scanner/exploit paths (`/.env`, `/wp-login`, jndi…) at the **nginx / ingress** layer across all domains. Rendered per **target group** (Cloudflare is IP-only and never gets path rules). A live "where it applies" list shows the affected targets. |
+| **Threat-intel feeds** | Auto-ban → Threat feeds | Periodically fetch external block lists (Spamhaus DROP, Tor exit nodes, custom IP/CIDR) and ban them into a chosen group. Self-syncing: entries re-banned each cycle with a multi-cycle TTL, so a dropped entry simply expires. |
+| **WAF / CRS triggers** | Overview | Per-IP OWASP ModSecurity offenders ("Inbound Anomaly Score Exceeded") with the attack families each tripped (SQLi/XSS/RCE/LFI/…) and a one-click ban. |
+| **Anomaly detection** | Overview / alerts | Rolling **robust baseline** (median + MAD modified z-score) over snapshot history — a metric flags only when it clears a floor *and* is a statistically significant outlier, cutting false alarms on bursty traffic. |
+| **IP intelligence** | IP profile drawer | GeoIP flag + city/country, ASN/org/ISP, and a datacenter/VPN/Tor **reputation** verdict (ip-api.com, cached). Surfaced on ban candidates, suspects, and the country map too. |
+| **Notifications** | Settings → Notifications | Slack & Telegram channels + routing rules (event × environment × min-severity → channel), with a per-channel test. |
 
 ---
 
@@ -142,9 +170,12 @@ The backend parses one canonical field set. Two ways to feed it:
 - One **`ENROLL_SECRET`** lets agents self-register; each then authenticates with its
   own **per-node token** (least privilege — a node token can only pull *its* snippet
   and post *its* heartbeat, never block/unblock).
-- The **🖥️ Ноды** tab shows every node: online/offline, CPU load, RAM, uptime, bans
-  applied, and an `nginx -t ✗` badge if its config is broken. **Отозвать** revokes a
-  node's token instantly.
+- The **Nodes** tab shows every node: online/offline, CPU load, RAM, uptime, bans
+  applied, and an `nginx -t ✗` badge if its config is broken. **Revoke** kills a
+  node's token instantly. The dashboard host itself appears as a `dashboard` node.
+- A node joins an **environment** at install time (`--env`). An environment bundles its
+  nodes with their own Cloudflare token, Loki source, rules, and alert channels —
+  switch between them from the top-bar selector.
 
 ---
 
@@ -167,9 +198,12 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ```
 
 Key endpoints — `GET /metrics` · `GET /api/summary` · `GET /api/insights` ·
-`GET /api/status` · `GET /api/nodes` · `GET /api/nodes/install` ·
-`POST /api/nodes/delete` · `GET|POST /api/settings` · `GET /api/ban_targets[/check]` ·
-`POST /api/block[_bulk]` · LLM switch `GET /api/llm` · `POST /api/llm/toggle`.
+`GET /api/status` · `GET /api/nodes[/install]` · `POST /api/nodes/delete` ·
+`GET|POST /api/settings` · `GET|POST /api/environments` · `GET|POST /api/notify_config` ·
+`GET /api/ban_targets[/check]` · `POST /api/block[_bulk]` ·
+`GET|POST /api/autoban/rules` · `GET /api/ban_candidates` · `GET /api/crs_offenders` ·
+`GET|POST /api/threat_feeds[/refresh]` · `GET|POST /api/path_rules` ·
+LLM switch `GET /api/llm` · `POST /api/llm/toggle`.
 
 The common variables are documented in **[`deploy/.env.example`](deploy/.env.example)**;
 advanced tunables (intervals, ASN/Tor lookups, safety prefixes) read sane defaults
@@ -177,12 +211,17 @@ straight from `backend/app/config.py` and `blocklist-api/app/config.py`.
 
 ## Status
 
-- [x] LLM insights + anomaly detection, dashboard, `/metrics`, HTTP Basic auth, LLM on/off.
+- [x] LLM insights + robust (MAD/z-score) anomaly detection, dashboard, `/metrics`, HTTP Basic auth, LLM on/off.
 - [x] VM deployment: nginx logs → Promtail → Loki; modular Docker/systemd; combined-log support.
 - [x] Pluggable denylist storage (configmap / file / sqlite).
-- [x] Pluggable, grouped ban enforcement (ingress-cm / nginx-file / cloudflare); Cloudflare auto-setup.
-- [x] Node enrollment (per-node tokens), heartbeat/host-load, «Ноды» tab, one-liner + fleet installer.
-- [x] Hybrid ENV+GUI config (**Настройки**), `CONFIG_LOCK`, auto-promotion of enrolled nodes to targets.
+- [x] Pluggable, grouped ban enforcement (ingress-cm / nginx-file / cloudflare); Cloudflare auto-setup; GUI group builder.
+- [x] Node enrollment (per-node tokens), heartbeat/host-load, **Nodes** tab, one-liner + fleet installer.
+- [x] Hybrid ENV+GUI config (**Settings**), `CONFIG_LOCK`, auto-promotion of enrolled nodes to targets.
+- [x] Multi-environment model (per-env CF token / Loki / rules / channels), top-bar switcher.
+- [x] Auto-ban rules: path / regex / family / **rate** / **country (GeoIP)**, per-rule group + TTL, dry-run preview.
+- [x] 403 path rules scoped per target group; threat-intel feed import; WAF/CRS offender panel with one-click ban.
+- [x] GeoIP/ASN/reputation IP profiles; Slack/Telegram notifications with routing rules.
+- [x] Bilingual UI (EN default + RU toggle), in-app dialogs, customizable/collapsible cards.
 
 ## Security notes
 
