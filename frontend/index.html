@@ -2282,15 +2282,18 @@ function renderNotify(){
 }
 function nfChannelRow(c,i){
   const tg=c.type==="telegram";
-  return `<div class="card p-2 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}">
-    <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">${tg?'Telegram':'Slack'}</span>
+  const accent=tg?"#229ED9":"#611f69";   // Telegram blue / Slack aubergine
+  return `<div class="card p-2.5 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}" style="border-left:3px solid ${accent}">
+    <span class="px-2 py-0.5 rounded font-medium text-white shrink-0" style="background:${accent}">${tg?'Telegram':'Slack'}</span>
     <input data-cf="id" value="${esc(c.id||'')}" placeholder="id" class="w-24 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
     <input data-cf="label" value="${esc(c.label||'')}" placeholder="${_trText('метка')}" class="w-28 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-    ${tg?`<input data-cf="bot_token" type="password" placeholder="${c.configured?'•••• задан':'bot token'}" class="flex-1 min-w-[140px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><input data-cf="chat_id" value="${esc(c.chat_id||'')}" placeholder="chat_id" class="w-28 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`:`<input data-cf="webhook" type="password" placeholder="${c.configured?'•••• задан':'Slack webhook URL'}" class="flex-1 min-w-[180px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`}
+    ${tg?`<input data-cf="bot_token" type="password" placeholder="${c.configured?'•••• задан':'bot token'}" class="flex-1 min-w-[140px] max-w-sm mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><input data-cf="chat_id" value="${esc(c.chat_id||'')}" placeholder="chat_id" class="w-28 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`:`<input data-cf="webhook" type="password" placeholder="${c.configured?'•••• задан':'Slack webhook URL'}" class="flex-1 min-w-[180px] max-w-md mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`}
     <input type="hidden" data-cf="type" value="${tg?'telegram':'slack'}">
-    <button onclick="nfTest('${esc(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${_trText('тест')}</button>
-    <button onclick="nfDelChannel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
-    ${c.last?`<span class="${c.last.ok?'text-emerald-400':'text-red-400'}">${c.last.ok?'✓':'✗ '+esc(c.last.error||'')}</span>`:""}
+    <span class="flex items-center gap-1 shrink-0 ml-auto">
+      ${c.last?`<span class="${c.last.ok?'text-emerald-400':'text-red-400'}" title="${esc((c.last&&c.last.error)||'')}">${c.last.ok?'✓':'✗'}</span>`:""}
+      <button onclick="nfTest('${esc(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${_trText('тест')}</button>
+      <button onclick="nfDelChannel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
+    </span>
   </div>`;
 }
 function nfRuleRow(r,i){
@@ -2734,7 +2737,8 @@ function renderP403Types(st){
     else if(!reachable){dot="bg-amber-400";cls="border-amber-600/40 bg-amber-900/20 text-amber-300 hover:border-amber-500";state=_trText("нет связи");tip=bk+": нет связи с бэкендом";}
     else if(!ok){dot="bg-amber-400";cls="border-amber-600/40 bg-amber-900/20 text-amber-300 hover:border-amber-500";state=_trText("дрейф");tip=bk+": дрейф рендера — нажми ↻ ресинк в Денлисте";}
     else{dot="bg-emerald-400";cls="border-emerald-600/40 bg-emerald-900/30 text-emerald-300 hover:border-emerald-500";state=_trText("вкл");tip=bk+": 403 активен — выключить";}
-    return `<button onclick="p403TypeToggle('${ty}',${!on})" title="${esc(tip)}" class="text-[11px] leading-none px-2.5 py-1.5 rounded-full border flex items-center gap-1.5 transition ${cls}"><span class="w-1.5 h-1.5 rounded-full ${dot} shrink-0"></span><span class="font-semibold">${esc(bk)}</span><span class="opacity-60">${state}</span></button>`;
+    const ic=(typeof _typeIcon==="function"&&typeof _TGT_META!=="undefined"&&_TGT_META[ty])?_typeIcon(ty):"";
+    return `<button onclick="p403TypeToggle('${ty}',${!on})" title="${esc(tip)}" class="text-[11px] leading-none pl-2 pr-2.5 py-1.5 rounded-full border flex items-center gap-1.5 transition ${cls}">${ic}<span class="font-semibold">${esc(bk)}</span><span class="w-1.5 h-1.5 rounded-full ${dot} shrink-0"></span><span class="opacity-70 text-[10px] uppercase tracking-wide">${state}</span></button>`;
   }).join("");
 }
 async function p403TypeToggle(type,enabled){
