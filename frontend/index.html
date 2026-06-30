@@ -132,6 +132,17 @@
   .sw:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-weak)}
   .burger{display:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);background:#161c27;color:var(--text);cursor:pointer;font-size:16px;align-items:center;justify-content:center}
   @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s;box-shadow:0 0 40px #000a}.sidebar.open{left:0}.main{padding:14px}.burger{display:inline-flex}}
+  /* кастомная выпадашка привязки правила (на <details>, чтобы рендерить SVG-лого) */
+  .attach-dd{position:relative;display:inline-block}
+  .attach-dd>summary{list-style:none;cursor:pointer;padding:2px 8px;border:1px solid var(--border2);border-radius:6px;background:#1e293b;color:#cbd5e1;font-size:11px;user-select:none}
+  .attach-dd>summary::-webkit-details-marker{display:none}
+  .attach-dd>summary:hover{border-color:#475569;color:#e2e8f0}
+  .attach-menu{position:absolute;z-index:50;top:calc(100% + 4px);left:0;min-width:200px;max-height:300px;overflow:auto;padding:5px;border:1px solid var(--border2);border-radius:10px;background:#0f172a;box-shadow:0 12px 30px #000a}
+  .attach-sec{display:flex;align-items:center;gap:6px;margin-top:6px;padding:8px 8px 4px;border-top:1px solid var(--border2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#cbd5e1}
+  .attach-menu>.attach-sec:first-child{margin-top:0;border-top:0;padding-top:3px}
+  .attach-row{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:6px 9px;border:0;border-radius:7px;background:transparent;color:#e2e8f0;font-size:12px;cursor:pointer}
+  .attach-row:hover{background:#1e293b}
+  .attach-row .attach-res{margin-left:auto;color:#64748b;font-size:11px}
 </style>
 </head>
 <body class="min-h-screen">
@@ -348,7 +359,7 @@
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
           <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
-          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: 🌐 nginx — это подключённые ноды, ☁️ Cloudflare — из реестра CF-таргетов.</div>
+          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx — это подключённые ноды, Cloudflare — из реестра CF-таргетов.</div>
           <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('nodes')" class="text-indigo-300 cursor-pointer">Ноды</a> · <a onclick="showView('settings');setSub('cf')" class="text-indigo-300 cursor-pointer">Настройки → CF-таргеты</a></div>
         </div>
         <div class="flex items-center gap-2">
@@ -943,7 +954,7 @@ const RU2EN={
   "Cloudflare-таргет":"Cloudflare target","Настройки → CF-таргеты":"Settings → CF targets","ingress-cm таргет":"ingress-cm target",
   "Настройки → Окружения":"Settings → Environments","Настройки → Глобальные":"Settings → Global","задан в BAN_TARGETS":"defined in BAN_TARGETS",
   "открыть во вкладке Ноды":"open in the Nodes tab","источник":"source","подключённая нода — открыть во вкладке Ноды":"connected node — open in the Nodes tab",
-  "нет бэкендов":"no backends","таргетов":"targets","Cloudflare WAF — 403 по пути на edge":"Cloudflare WAF — path-403 at the edge","через какие бэкенды эта группа применяет баны/403":"which backends this group enforces bans/403 through",
+  "нет бэкендов":"no backends","таргетов":"targets","нечего привязать":"nothing to attach","привязать":"attach","Cloudflare WAF — 403 по пути на edge":"Cloudflare WAF — path-403 at the edge","через какие бэкенды эта группа применяет баны/403":"which backends this group enforces bans/403 through",
   "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
   "осталось до авто-разбана":"time left until auto-unban","истекает…":"expiring…",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
@@ -2464,15 +2475,22 @@ function _appliesLineRule(r, pathOnly){
   const noAttach=!r.all && !(r.groups||[]).length && !(r.targets||[]).length;
   if(noAttach) return `<div class="text-[10px] mt-1 text-amber-400/80">↳ ${_trText("не привязано — правило не действует")}</div>`;
   if(!list.length) return `<div class="text-[10px] mt-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${pathOnly?_trText("нет nginx/ingress таргетов"):_trText("нет таргетов")}</div>`;
-  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${_typeMeta(t.type).ic} ${esc(t.id)}<span style="color:var(--faint)"> ·${esc(_typeLabel(t.type))}</span></span>`).join(" ");
+  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300 inline-flex items-center gap-1">${_typeIcon(t.type)}${esc(t.id)}<span style="color:var(--faint)">·${esc(_typeLabel(t.type))}</span></span>`).join(" ");
   return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
 }
 // ── редактор привязки правила (группы + таргеты + «все») ───────────────────────
 // единое человеческое имя/иконка бэкенда (nginx-file → «nginx» и т.п.)
-const _TGT_META={"nginx-file":{ic:"🌐",lbl:"nginx"},"cloudflare":{ic:"☁️",lbl:"Cloudflare"},
-                 "ingress-cm":{ic:"☸️",lbl:"ingress"},"noop":{ic:"•",lbl:"noop"}};
-function _typeMeta(t){return _TGT_META[t]||{ic:"🎯",lbl:t||"?"};}
+// официальные лого бэкендов (inline SVG — рендерятся в HTML; в нативном <select> нельзя)
+const _ICON_CF='<svg viewBox="0 0 24 24" width="14" height="14" class="shrink-0" aria-label="Cloudflare"><path fill="#FBAD41" d="M9.5 8.5a4.5 4.5 0 0 1 8.3 1.2 3 3 0 0 1-.3 6H7.5z"/><path fill="#F38020" d="M16.6 16H6a3 3 0 0 1-.3-6 4.5 4.5 0 0 1 8.5-1.3 2.8 2.8 0 0 1 3.8 2.1 2.7 2.7 0 0 1-1.4 5.2z"/></svg>';
+const _ICON_ING='<svg viewBox="0 0 24 24" width="14" height="14" class="shrink-0" aria-label="ingress"><path fill="#326CE5" d="M12 2 3.6 6v8L12 22l8.4-8V6L12 2z"/><circle cx="12" cy="12" r="3.1" fill="#fff"/></svg>';
+const _ICON_DOT=c=>`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c}" class="shrink-0"></span>`;
+const _TGT_META={"nginx-file":{ic:"🟢",lbl:"nginx",svg:_NGINX_ICON},
+                 "cloudflare":{ic:"🟠",lbl:"Cloudflare",svg:_ICON_CF},
+                 "ingress-cm":{ic:"🔵",lbl:"ingress",svg:_ICON_ING},
+                 "noop":{ic:"⚪",lbl:"noop",svg:_ICON_DOT("#64748b")}};
+function _typeMeta(t){return _TGT_META[t]||{ic:"🎯",lbl:t||"?",svg:_ICON_DOT("#64748b")};}
 function _typeLabel(t){return _typeMeta(t).lbl;}
+function _typeIcon(t){return _typeMeta(t).svg;}   // SVG-лого для HTML-контекстов
 // во что группа резолвится → короткая подпись «→ test-1» / «→ все» / «→ 3 таргета»
 // 'empty' (ни одного таргета) | 'all' (ровно все — дубль кнопки «все таргеты») | 'some'
 function _grpKind(g){
@@ -2491,29 +2509,33 @@ function _grpResolve(g){
   if(ids.length<=2) return ids.join(", ");
   return ids.length+" "+_trText("таргетов");
 }
-function _attachOptions(r){
-  const d=_targetsData; if(!d) return `<option value="">${_trText('+ привязать…')}</option>`;
-  // прячем шумные группы: пустые (ничего не забанят) и совпадающие со «всеми» (дубль кнопки)
+// тип таргета по id (для иконки в чипах привязки)
+function _tgtTypeById(id){const t=(_targetsData&&_targetsData.targets||[]).find(x=>x.id===id);return t?t.type:"";}
+// кастомная выпадашка привязки (на <details> — чтобы рендерить SVG-лого; в <select> нельзя)
+function _attachMenu(r, kind){
+  const d=_targetsData; if(!d) return "";
   const gs=Object.keys(d.groups||{}).filter(g=>g&&!(r.groups||[]).includes(g)&&_grpKind(g)==="some");
   const ts=(d.targets||[]).filter(t=>t.type!=="noop"&&!(r.targets||[]).includes(t.id));
-  let o=`<option value="">${_trText('+ привязать…')}</option>`;
-  if(gs.length) o+=`<optgroup label="🗂 ${_trText('группы')}">`+gs.map(g=>`<option value="g:${esc(g)}">${esc(g)} → ${esc(_grpResolve(g))}</option>`).join("")+`</optgroup>`;
-  // таргеты — отдельной секцией на каждый бэкенд (nginx / Cloudflare / ingress)
   const order=["nginx-file","cloudflare","ingress-cm"];
   const types=[...new Set(ts.map(t=>t.type))].sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
-  types.forEach(ty=>{const m=_typeMeta(ty),arr=ts.filter(t=>t.type===ty);
-    o+=`<optgroup label="${m.ic} ${esc(m.lbl)}">`+arr.map(t=>`<option value="t:${esc(t.id)}">${m.ic} ${esc(t.id)}</option>`).join("")+`</optgroup>`;});
-  return o;
+  const close="this.closest('details').removeAttribute('open')";
+  const row=(inner,tok)=>`<button type="button" onclick="${close};attachAdd('${kind}','${esc(r.id)}','${tok}')" class="attach-row">${inner}</button>`;
+  let m="";
+  if(gs.length) m+=`<div class="attach-sec">🗂 ${_trText('группы')}</div>`+gs.map(g=>row(`<span>${esc(g)}</span><span class="attach-res">→ ${esc(_grpResolve(g))}</span>`,"g:"+esc(g))).join("");
+  types.forEach(ty=>{const mt=_typeMeta(ty);
+    m+=`<div class="attach-sec">${mt.svg} ${esc(mt.lbl)}</div>`+ts.filter(t=>t.type===ty).map(t=>row(`${mt.svg}<span>${esc(t.id)}</span>`,"t:"+esc(t.id))).join("");});
+  if(!m) m=`<div class="attach-sec" style="opacity:.6">${_trText('нечего привязать')}</div>`;
+  return `<details class="attach-dd"><summary class="attach-add">＋ ${_trText('привязать')}</summary><div class="attach-menu">${m}</div></details>`;
 }
 function _attachUI(r, kind){
   const all=!!r.all;
   const chip=(label,tok)=>`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${label}<button onclick="attachRemove('${kind}','${esc(r.id)}','${tok}')" class="text-slate-500 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`;
   const gChips=(r.groups||[]).map(g=>chip("🗂 "+esc(g)+' <span style="color:var(--faint)">→ '+esc(_grpResolve(g))+'</span>',"g:"+esc(g))).join(" ");
-  const tChips=(r.targets||[]).map(t=>chip("🎯 "+esc(t),"t:"+esc(t))).join(" ");
+  const tChips=(r.targets||[]).map(t=>chip(_typeIcon(_tgtTypeById(t))+" "+esc(t),"t:"+esc(t))).join(" ");
   return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
     <span style="color:var(--faint)">🎯 ${_trText('привязка')}:</span>
     <button onclick="attachAll('${kind}','${esc(r.id)}',${!all})" class="px-1.5 py-0.5 rounded border ${all?'bg-emerald-600/30 border-emerald-500/40 text-emerald-200':'border-slate-700 text-slate-500 hover:text-slate-300'}">${_trText('все таргеты')}</button>
-    ${all?"":gChips+" "+tChips+`<select onchange="attachAdd('${kind}','${esc(r.id)}',this.value);this.value=''" class="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300">${_attachOptions(r)}</select>`}
+    ${all?"":gChips+" "+tChips+_attachMenu(r,kind)}
   </div>`;
 }
 function _attachRuleById(kind,id){ return kind==="p403"?(_p403.rules||[]).find(r=>String(r.id)===String(id)):(_abRules||[]).find(r=>String(r.id)===String(id)); }
@@ -2559,7 +2581,7 @@ function _appliesLine(group, pathOnly){
   if(list==null) return "";
   const lbl=group?(_trText("группа")+" «"+esc(group)+"»"):_trText("все таргеты");
   if(!list.length) return `<div class="text-[10px] mt-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${lbl} — ${pathOnly?_trText("нет nginx/ingress таргетов"):_trText("нет таргетов")}</div>`;
-  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300">${_typeMeta(t.type).ic} ${esc(t.id)}<span style="color:var(--faint)"> ·${esc(_typeLabel(t.type))}</span></span>`).join(" ");
+  const chips=list.map(t=>`<span class="mono px-1 py-0.5 rounded bg-slate-800/70 text-slate-300 inline-flex items-center gap-1">${_typeIcon(t.type)}${esc(t.id)}<span style="color:var(--faint)">·${esc(_typeLabel(t.type))}</span></span>`).join(" ");
   return `<div class="text-[10px] mt-1 flex flex-wrap items-center gap-1" style="color:var(--faint)">↳ ${_trText("применяется к")}: ${chips}</div>`;
 }
 async function renderP403Applies(){
@@ -2578,7 +2600,7 @@ async function renderP403Applies(){
           const cf=t.type==="cloudflare";
           const tip=cf?_trText('Cloudflare WAF — 403 по пути на edge'):(node?_trText('подключённая нода — открыть во вкладке Ноды'):_trText('ingress-cm таргет'));
           const go=cf?"showView('settings');setSub('cf')":(node?"showView('nodes')":"showView('settings');setSub('global')");
-          return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70">${esc(t.id)} <span class="text-emerald-500/70">${esc(_typeLabel(t.type))}</span> ↗</span>`;}).join("")
+          return `<span onclick="${go}" title="${tip}" class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90 mono cursor-pointer hover:bg-emerald-900/70 inline-flex items-center gap-1">${_typeIcon(t.type)}${esc(t.id)} <span class="text-emerald-500/70">${esc(_typeLabel(t.type))}</span> ↗</span>`;}).join("")
       : `<span class="text-slate-500">${_trText('нет nginx/ingress таргетов — добавь ноду или включи ingress у env.')}</span>`;
     if(cfIpOnly.length)html+=`<span class="text-[11px] text-slate-600">· ${_trText('Cloudflare не применяет 403 по пути (только IP):')} ${cfIpOnly.map(t=>esc(t.id)).join(", ")}</span>`;
     el.innerHTML=html;
@@ -3360,10 +3382,10 @@ function renderGroups(){
     const members=_grpDraft[g]||[];
     const chips=members.map(tid=>{
       const ty=_targetType(tid);
-      return `<span class="chip">${ty?_typeMeta(ty).ic+" ":""}${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(_typeLabel(ty))}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
+      return `<span class="chip">${ty?_typeIcon(ty):""}${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(_typeLabel(ty))}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
     }).join(" ")||`<span class="text-[11px] text-slate-600">${_trText('пусто')}</span>`;
     const avail=allTargets.filter(t=>!members.includes(t.id));
-    const opts=avail.map(t=>`<option value="${esc(t.id)}">${_typeMeta(t.type).ic} ${esc(t.id)} · ${esc(_typeLabel(t.type))}</option>`).join("");
+    const opts=avail.map(t=>`<option value="${esc(t.id)}">${esc(t.id)} · ${esc(_typeLabel(t.type))}</option>`).join("");
     return `<div class="bg-slate-900/40 border border-slate-800 rounded p-2">
       <div class="flex items-center gap-2 mb-1.5 flex-wrap">
         <span class="mono text-slate-200 text-[13px]">${esc(g)}</span>
@@ -3427,7 +3449,7 @@ async function loadBanTargets(){
         <div class="flex items-center gap-2 flex-wrap">
           <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
           ${idHtml}
-          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${_typeMeta(t.type).ic} ${esc(_typeLabel(t.type))}</span>
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 inline-flex items-center gap-1">${_typeIcon(t.type)}${esc(_typeLabel(t.type))}</span>
           ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
           <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Применяет и баны IP, и правила 403 по пути':'Применяет только баны IP — 403-пути Cloudflare не умеет'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
           <span class="text-[11px] text-slate-600">${_trText('группы:')} ${inGroups.map(esc).join(", ")||"—"}</span>
