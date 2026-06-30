@@ -664,8 +664,65 @@ function applyI18n(){
   const lb=document.getElementById("lang-btn"); if(lb)lb.textContent=_lang.toUpperCase();
   document.documentElement.lang=_lang;
 }
-function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_lang",_lang); applyI18n(); initCards();
-  if(typeof showView==="function")showView(_view||"dash"); }
+function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_lang",_lang); location.reload(); }
+
+// ── live RU→EN translation (en default; ru shows source). Covers dynamically
+// rendered content via a MutationObserver, so no need to refactor every string. ──
+const RU2EN={
+  "окно:":"window:","🔍 поиск IP → профиль":"🔍 search IP → profile","загрузка…":"loading…","загрузка":"loading",
+  "ошибка:":"error:","ошибка":"error","ошибка проверки:":"check error:","не удалось:":"failed:","сохраняю…":"saving…",
+  "сохранено":"saved","сохранить":"save","Сохранить":"Save","удалить":"delete","удалён":"deleted","отмена":"cancel",
+  "обновить":"refresh","проверяю…":"checking…","Проверить подключение":"Check connection","тест":"test","вкл":"on","выкл":"off",
+  "включить":"enable","выключить":"disable","включено":"enabled","активно":"active","пауза":"pause","нет данных":"no data",
+  "никогда":"never","назад":"ago","всего":"total","Всего:":"Total:","Заблок.:":"Blocked:","причина":"reason","группы:":"groups:",
+  "дефолтная группа:":"default group:","группа по умолч.":"default group","по умолчанию":"default","все":"all","все домены":"all domains",
+  "мониторинг трафика и атак":"traffic & attack monitoring","подключение…":"connecting…","онлайн":"online","офлайн":"offline",
+  "Проблемы в обработке":"Processing problems","недоступен":"unreachable","не готов":"not ready","запрос не прошёл":"query failed",
+  "обновлены":"updated","Данные":"Data","Правила 403":"403 rules","рендер":"render","дрейф!":"drift!","акт.":"act.",
+  "AI-аналитик":"AI analyst","AI-разбор":"AI insight","Лента AI-инсайтов":"AI insights feed","AI-разбор выключен":"AI insight off",
+  "Кандидаты в бан":"Ban candidates","Подозрительные IP":"Suspicious IPs","Активные блокировки":"Active blocks","Кто и что":"Who & what",
+  "Заблокировать":"Block","разблокировать":"unblock","забанить":"ban","забанен":"banned","разбанен":"unbanned","бан":"ban","разбан":"unban",
+  "истёк TTL":"TTL expired","причина бана":"ban reason","навсегда":"forever","профиль":"profile","оператор":"operator",
+  "автобан":"auto-ban","Автобан":"Auto-ban","система":"system","Создать новое правило":"Create a rule","Редактировать правило":"Edit rule",
+  "укажи путь":"set a path","нужно имя":"name required","укажи путь/паттерн":"set a path/pattern","превью":"preview",
+  "считаю (Loki)…":"computing (Loki)…","основное":"primary","сделать основным":"make primary","ред.":"edit","Правил пока нет.":"No rules yet.",
+  "Создай первое слева.":"Create your first on the left.","семейство:":"family:","путь":"path","код":"code","бан ":"ban ",
+  "Включить автобан":"Enable auto-ban","Автобан включён":"Auto-ban on","Выключен":"Off","Исполнитель не подключён":"Executor not wired",
+  "Ноды":"Nodes","Подключённые ноды":"Connected nodes","Добавить ноду":"Add node","отозвать":"revoke","баны на ноде":"bans on node",
+  "пока нет подключённых нод.":"no connected nodes yet.","Установка агента на nginx-VM":"Agent install on the nginx VM",
+  "Журнал действий":"Action journal","все действия":"all actions","баны":"bans","разбаны":"unbans","истёкшие (TTL)":"expired (TTL)",
+  "только с ошибкой":"errors only","применено":"applied","нет записей под фильтр.":"no records for this filter.",
+  "Настройки":"Settings","Окружения":"Environments","Уведомления":"Notifications","Глобальные":"Global","Глобальные настройки":"Global settings",
+  "Окружение":"Environment","Название":"Name","Каналы":"Channels","Правила":"Rules","канал":"channel","правило":"rule","метка":"label",
+  "важность":"severity","событие":"event","нет каналов":"no channels","нет правил":"no rules","задан":"set","не задан":"not set",
+  "только через ENV":"ENV only","Куда применяются баны":"Where bans apply","таргеты":"targets","окружение":"environment",
+  "не задан в blocklist-api":"not set in blocklist-api","команда недоступна":"command unavailable","не настроен":"not configured",
+  "Скопировать":"Copy","дней":"days","день":"day","ч ":"h ","м ":"m ","с назад":"s ago","м назад":"m ago","ч назад":"h ago","д назад":"d ago",
+};
+let _ruKeys=null, _trMO=null, _trBusy=false;
+function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
+function _trText(v){ if(!/[А-Яа-яЁё]/.test(v))return v; for(const k of _ruSorted())if(v.indexOf(k)>=0)v=v.split(k).join(RU2EN[k]); return v; }
+function translateDOM(root){
+  if(_lang!=="en")return;
+  root=root||document.body;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),nodes=[]; let n;
+  while(n=w.nextNode())nodes.push(n);
+  nodes.forEach(t=>{ const v=_trText(t.nodeValue); if(v!==t.nodeValue)t.nodeValue=v; });
+  (root.querySelectorAll?root.querySelectorAll("[placeholder],[title]"):[]).forEach(e=>{
+    if(e.placeholder){const v=_trText(e.placeholder); if(v!==e.placeholder)e.placeholder=v;}
+    if(e.title){const v=_trText(e.title); if(v!==e.title)e.title=v;}
+  });
+}
+function startTranslator(){
+  if(_lang!=="en"||_trMO)return;
+  translateDOM(document.body);
+  _trMO=new MutationObserver(ms=>{ if(_trBusy)return; _trBusy=true;
+    try{ ms.forEach(m=>m.addedNodes&&m.addedNodes.forEach(nd=>{
+      if(nd.nodeType===1)translateDOM(nd); else if(nd.nodeType===3){const v=_trText(nd.nodeValue); if(v!==nd.nodeValue)nd.nodeValue=v;}
+    })); } finally{ setTimeout(()=>{_trBusy=false;},0); }
+  });
+  _trMO.observe(document.body,{childList:true,subtree:true});
+}
 
 // ── card manager (hide / restore dashboard sections) ──────────────────────────
 let _hiddenCards=JSON.parse(localStorage.getItem("soc_hidden_cards")||"[]");
@@ -2768,7 +2825,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();initCards();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();
+applyI18n();initCards();loadEnvSwitcher();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
