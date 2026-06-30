@@ -86,6 +86,11 @@
   .setnav-btn:hover{background:#ffffff08;color:var(--text)}
   .setnav-btn.on{background:var(--accent-weak);border-color:#4d8dff33;color:var(--accent2)}
   @media(max-width:760px){.setwrap{grid-template-columns:1fr}.setnav{flex-direction:row;overflow:auto}}
+  /* toggle switch */
+  .sw{width:38px;height:21px;border-radius:20px;background:#2a3340;position:relative;transition:.15s;cursor:pointer;flex:0 0 auto;border:0;display:inline-block}
+  .sw.on{background:var(--accent)}
+  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.15s}
+  .sw.on i{left:19px}
   .burger{display:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);background:#161c27;color:var(--text);cursor:pointer;font-size:16px;align-items:center;justify-content:center}
   @media(max-width:760px){.sidebar{position:fixed;left:-240px;transition:.2s;box-shadow:0 0 40px #000a}.sidebar.open{left:0}.main{padding:14px}.burger{display:inline-flex}}
 </style>
@@ -125,7 +130,7 @@
     </div>
     <span id="updated" class="hidden"></span>
     <button id="lang-btn" onclick="toggleLang()" class="iconbtn-x btn btn-ghost btn-xs" title="language">EN</button>
-    <button id="llm-toggle" onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
+    <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
     <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
     <h1 id="view-title" class="hidden" data-i18n="title">SOC Dashboard</h1>
   </header>
@@ -584,7 +589,7 @@
       <div class="card p-3 mb-4 flex items-center justify-between">
         <div><div class="text-xs font-medium text-slate-300" data-i18n="llm.label">LLM analysis</div>
           <div class="text-[11px]" style="color:var(--faint)" data-i18n="llm.hint">When off, all AI mentions disappear from the dashboard.</div></div>
-        <button id="set-llm-toggle" onclick="toggleLLM()" class="btn btn-xs">🤖 —</button>
+        <div class="flex items-center gap-2"><span id="set-llm-state" class="text-xs" style="color:var(--muted)">—</span><button id="set-llm-toggle" onclick="toggleLLM()" class="sw" title="LLM on/off"><i></i></button></div>
       </div>
       <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
       <div id="set-msg" class="text-[11px] mt-3"></div>
@@ -783,10 +788,13 @@ function translateDOM(root){
 function startTranslator(){
   if(_lang!=="en"||_trMO)return;
   translateDOM(document.body);
-  _trMO=new MutationObserver(ms=>{ if(_trBusy)return; _trBusy=true;
-    try{ ms.forEach(m=>m.addedNodes&&m.addedNodes.forEach(nd=>{
+  // translateDOM only edits text/attributes (never adds nodes), so it can't
+  // self-trigger this childList observer — no busy-guard needed (the guard was
+  // skipping rapid successive renders, leaving Russian on screen).
+  _trMO=new MutationObserver(ms=>{
+    ms.forEach(m=>m.addedNodes&&m.addedNodes.forEach(nd=>{
       if(nd.nodeType===1)translateDOM(nd); else if(nd.nodeType===3){const v=_trText(nd.nodeValue); if(v!==nd.nodeValue)nd.nodeValue=v;}
-    })); } finally{ setTimeout(()=>{_trBusy=false;},0); }
+    }));
   });
   _trMO.observe(document.body,{childList:true,subtree:true});
 }
@@ -1518,16 +1526,17 @@ function chip(label,ok,detail){
 }
 function renderLLMToggle(enabled){
   const sb=document.getElementById("llm-toggle");
-  if(sb)sb.textContent=enabled?"🤖 on":"🤖 off";
-  const sg=document.getElementById("set-llm-toggle");
-  if(sg){ sg.textContent=enabled?t("llm.on"):t("llm.off");
-    sg.style.color=enabled?"var(--ok)":"var(--faint)"; }
+  if(sb)sb.textContent=enabled?"🤖 on":"🤖 off";          // hidden when off via data-llm
+  const sg=document.getElementById("set-llm-toggle");      // real switch in Settings
+  if(sg)sg.classList.toggle("on",!!enabled);
+  const st=document.getElementById("set-llm-state");
+  if(st){ st.textContent=enabled?t("llm.on"):t("llm.off"); st.style.color=enabled?"var(--ok)":"var(--faint)"; }
 }
 async function toggleLLM(){
-  const b=document.getElementById("llm-toggle");
-  const cur=b&&b.textContent.includes("вкл");
+  const cur=!document.body.classList.contains("llm-off");   // authoritative current state
   try{
     const d=await fetch("/api/llm/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!cur})}).then(r=>r.json());
+    document.body.classList.toggle("llm-off",!d.enabled);    // apply immediately (don't wait for refresh)
     renderLLMToggle(!!d.enabled);refresh();
   }catch(e){}
 }
