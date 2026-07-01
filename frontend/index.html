@@ -721,11 +721,14 @@
         <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl" data-i18n="tg.sub">A group bundles several targets (nginx nodes + Cloudflare). 403 &amp; auto-ban rules attach to a group and apply to all its targets at once.</div>
       </div>
       <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
-      <!-- создание новой группы — под списком существующих -->
-      <div class="flex items-center gap-2 mt-3 p-2.5 rounded-lg" style="background:#0f0d08;border:1px dashed #3a311e">
-        <span class="text-[11px] shrink-0" style="color:#d6a35c" data-i18n="tg.newname">New group:</span>
-        <input id="grp-new" placeholder="nginx-aaa" class="flex-1 max-w-xs bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 mono" onkeydown="if(event.key==='Enter')grpNew()">
-        <button onclick="grpNew()" class="btn btn-ghost btn-xs shrink-0">＋ <span data-i18n="tg.create">Create</span></button>
+      <!-- создание новой группы — кнопка Add раскрывает поле ввода -->
+      <div class="flex items-center gap-2 mt-3">
+        <button id="grp-add-btn" onclick="grpAddToggle()" class="btn btn-ghost btn-xs shrink-0">＋ <span data-i18n="tg.add">Add</span></button>
+        <div id="grp-new-row" class="hidden flex items-center gap-2 flex-1">
+          <input id="grp-new" placeholder="nginx-aaa" class="flex-1 max-w-xs bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 mono" onkeydown="if(event.key==='Enter')grpNew()">
+          <button onclick="grpNew()" class="btn btn-ghost btn-xs shrink-0">＋ <span data-i18n="tg.create">Create</span></button>
+          <button onclick="grpAddToggle()" class="btn btn-ghost btn-xs shrink-0" aria-label="cancel">✕</button>
+        </div>
         <span class="flex-1"></span>
         <span id="grp-msg" class="text-[11px]"></span>
         <button onclick="grpSave()" class="btn btn-primary btn-xs shrink-0">💾 <span data-i18n="save">Save</span></button>
@@ -1080,7 +1083,7 @@ const I18N={en:{
   "ing.f.ns":"Install namespace","ing.f.host":"block-api hostname","ing.f.cns":"Controller namespace","ing.f.ccm":"Controller ConfigMap","ing.f.ip":"Dashboard IP (whitelist)","ing.f.token":"Token","ing.gen":"generate","ing.f.loki":"Dashboard Loki push URL",
   "ing.s2":"Logs into Loki","ing.s2.sub":"The dashboard reads traffic/attacks from Loki. You need one of:","ing.s2.a":"Loki + Promtail already in the cluster","ing.s2.a2":"— then just give the dashboard access to that Loki (set its URL in the dashboard config/deploy).","ing.s2.b":"Loki only on the dashboard","ing.s2.b2":"— then install Promtail in the cluster so it ships ingress-nginx logs to the dashboard's Loki. URL below:",
   "ing.s3":"values.yaml — where the target is set","ing.s3.sub":"The ingress target IS the controller's namespace + ConfigMap pair. Same values as the command above:",
-  "nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
+  "nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","tg.add":"Add","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
   "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.global":"Global",
   "cft.h":"Cloudflare targets","cft.sub":"A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).","cft.new":"New CF target",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
@@ -1106,7 +1109,7 @@ const I18N={en:{
   "ing.f.ns":"Namespace установки","ing.f.host":"Хостнейм block-api","ing.f.cns":"Namespace контроллера","ing.f.ccm":"ConfigMap контроллера","ing.f.ip":"IP дашборда (whitelist)","ing.f.token":"Token","ing.gen":"сгенерить","ing.f.loki":"Loki push URL дашборда",
   "ing.s2":"Логи в Loki","ing.s2.sub":"Дашборд читает трафик/атаки из Loki. Нужен один из вариантов:","ing.s2.a":"Loki + Promtail уже в кластере","ing.s2.a2":"— тогда просто дай дашборду доступ к этому Loki (укажи его URL в настройках/при деплое дашборда).","ing.s2.b":"Loki только на дашборде","ing.s2.b2":"— тогда поставь Promtail в кластер, чтобы он слал логи ingress-nginx в Loki дашборда. URL ниже:",
   "ing.s3":"values.yaml — где указывается таргет","ing.s3.sub":"Таргет ingress — это и есть пара «namespace + ConfigMap контроллера». Те же значения, что в команде выше:",
-  "nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
+  "nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","tg.add":"Добавить","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
   "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.global":"Глобальные",
   "cft.h":"Cloudflare-таргеты","cft.sub":"Именованный аккаунт/зона Cloudflare, который привязывается к группам и 403-правилам как любой таргет. Токен write-only (хранится на сервере, показывается только как «задан»).","cft.new":"Новый CF-таргет",
   "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
@@ -4495,11 +4498,17 @@ function _grpAddMenu(g,avail){
     m+=`<div class="attach-sec">${mt.svg} ${esc(mt.lbl)}</div>`+avail.filter(t=>t.type===ty).map(t=>`<button type="button" onclick="${close};grpAddTarget('${escJs(g)}','${escJs(t.id)}')" class="attach-row">${mt.svg}<span>${esc(t.id)}</span></button>`).join("");});
   return `<details class="attach-dd"><summary class="attach-add">＋ ${_trText('таргет')}</summary><div class="attach-menu">${m}</div></details>`;
 }
+function grpAddToggle(){
+  const row=document.getElementById("grp-new-row"),btn=document.getElementById("grp-add-btn");
+  const opening=row.classList.contains("hidden");
+  row.classList.toggle("hidden"); btn.classList.toggle("hidden",opening);
+  if(opening){ const inp=document.getElementById("grp-new"); if(inp){inp.value="";inp.focus();} }
+}
 function grpNew(){
   const inp=document.getElementById("grp-new"),name=(inp.value||"").trim();
   if(!name)return; if(!_grpDraft)_grpDraft={};
   if(_grpDraft[name]){uiAlert("такая группа уже есть");return;}
-  _grpDraft[name]=[]; inp.value=""; renderGroups();
+  _grpDraft[name]=[]; inp.value=""; renderGroups(); grpAddToggle();
 }
 function grpDelete(g){ if(_grpDraft){delete _grpDraft[g];renderGroups();} }
 function grpAddTarget(g,tid){ if(!_grpDraft[g])_grpDraft[g]=[]; if(!_grpDraft[g].includes(tid))_grpDraft[g].push(tid); renderGroups(); }
