@@ -332,11 +332,20 @@ async def notify_dispatch(request: Request):
 
 @app.get("/enroll_info")
 def enroll_info():
-    """Admin-only: data the dashboard needs to render the «Add node» install
-    one-liner (the enroll secret + the URL agents should use to reach us)."""
-    return {"enroll_configured": bool(config.ENROLL_SECRET),
-            "enroll_secret": config.ENROLL_SECRET,
-            "public_url": config.PUBLIC_URL}
+    """Admin-only: the «Add node» install one-liner, rendered HERE so the raw
+    ENROLL_SECRET is never returned as a standalone field (it appears only inside
+    the command an authed operator explicitly fetched). See S3."""
+    url = (config.PUBLIC_URL or "").rstrip("/")
+    configured = bool(config.ENROLL_SECRET)
+    cmd = ""
+    if configured and url:
+        # installer refuses plaintext HTTP unless INSECURE=1 (operator chose this URL)
+        insecure = "" if url.startswith("https://") else "INSECURE=1 "
+        cmd = ("curl -fsSL %s/install/soc-nginx-agent.sh | "
+               "sudo %sBLOCKLIST_API_URL=%s ENROLL_SECRET=%s bash"
+               % (url, insecure, url, config.ENROLL_SECRET))
+    return {"enroll_configured": configured, "public_url": url,
+            "install_cmd": cmd, "needs_public_url": configured and not url}
 
 
 @app.post("/block")

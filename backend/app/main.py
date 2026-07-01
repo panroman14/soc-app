@@ -895,21 +895,14 @@ def api_nodes_install():
     The enroll secret stays server-side until an authed operator opens this."""
     if not config.BLOCKLIST_API_URL:
         return JSONResponse({"enabled": False})
+    # blocklist-api renders the one-liner itself now (S3) — the raw ENROLL_SECRET is
+    # never returned as a field; we just proxy the rendered command.
     _, info = _blocklist_call("GET", "/enroll_info")
     info = info or {}
-    url = (info.get("public_url") or "").rstrip("/")
-    secret = info.get("enroll_secret") or ""
-    configured = bool(info.get("enroll_configured"))
-    cmd = ""
-    if configured and url and secret:
-        # the installer refuses plaintext HTTP unless INSECURE=1 — the operator already
-        # chose this PUBLIC_URL, so pre-acknowledge it for the one-click flow.
-        insecure = "" if url.startswith("https://") else "INSECURE=1 "
-        cmd = ("curl -fsSL %s/install/soc-nginx-agent.sh | "
-               "sudo %sBLOCKLIST_API_URL=%s ENROLL_SECRET=%s bash") % (url, insecure, url, secret)
-    return JSONResponse({"enabled": True, "configured": configured,
-                         "public_url": url, "install_cmd": cmd,
-                         "needs_public_url": configured and not url})
+    return JSONResponse({"enabled": True, "configured": bool(info.get("enroll_configured")),
+                         "public_url": (info.get("public_url") or "").rstrip("/"),
+                         "install_cmd": info.get("install_cmd") or "",
+                         "needs_public_url": bool(info.get("needs_public_url"))})
 
 
 @app.get("/api/blocklist")
