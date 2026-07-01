@@ -2978,12 +2978,17 @@ async function loadIngress(){
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
 // ── Ingress: «Подключить кластер» (генератор helm-команды + promtail + values) ──
-function ingSetupToggle(){ const b=document.getElementById("ing-setup"); b.classList.toggle("hidden"); if(!b.classList.contains("hidden")){ _ingRestore(); if(!document.getElementById("ing-token").value)ingGenToken(); else ingCmd(); bcReset(); loadIngBackends(); } }
-// persist the Setup form (esp. the token) — a fresh random token on every reload
-// would never match what you helm-installed → 401 on Test. Restore keeps them equal.
+// "Setup cluster" always starts a FRESH new-cluster form — it registers a NEW
+// ingress, not an editor for an existing one (existing backends are managed in the
+// list below via activate/delete). Closing just hides the panel.
+function ingSetupToggle(){ const b=document.getElementById("ing-setup"); const opening=b.classList.contains("hidden"); b.classList.toggle("hidden"); if(opening){ _ingFormReset(); ingGenToken(); bcReset(); loadIngBackends(); } }
+// default values for a clean new-cluster form
+const _ING_DEFAULTS={"ing-ns":"soc","ing-host":"block-api.example.com","ing-cns":"ingress-nginx","ing-ccm":"ingress-nginx-controller","ing-ip":"","ing-token":"","ing-loki":""};
+function _ingFormReset(){ Object.entries(_ING_DEFAULTS).forEach(([id,v])=>{const e=document.getElementById(id); if(e)e.value=v;}); ingCmd(); }
+// persist within a session so an accidental reload mid-setup doesn't wipe the token
+// you already helm-installed (a fresh random one would 401 on Test).
 const _ING_FORM=["ing-ns","ing-host","ing-cns","ing-ccm","ing-ip","ing-token","ing-loki"];
 function _ingPersist(){ try{ const f={}; _ING_FORM.forEach(id=>{const e=document.getElementById(id); if(e)f[id]=e.value;}); localStorage.setItem("soc_ing_form",JSON.stringify(f)); }catch(e){} }
-function _ingRestore(){ try{ const f=JSON.parse(localStorage.getItem("soc_ing_form")||"{}"); _ING_FORM.forEach(id=>{const e=document.getElementById(id); if(e&&f[id])e.value=f[id];}); }catch(e){} }
 function _bcUrl(){ const h=_ingVal("ing-host",""); return h?(h.startsWith("http")?h.replace(/\/$/,""):"https://"+h.replace(/\/$/,"")):""; }
 function bcReset(){
   document.getElementById("bc-result").textContent="";
@@ -3043,8 +3048,8 @@ async function ingBackendDelete(id){
   if(!await uiConfirm(_trText("Удалить это подключение?")))return;
   try{
     const r=await fetch("/api/ingress_apis/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}).then(x=>x.json());
-    // deleting the active backend reset the dashboard to the env-default one —
-    // reload so nodes/CF/all views repopulate from the restored source.
+    // deleting the active backend switched the dashboard to another registered
+    // backend — reload so nodes/CF/all views repopulate from the new active source.
     if(r&&r.reset_to_default){ location.reload(); return; }
     loadIngBackends(); loadIngress();
   }
