@@ -1454,7 +1454,7 @@ const RU2EN={
   "все бэкенды":"all backends","данные ниже могут быть неполными":"data below may be incomplete","недоступен":"unreachable","локальный":"local",
   "править":"edit","имя":"name","не удалось: ":"failed: ","оставь пустым — не менять":"leave blank to keep","локальный blocklist-api":"local blocklist-api",
   "нет подключённых ingress — нажми «Setup cluster», чтобы добавить":"no ingress connected — click «Setup cluster» to add one",
-  "добавлено":"added","Удалить этот ingress?":"Delete this ingress?","переименовать":"rename","Имя ноды (пусто — вернуть исходное):":"Node name (blank = restore original):",
+  "добавлено":"added","Удалить этот ingress?":"Delete this ingress?","переименовать":"rename","Имя ноды (пусто — вернуть исходное):":"Node name (blank = restore original):","ничего":"none",
   "IP в бане":"IP banned","баны идут":"bans active","готов · банов нет":"ready · no bans","простаивает":"idle",
   "активность банов · 24ч":"ban activity · 24h","активности нет":"no activity","приатаченные 403-правила":"attached 403 rules",
   "403-правил нет":"no 403 rules","автобан выкл":"auto-ban off","автобан":"auto-ban","способ применения":"enforcement",
@@ -3596,11 +3596,12 @@ function _attachMenu(r, kind){
   const types=[...new Set(ts.map(t=>t.type))].sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
   const close="this.closest('details').removeAttribute('open')";
   const row=(inner,tok)=>`<button type="button" onclick="${close};attachAdd('${kind}','${escJs(r.id)}','${tok}')" class="attach-row">${inner}</button>`;
-  let m="";
+  const secColor={"nginx-file":"#4ade80","cloudflare":"#fb923c","ingress-cm":"#60a5fa"};
+  // "все таргеты" first (highlighted) — sets all:true rather than a specific target
+  let m=`<button type="button" onclick="${close};attachAll('${kind}','${escJs(r.id)}',true)" class="attach-row" style="font-weight:500;color:#6ee7b7;border-bottom:1px solid var(--border)">🌐 ${_trText('все таргеты')}</button>`;
   if(gs.length) m+=`<div class="attach-sec">🗂 ${_trText('группы')}</div>`+gs.map(g=>row(`<span>${esc(g)}</span><span class="attach-res">→ ${esc(_grpResolve(g))}</span>`,"g:"+esc(g))).join("");
   types.forEach(ty=>{const mt=_typeMeta(ty);
-    m+=`<div class="attach-sec">${mt.svg} ${esc(mt.lbl)}</div>`+ts.filter(t=>t.type===ty).map(t=>row(`${mt.svg}<span>${esc(t.id)}</span>`,"t:"+esc(t.id))).join("");});
-  if(!m) m=`<div class="attach-sec" style="opacity:.6">${_trText('нечего привязать')}</div>`;
+    m+=`<div class="attach-sec" style="color:${secColor[ty]||'var(--faint)'};font-weight:500;letter-spacing:.02em">${mt.svg} ${esc(mt.lbl)}</div>`+ts.filter(t=>t.type===ty).map(t=>row(`${mt.svg}<span>${esc(t.id)}</span>`,"t:"+esc(t.id))).join("");});
   return `<details class="attach-dd"><summary class="attach-add">＋ ${_trText('привязать')}</summary><div class="attach-menu">${m}</div></details>`;
 }
 function _attachUI(r, kind){
@@ -3608,10 +3609,13 @@ function _attachUI(r, kind){
   const chip=(label,tok)=>`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${label}<button onclick="attachRemove('${kind}','${escJs(r.id)}','${tok}')" class="text-slate-500 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`;
   const gChips=(r.groups||[]).map(g=>chip("🗂 "+esc(g)+' <span style="color:var(--faint)">→ '+esc(_grpResolve(g))+'</span>',"g:"+esc(g))).join(" ");
   const tChips=(r.targets||[]).map(t=>chip(_typeIcon(_tgtTypeById(t))+" "+esc(t),"t:"+esc(t))).join(" ");
+  const allChip=all?`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-600/25 border border-emerald-500/40 text-emerald-200">${_trText('все таргеты')}<button onclick="attachRemove('${kind}','${escJs(r.id)}','all')" class="text-emerald-300/70 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`:"";
+  const chips=all?allChip:(gChips+" "+tChips).trim();
+  const icon=kind==="p403"?"":"🎯 ";
   return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
-    <span style="color:var(--faint)">🎯 ${_trText('привязка')}:</span>
-    <button onclick="attachAll('${kind}','${escJs(r.id)}',${!all})" class="px-1.5 py-0.5 rounded border ${all?'bg-emerald-600/30 border-emerald-500/40 text-emerald-200':'border-slate-700 text-slate-500 hover:text-slate-300'}">${_trText('все таргеты')}</button>
-    ${all?"":gChips+" "+tChips+_attachMenu(r,kind)}
+    <span style="color:var(--faint)">${icon}${_trText('привязка')}:</span>
+    ${chips||`<span style="color:var(--faint)">${_trText('ничего')}</span>`}
+    ${_attachMenu(r,kind)}
   </div>`;
 }
 function _attachRuleById(kind,id){ return kind==="p403"?(_p403.rules||[]).find(r=>String(r.id)===String(id)):(_abRules||[]).find(r=>String(r.id)===String(id)); }
@@ -3639,7 +3643,8 @@ function attachAdd(kind,id,tok){ if(!tok)return; const r=_attachRuleById(kind,id
   else if(tok.slice(0,2)==="t:")r.targets=[...new Set([...(r.targets||[]),tok.slice(2)])];
   _attachSave(kind,r); }
 function attachRemove(kind,id,tok){ const r=_attachRuleById(kind,id); if(!r)return;
-  if(tok.slice(0,2)==="g:")r.groups=(r.groups||[]).filter(g=>g!==tok.slice(2));
+  if(tok==="all")r.all=false;
+  else if(tok.slice(0,2)==="g:")r.groups=(r.groups||[]).filter(g=>g!==tok.slice(2));
   else r.targets=(r.targets||[]).filter(t=>t!==tok.slice(2));
   _attachSave(kind,r); }
 function _appliesTargets(group, pathOnly){
