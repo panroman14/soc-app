@@ -996,21 +996,22 @@ def _notify(event):
 def api_environments():
     if not config.BLOCKLIST_API_URL:
         return JSONResponse({"enabled": False, "environments": []})
-    _, body = _blocklist_call("GET", "/environments")
+    # C1: per-backend config → follow the scope picker (was ignoring it via _blocklist_call)
+    _, body = _bcall_to(*_scoped_backend(), "GET", "/environments")
     return JSONResponse({"enabled": True, **(body or {})})
 
 
 @app.post("/api/environments")
 async def api_environments_save(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/environments", body)
+    status, resp = _bcall_to(*_scoped_backend(), "POST", "/environments", body)
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
 @app.post("/api/environments/delete")
 async def api_environments_delete(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/environments/delete", {"id": body.get("id", "")})
+    status, resp = _bcall_to(*_scoped_backend(), "POST", "/environments/delete", {"id": body.get("id", "")})
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
