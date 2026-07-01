@@ -1454,6 +1454,11 @@ const RU2EN={
   "править":"edit","имя":"name","не удалось: ":"failed: ","оставь пустым — не менять":"leave blank to keep","локальный blocklist-api":"local blocklist-api",
   "нет подключённых ingress — нажми «Setup cluster», чтобы добавить":"no ingress connected — click «Setup cluster» to add one",
   "добавлено":"added","Удалить этот ingress?":"Delete this ingress?",
+  "IP в бане":"IP banned","баны идут":"bans active","готов · банов нет":"ready · no bans","простаивает":"idle",
+  "активность банов · 24ч":"ban activity · 24h","активности нет":"no activity","приатаченные 403-правила":"attached 403 rules",
+  "403-правил нет":"no 403 rules","автобан выкл":"auto-ban off","автобан":"auto-ban","способ применения":"enforcement",
+  "включён · банит по IP":"on · bans by IP","выключен · баны не добавляются":"off · no new bans","последние баны":"recent bans",
+  "ничего не приатачено":"nothing attached","активны":"active","в бане":"banned","готов":"ready","таргетов пока нет — подключи ноду, CF-таргет или ingress.":"no targets yet — connect a node, CF target or ingress.",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
@@ -4562,16 +4567,16 @@ function _smpRender(){
     const open=_smpOpen===t.id;
     let detail="";
     if(open){
-      const rulesHtml=my.length?my.map(r=>`<div class="flex items-center gap-2 px-2 py-1 rounded border border-slate-800 bg-slate-900/50">
-          <span class="mono text-[12px] text-slate-200 truncate">${esc(r.pattern||r.name||"(правило)")}</span>
-          <span class="ml-auto text-[11px] text-emerald-400">вкл</span></div>`).join(""):`<div class="text-[12px] text-slate-500">403-правил нет</div>`;
+      const rulesHtml=my.length?my.map(r=>`<div class="flex items-center gap-2 px-2 py-1 rounded border border-slate-800 bg-slate-900/50 min-w-0">
+          <span class="mono text-[12px] text-slate-200 truncate min-w-0" title="${escAttr(r.pattern||r.name||"")}">${esc(r.pattern||r.name||"(правило)")}</span>
+          <span class="ml-auto shrink-0 text-[11px] text-emerald-400">✓</span></div>`).join(""):`<div class="text-[12px] text-slate-500">403-правил нет</div>`;
       const rec=(recentByBe[be]||[]).slice(0,6);
       const recHtml=rec.length?rec.map(c=>`<span class="mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">${esc(c)}</span>`).join(" "):`<span class="text-[12px] text-slate-500">—</span>`;
       detail=`<div class="mt-3 pt-3 border-t border-slate-800 grid gap-3">
         <div><div class="text-[11px] text-slate-500 mb-1">активность банов · 24ч</div>${_smpSpark(sparkByBe[be],_smpColor(t.type))}</div>
         <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
-          <div><div class="text-[11px] text-slate-500 mb-1.5">приатаченные 403-правила</div><div class="grid gap-1.5">${rulesHtml}</div></div>
-          <div><div class="text-[11px] text-slate-500 mb-1.5">автобан</div><div class="text-[12px]">${armed?'<span class="text-emerald-400">включён</span> · банит по IP':'<span class="text-amber-400">выключен</span> · баны не добавляются'}</div>
+          <div class="min-w-0"><div class="text-[11px] text-slate-500 mb-1.5">приатаченные 403-правила</div><div class="grid gap-1.5 min-w-0">${rulesHtml}</div></div>
+          <div class="min-w-0"><div class="text-[11px] text-slate-500 mb-1.5">автобан</div><div class="text-[12px] ${armed?'text-emerald-400':'text-amber-400'}">${armed?'включён · банит по IP':'выключен · баны не добавляются'}</div>
             <div class="text-[11px] text-slate-500 mt-2.5 mb-1.5">способ применения</div><div class="text-[12px] text-slate-300">${_trText(blocksPath?'IP + 403-пути':'только IP')}</div></div>
         </div>
         <div><div class="text-[11px] text-slate-500 mb-1.5">последние баны</div><div class="flex flex-wrap gap-1.5">${recHtml}</div></div>
@@ -4598,7 +4603,7 @@ function _smpRender(){
   }).join("");
   el.innerHTML=`<div class="smp-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.6rem">${tiles}</div>`;
   const sumEl=document.getElementById("smp-summary");
-  if(sumEl)sumEl.innerHTML=`<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400"><span class="smp-live w-1.5 h-1.5 rounded-full bg-emerald-400"></span>${active} из ${tg.length} активны</span>`;
+  if(sumEl)sumEl.innerHTML=`<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400"><span class="smp-live w-1.5 h-1.5 rounded-full bg-emerald-400"></span>${active}/${tg.length} активны</span>`;
   const bnEl=document.getElementById("smp-banned");
   const total=Object.values(bansByBe).reduce((a,b)=>a+b,0);
   if(bnEl)bnEl.innerHTML=`в бане <span class="text-slate-200 font-medium">${total}</span> IP`;
