@@ -1554,27 +1554,31 @@ function lgQuick(tok){
 }
 // ── query + render ──
 async function lgRun(){ _lg.endNs=null; _lg.winMin=null; return _lgFetch(); }
+let _lgGen=0, _lgFacetDeb=null;
 async function _lgFetch(){
   lgReadState();
   const tbl=document.getElementById("lg-table"); if(!tbl)return;
+  const gen=++_lgGen;                              // run-token (C3): drop stale async results
   try{
     const [q,h]=await Promise.all([
       _post("/api/logs/query", _lgBody({limit:200})),
       _post("/api/logs/histogram", _lgBody({by_class:true}))
     ]);
+    if(gen!==_lgGen)return;                         // a newer run superseded this one
     if(q.enabled===false){ tbl.innerHTML='<div class="text-slate-600 text-xs p-2">Loki '+_trText("не настроен")+' (LOKI_URL).</div>'; document.getElementById("lg-hist").innerHTML=""; return; }
     _lg.rows=q.rows||[]; _lg.cursor=q.next_cursor||null;
     lgRenderRows(); lgRenderHist(h); lgRenderSrcStatus(q.sources||[]); lgStats(q);
     document.getElementById("lg-more").classList.toggle("hidden", !_lg.cursor);
-    lgLoadFacets();
-  }catch(e){ tbl.innerHTML='<div class="text-red-400 text-xs p-2">error: '+esc(e.message)+'</div>'; }
+    clearTimeout(_lgFacetDeb); _lgFacetDeb=setTimeout(lgLoadFacets,400);   // Pf1: debounce facets (N×7 queries)
+  }catch(e){ if(gen===_lgGen)tbl.innerHTML='<div class="text-red-400 text-xs p-2">error: '+esc(e.message)+'</div>'; }
   clearTimeout(_lgTimer);
   if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgTail,5000);
 }
 async function lgTail(){
-  const maxTs=_lg.rows.length?_lg.rows[0].ts:0;
+  const gen=_lgGen, maxTs=_lg.rows.length?_lg.rows[0].ts:0;
   try{
     const q=await _post("/api/logs/query", _lgBody({limit:100}));
+    if(gen!==_lgGen)return;                         // filter changed mid-flight → drop (C3)
     const fresh=(q.rows||[]).filter(r=>r.ts>maxTs);
     if(fresh.length){ _lg.rows=fresh.concat(_lg.rows).slice(0,1000); lgRenderRows(); lgStats(q); }
   }catch(e){}
@@ -2868,6 +2872,7 @@ let _view="dash";
 const _VIEWS=["dash","autoban","p403","targets","dashboards","journal","logs","settings"];
 function showView(name){
   if(!_VIEWS.includes(name))name="dash";
+  if(name!=="logs")clearTimeout(_lgTimer);   // C3: stop the tail poll when leaving Logs
   _view=name;
   _VIEWS.forEach(v=>{
     document.getElementById("view-"+v).classList.toggle("hidden",v!==name);

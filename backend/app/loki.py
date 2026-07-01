@@ -295,10 +295,10 @@ def query_logs(query, minutes=15, end_ns=None, limit=300):
     return rows[:limit]
 
 
-def log_histogram(query, minutes=15, buckets=60):
+def log_histogram(query, minutes=15, buckets=60, end_ns=None):
     """Volume-over-time for the sparkline: count_over_time bucketed across the range."""
     import time as _t
-    end = int(_t.time())
+    end = int(end_ns / 1e9) if end_ns else int(_t.time())
     start = end - int(minutes) * 60
     step = max(1, (end - start) // max(1, buckets))
     metric = "sum(count_over_time(%s [%ds]))" % (query, step)
@@ -315,12 +315,12 @@ def log_histogram(query, minutes=15, buckets=60):
     return {"step": step, "points": pts}
 
 
-def log_histogram_by_class(query, minutes=15, buckets=60):
+def log_histogram_by_class(query, minutes=15, buckets=60, end_ns=None):
     """Datadog-style stacked volume: request count per time bucket split by status
     class (2xx/3xx/4xx/5xx). Uses label_format to derive the class from status, then
     sums by it. Returns {step, series:{"2xx":[{t,v}],…}}."""
     import time as _t
-    end = int(_t.time())
+    end = int(end_ns / 1e9) if end_ns else int(_t.time())
     start = end - int(minutes) * 60
     step = max(1, (end - start) // max(1, buckets))
     # first digit of status → class bucket; group the count_over_time by it
@@ -340,11 +340,11 @@ def log_histogram_by_class(query, minutes=15, buckets=60):
     return {"step": step, "series": series}
 
 
-def log_facets(query, fields, minutes=15, topn=10):
+def log_facets(query, fields, minutes=15, topn=10, end_ns=None):
     """Datadog-style facet counts: for each field, the top values by request count
     over the window. Returns {field: [{value, count}, …]}."""
     import time as _t
-    end = int(_t.time())
+    end = int(end_ns / 1e9) if end_ns else int(_t.time())
     start = end - int(minutes) * 60
     win = max(1, int(minutes))
     out = {}

@@ -461,8 +461,9 @@ async def api_logs_histogram(request: Request):
     q = _logql_from_body(body)
     mins = min(max(int(body.get("minutes") or 15), 1), 10080)
     by_class = bool(body.get("by_class"))
-    fn = (lambda: loki.log_histogram_by_class(q, mins)) if by_class \
-        else (lambda: loki.log_histogram(q, mins))
+    end_ns = body.get("end_ns")                   # C2: honor zoom anchor
+    fn = (lambda: loki.log_histogram_by_class(q, mins, end_ns=end_ns)) if by_class \
+        else (lambda: loki.log_histogram(q, mins, end_ns=end_ns))
     merged_series, merged_pts, step = {}, {}, None
     for _sid, res, err in _loki_fanout(fn, body.get("log_sources")):
         if err or not res:
@@ -493,8 +494,9 @@ async def api_logs_facets(request: Request):
     q = _logql_from_body(body)
     mins = min(max(int(body.get("minutes") or 15), 1), 10080)
     fields = [f for f in (body.get("fields") or _FACET_FIELDS) if f in loki._LOG_FIELDS]
+    end_ns = body.get("end_ns")                   # C2: honor zoom anchor
     merged = {}
-    for _sid, res, err in _loki_fanout(lambda: loki.log_facets(q, fields, mins),
+    for _sid, res, err in _loki_fanout(lambda: loki.log_facets(q, fields, mins, end_ns=end_ns),
                                        body.get("log_sources")):
         if err or not res:
             continue
