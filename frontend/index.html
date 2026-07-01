@@ -419,13 +419,10 @@
     <div class="card p-4 mb-4">
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
-          <div class="text-sm font-semibold text-slate-200">Куда применяются баны (таргеты)</div>
-          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Список строится автоматически: nginx — это подключённые ноды, Cloudflare — из реестра CF-таргетов.</div>
-          <div class="text-[11px] text-slate-600 mt-0.5">настраивается: <a onclick="showView('targets');setTsub('nginx')" class="text-indigo-300 cursor-pointer">Targets → nginx</a> · <a onclick="showView('targets');setTsub('cf')" class="text-indigo-300 cursor-pointer">Targets → Cloudflare</a></div>
+          <div class="text-sm font-semibold text-slate-200">Куда применяются баны</div>
+          <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl">Таргеты, к которым можно приатачить правила. nginx — подключённые ноды, Cloudflare и ingress — из их реестров.</div>
         </div>
         <div class="flex items-center gap-2">
-          <label class="text-[11px] text-slate-500">ручной бан в группу:</label>
-          <select id="bt-group" onchange="_banGroup=this.value" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200"></select>
           <button id="bt-check-btn" onclick="checkBanTargets()" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">Проверить</button>
         </div>
       </div>
@@ -4529,32 +4526,48 @@ async function loadBanTargets(){
     if(d&&d.enabled!==false)_banGroupInfo={groups:d.groups||{},targets:d.targets||[],default_group:d.default_group||"",cf_edge_paths:!!d.cf_edge_paths};
     if(_view==="autoban"&&Array.isArray(_abRules))renderAbRules(_abRules); // подписи «применяется к»
     if(d.enabled===false){el.innerHTML=`<span class="text-slate-500">blocklist-api не настроен — баны отключены.</span>`;return;}
-    const tg=(d.targets||[]).filter(t=>t.type!=="noop"), groups=d.groups||{}, errs=d.last_errors||{};
-    fillBanGroupSelect(groups,d.default_group||"");
-    if(!tg.length){el.innerHTML=`<span class="text-slate-500">таргеты не заданы — забань ноду в окружение или включи Cloudflare у env.</span>`;return;}
-    const rows=tg.map(t=>{
+    const tg=(d.targets||[]).filter(t=>t.type!=="noop"), errs=d.last_errors||{};
+    if(!tg.length){el.innerHTML=`<span class="text-slate-500">таргетов пока нет — подключи ноду, CF-таргет или ingress.</span>`;return;}
+    // variant A: columns by target type. Each target is just a record (no groups).
+    const COLS=[
+      {type:"nginx-file", label:"nginx",      dot:"#009639", sub:_trText("подключённые ноды")},
+      {type:"cloudflare", label:"Cloudflare", dot:"#F48120", sub:"edge WAF"},
+      {type:"ingress-cm", label:"ingress",    dot:"#326CE5", sub:"k8s"},
+    ];
+    const known=new Set(COLS.map(c=>c.type));
+    const others=[...new Set(tg.filter(t=>!known.has(t.type)).map(t=>t.type))]
+      .map(ty=>({type:ty, label:_typeLabel(ty)||ty, dot:"#64748b", sub:""}));
+    const cardFor=t=>{
       const err=errs[t.id];
       const dot=err?"#ef4444":"#10b981";
-      const inGroups=Object.keys(groups).filter(g=>(groups[g]||[]).includes(t.id));
       const blocksPath=(t.type==="nginx-file"||t.type==="ingress-cm");
-      const src=_targetSource(t);
       const isNode=t.type==="nginx-file"&&t.enrolled!==false;
       const idHtml=isNode
         ? `<span class="text-slate-200 mono cursor-pointer hover:text-indigo-300" onclick="showView('targets');setTsub('nginx')" title="${_trText('открыть во вкладке Ноды')}">${esc(t.id)} ↗</span>`
         : `<span class="text-slate-200 mono">${esc(t.id)}</span>`;
-      return `<div class="py-1.5 border-b border-slate-800/40 last:border-0">
+      return `<div class="py-1.5 border-t border-slate-800/40 first:border-0">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>
+          <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background:${dot}"></span>
           ${idHtml}
-          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 inline-flex items-center gap-1">${_typeIcon(t.type)}${esc(_typeLabel(t.type))}</span>
           ${t.mode?`<span class="text-[11px] text-slate-500">${esc(t.mode)}</span>`:""}
-          <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Применяет и баны IP, и правила 403 по пути':'Применяет только баны IP — 403-пути Cloudflare не умеет'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
-          <span class="text-[11px] text-slate-600">${_trText('группы:')} ${inGroups.map(esc).join(", ")||"—"}</span>
+          <span class="text-[11px] px-1.5 py-0.5 rounded ${blocksPath?'bg-emerald-900/40 text-emerald-300/90':'bg-slate-800/60 text-slate-500'}" title="${blocksPath?'Умеет и баны IP, и правила 403 по пути':'Умеет только баны IP'}">${_trText(blocksPath?'IP + 403-пути':'только IP')}</span>
           ${err?`<span class="text-[11px] text-red-300">${esc(err)}</span>`:""}
         </div>
-        ${src?`<div class="text-[11px] text-slate-500 mt-0.5 ml-3.5">${_trText('источник')}: ${src}</div>`:""}
-      </div>`;}).join("");
-    el.innerHTML=rows+`<div class="text-[11px] text-slate-600 mt-1">дефолтная группа: <span class="mono">${esc(d.default_group||"default")}</span></div>`;
+      </div>`;
+    };
+    const cols=[...COLS,...others].map(c=>{
+      const items=tg.filter(t=>t.type===c.type);
+      if(!items.length)return "";
+      return `<div class="border border-slate-800 rounded-lg bg-slate-950/40 overflow-hidden">
+        <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-800">
+          <span class="w-2.5 h-2.5 rounded-sm shrink-0" style="background:${c.dot}"></span>
+          <span class="text-[13px] font-medium text-slate-200">${esc(c.label)}</span>
+          ${c.sub?`<span class="ml-auto text-[11px] text-slate-500">${esc(c.sub)}</span>`:""}
+        </div>
+        <div class="px-3 py-1.5">${items.map(cardFor).join("")}</div>
+      </div>`;
+    }).join("");
+    el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.6rem">${cols}</div>`;
   }catch(e){el.innerHTML=`<span class="text-red-300">ошибка: ${esc(e.message||String(e))}</span>`;}
 }
 
