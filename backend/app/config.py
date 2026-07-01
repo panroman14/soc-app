@@ -23,6 +23,11 @@ BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "")
 DEV_NO_AUTH = os.environ.get("SOC_DEV_NO_AUTH", "") not in ("0", "", "false", "False")
 # Paths served without auth (Prometheus scrape + health probes).
 AUTH_EXEMPT = {"/metrics", "/api/health"}
+# CSRF: mutating requests whose browser Origin doesn't match are rejected. Behind a
+# reverse proxy that rewrites Host, list the public origin(s) here (comma-separated,
+# e.g. "https://soc.example.com"); empty = compare Origin against the Host header.
+TRUSTED_ORIGINS = [o.strip().rstrip("/") for o in
+                   os.environ.get("TRUSTED_ORIGINS", "").split(",") if o.strip()]
 
 # --- Trusted IPs (люди/офисы — помечаем, не считаем атакой) ---
 TRUSTED_IPS = {

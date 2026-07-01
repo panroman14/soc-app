@@ -14,6 +14,7 @@ import json
 import os
 import re
 import secrets
+import urllib.parse
 import threading
 import time
 
@@ -49,6 +50,37 @@ async def no_cache_html(request: Request, call_next):
     p = request.url.path
     if p == "/" or p.endswith(".html"):
         resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
+_CSP = ("default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
+        "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
+        "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+
+
+@app.middleware("http")
+async def security(request: Request, call_next):
+    """Security headers on every response + CSRF Origin check on mutations.
+
+    S4: the dashboard has no CSRF token and (with Basic auth) browsers replay creds,
+    so a malicious page could POST bans. Reject mutating requests whose browser
+    Origin doesn't match the site. Non-browser clients (curl) send no Origin → allowed.
+    """
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("origin")
+        if origin:
+            o = origin.rstrip("/")
+            allowed = (o in config.TRUSTED_ORIGINS) if config.TRUSTED_ORIGINS \
+                else (urllib.parse.urlparse(o).netloc == request.headers.get("host", ""))
+            if not allowed:
+                return JSONResponse({"error": "cross-origin запрос отклонён (CSRF)"}, status_code=403)
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    resp.headers.setdefault("Content-Security-Policy", _CSP)
     return resp
 
 
