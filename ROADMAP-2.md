@@ -4,6 +4,14 @@
 > Предыдущий роадмап ([ROADMAP.md](ROADMAP.md)) — P0/P1/P2 закрыты. Это следующая волна.
 > Документ, кода не меняли. Ссылки `файл:строка` — на момент аудита, перед правкой сверять.
 
+> **Прогресс (2026-07-01):** ✅ сделано и запушено:
+> **P0-quick** Q1–Q5 (`e7cf19b`) · **X3** route_for fail-closed + **O1** unit-suite+CI (`ae7af70`) ·
+> **C1** env-writes scope (`eafda34`) · **X1/X2** raw-selector + egress-redirect (`2a4cd2e`) ·
+> **Pf2/Pf3** cache+timeouts (`a2aa2d3`) · **C2/C3/Pf1** zoom/tail/facet-debounce (`214b27c`) ·
+> **O3/D3** fleet-metrics + helm-CI (`4f384aa`). **C5** сложен в Q-batch.
+> Осталось: **C4** (cursor ns-precision), **Pf4** (audit-cursor), **O2** (structured logging), **O4** (request-id),
+> **D1/D2** (lockfiles/digest — нужен реестр/сеть, вне репо), **F1–F6** (фичи: WS-tail, absolute-time, alerting, RBAC, notifications, backup).
+
 ## 0. Что уже крепко (не переделывать)
 Аудит **подтвердил**, что все фиксы сессии держатся: fail-closed auth (оба сервиса + чарт), `_egress_check` (wired во все URL-входы), CSRF/CSP/заголовки, middleware-порядок (auth→security→no-cache), LogQL-escaping в структурном пути, `escJs()` (единственное косметическое исключение — ниже), Logs v2 auth, `_write_fanout` partial→502, CIDR-dedup в `/api/blocklist`. Плюс **обнаружено**: в репо уже есть CI (`.github/workflows/ci.yml`) + e2e smoke-тест (`tests/smoke.sh`, покрывает blocklist-api).
 
