@@ -1068,6 +1068,14 @@ const pct=n=>n==null?"—":(n*100).toFixed(1)+"%";
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000-ts);return s<60?s+"с":Math.floor(s/60)+"м";};
 const dt=ts=>{if(!ts)return"—";const d=new Date(ts*1000);const p=n=>String(n).padStart(2,"0");return `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;};
 const esc=s=>String(s==null?"":s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+// esc() is for HTML-text context only. For a value interpolated into a
+// single-quoted JS string inside an inline handler (onclick="f('${…}')"), esc() is
+// UNSAFE — a ' or \ breaks out into arbitrary code. escJs() JS-escapes \ ' and
+// newlines, then HTML-encodes the attribute-significant chars so " can't close the
+// attribute either. Use escJs() wherever a value goes into an inline handler arg.
+const escJs=s=>String(s==null?"":s)
+  .replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r?\n/g,"\\n")
+  .replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 // окружения убраны из UI — env-скоупинг логов оставлен инертным (всегда пустой env).
 const _env="";
 function _withEnv(url){ return url; }
@@ -1544,7 +1552,7 @@ async function lgLoadTree(){
     const labels=(d.labels||[]).filter(Boolean);
     if(!labels.length){ el.innerHTML=`<div class="text-slate-600 text-xs">${_trText("нет лейблов")}</div>`; return; }
     el.innerHTML=labels.map(l=>`<div>
-      <div class="lg-tree-lbl" onclick="lgTreeToggle('${esc(l)}')"><span id="lgchev-${esc(l)}">▸</span><span class="font-medium">${esc(l)}</span>
+      <div class="lg-tree-lbl" onclick="lgTreeToggle('${escJs(l)}')"><span id="lgchev-${esc(l)}">▸</span><span class="font-medium">${esc(l)}</span>
         <span id="lgcount-${esc(l)}" class="ml-auto text-[10px] text-slate-600"></span></div>
       <div id="lgvals-${esc(l)}" class="hidden"></div></div>`).join("");
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
@@ -1560,7 +1568,7 @@ async function lgTreeToggle(label){
       const d=await fetch(_withEnv("/api/log_label_values?name="+encodeURIComponent(label))).then(r=>r.json());
       const vals=(d.values||[]).slice(0,200);
       const sel=new Set(_lg.sources[label]||[]);
-      box.innerHTML=vals.map(v=>`<label class="lg-tree-val"><input type="checkbox" ${sel.has(v)?"checked":""} onchange="lgSourceToggle('${esc(label)}','${esc(v).replace(/'/g,"\\'")}',this.checked)"><span class="mono truncate">${esc(v)}</span></label>`).join("")||`<div class="lg-tree-val text-slate-600">${_trText("пусто")}</div>`;
+      box.innerHTML=vals.map(v=>`<label class="lg-tree-val"><input type="checkbox" ${sel.has(v)?"checked":""} onchange="lgSourceToggle('${escJs(label)}','${escJs(v).replace(/'/g,"\\'")}',this.checked)"><span class="mono truncate">${esc(v)}</span></label>`).join("")||`<div class="lg-tree-val text-slate-600">${_trText("пусто")}</div>`;
       box.dataset.loaded="1";
     }catch(e){ box.innerHTML=`<div class="lg-tree-val text-red-400">ошибка</div>`; }
   }
@@ -1636,8 +1644,8 @@ function lgRowExpand(i,el){
   const ip=esc(r.ip||"");
   const d=document.createElement("div"); d.className="lg-detail";
   d.innerHTML=`<div class="flex gap-1.5 mb-2 flex-wrap">
-      ${ip?`<button onclick="event.stopPropagation();lgBanIP('${ip}')" class="text-[11px] px-2 py-0.5 rounded bg-rose-600/30 text-rose-200 hover:bg-rose-600/50">⛔ ${_trText("забанить IP")}</button>`:""}
-      ${r.path?`<button onclick="event.stopPropagation();lgPathTo403('${esc(r.path).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50">🛂 ${_trText("путь в 403")}</button>`:""}
+      ${ip?`<button onclick="event.stopPropagation();lgBanIP('${escJs(ip)}')" class="text-[11px] px-2 py-0.5 rounded bg-rose-600/30 text-rose-200 hover:bg-rose-600/50">⛔ ${_trText("забанить IP")}</button>`:""}
+      ${r.path?`<button onclick="event.stopPropagation();lgPathTo403('${escJs(r.path).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50">🛂 ${_trText("путь в 403")}</button>`:""}
       ${ip?`<button onclick="event.stopPropagation();quickSearch('${ip}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">👤 ${_trText("профиль")}</button>`:""}
     </div>
     <pre class="mono text-[11px] text-slate-400 whitespace-pre-wrap break-all">${esc((()=>{try{return JSON.stringify(JSON.parse(r.line),null,2);}catch(e){return r.line;}})())}</pre>`;
@@ -1748,11 +1756,11 @@ function dbRender(){
   grid.innerHTML=dash.panels.map(p=>`<div class="db-panel" style="grid-column:span ${Math.max(2,Math.min(12,p.span||4))}">
     <div class="db-head"><span class="db-title">${esc(p.title||p.type)}</span>
       <span class="db-tools">
-        <button onclick="dbMovePanel('${esc(p.id)}',-1)" class="text-[11px] text-slate-400" title="←">◄</button>
-        <button onclick="dbMovePanel('${esc(p.id)}',1)" class="text-[11px] text-slate-400" title="→">►</button>
-        <button onclick="dbDupPanel('${esc(p.id)}')" class="text-[11px] text-slate-300" title="duplicate">⧉</button>
-        <button onclick="dbEditPanel('${esc(p.id)}')" class="text-[11px] text-indigo-300">✎</button>
-        <button onclick="dbDelPanel('${esc(p.id)}')" class="text-[11px] text-rose-300">✕</button></span></div>
+        <button onclick="dbMovePanel('${escJs(p.id)}',-1)" class="text-[11px] text-slate-400" title="←">◄</button>
+        <button onclick="dbMovePanel('${escJs(p.id)}',1)" class="text-[11px] text-slate-400" title="→">►</button>
+        <button onclick="dbDupPanel('${escJs(p.id)}')" class="text-[11px] text-slate-300" title="duplicate">⧉</button>
+        <button onclick="dbEditPanel('${escJs(p.id)}')" class="text-[11px] text-indigo-300">✎</button>
+        <button onclick="dbDelPanel('${escJs(p.id)}')" class="text-[11px] text-rose-300">✕</button></span></div>
     <div class="db-body flex-1" id="dbp-${esc(p.id)}"></div></div>`).join("");
   dash.panels.forEach(dbFillPanel);
 }
@@ -2090,8 +2098,8 @@ async function openProfile(ip){
         <div class="col-span-2"><div class="text-[11px] text-slate-500 mb-1">Топ путей <span class="text-slate-600">· «+автобан» добавит путь в правило</span></div>${abPathRows(p.top_paths)}</div>
       </div>
       <div class="mt-3 flex gap-2">
-        <button onclick="openRequests({ip:'${esc(ip)}'},'Запросы · ${esc(ip)}')" class="text-xs px-2 py-1 rounded bg-slate-700/40 text-slate-300 hover:bg-slate-700/60">показать запросы</button>
-        ${p.trusted?"":(isCfIp(ip)?`<button onclick="uiAlert('Это IP Cloudflare, не реальный посетитель — бан бесполезен. Реальный клиент скрыт за фларой.')" class="text-xs px-2 py-1 rounded bg-slate-700/50 text-orange-300 border border-orange-500/30">⛔ бан бесполезен (Cloudflare)</button>`:`<button onclick="blockIP('${esc(ip)}','профиль IP')" class="text-xs px-2 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ заблокировать на ingress</button>`)}
+        <button onclick="openRequests({ip:'${escJs(ip)}'},'Запросы · ${esc(ip)}')" class="text-xs px-2 py-1 rounded bg-slate-700/40 text-slate-300 hover:bg-slate-700/60">показать запросы</button>
+        ${p.trusted?"":(isCfIp(ip)?`<button onclick="uiAlert('Это IP Cloudflare, не реальный посетитель — бан бесполезен. Реальный клиент скрыт за фларой.')" class="text-xs px-2 py-1 rounded bg-slate-700/50 text-orange-300 border border-orange-500/30">⛔ бан бесполезен (Cloudflare)</button>`:`<button onclick="blockIP('${escJs(ip)}','профиль IP')" class="text-xs px-2 py-1 rounded bg-red-600/80 text-white hover:bg-red-600">⛔ заблокировать на ingress</button>`)}
       </div>`;
   }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка</div>`;}
 }
@@ -2166,12 +2174,12 @@ function _renderBlPage(){
    const ttl=e.ttl?`<span class="bl-ttl mono text-[11px] shrink-0" data-exp="${e.ts+e.ttl}" title="${_trText('осталось до авто-разбана')}">…</span>`
                   :`<span class="text-[11px] shrink-0" style="color:var(--faint)">∞ ${_trText('навсегда')}</span>`;
    return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
-      <span class="mono text-slate-200 w-40 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc((e.cidr||'').split('/')[0])}')">${esc(e.cidr)}</span>
+      <span class="mono text-slate-200 w-40 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${escJs((e.cidr||'').split('/')[0])}')">${esc(e.cidr)}</span>
       ${cfBadge((e.cidr||'').split('/')[0])}${abChip}${_beBadge(e.backends||e.backend)}
       <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="${esc(e.reason||"")}">${esc(e.reason||"")}</span>
       <span class="text-[11px] text-slate-500 shrink-0">${esc(e.added_by||"")} · ${dt(e.ts)}</span>
       ${ttl}
-      <button onclick="unblockCIDR('${esc(e.cidr)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700 shrink-0">разбан</button>
+      <button onclick="unblockCIDR('${escJs(e.cidr)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700 shrink-0">разбан</button>
     </div>`;}).join("");
   const pager=pages>1?`<div class="flex items-center justify-between mt-2 text-[11px] text-slate-500">
       <button onclick="_blPage--;_renderBlPage()" ${_blPage<=0?"disabled":""} class="px-2 py-0.5 rounded bg-slate-800 ${_blPage<=0?"opacity-40":"hover:bg-slate-700"}">←</button>
@@ -2222,7 +2230,7 @@ async function loadEscalation(){
   const off=d.offenders||[];
   document.getElementById("esc-offenders").innerHTML=off.length
     ? `<div class="text-slate-500 mb-1">${_trText("повторные нарушители")}:</div>`+off.slice(0,12).map(o=>
-        `<span class="inline-flex items-center gap-1 mr-1.5 mb-1 px-1.5 py-0.5 rounded bg-slate-800 mono cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc(o.ip)}')">${esc(o.ip)} <span class="text-amber-300">×${o.count}</span></span>`).join("")
+        `<span class="inline-flex items-center gap-1 mr-1.5 mb-1 px-1.5 py-0.5 rounded bg-slate-800 mono cursor-pointer hover:text-indigo-300" onclick="openProfile('${escJs(o.ip)}')">${esc(o.ip)} <span class="text-amber-300">×${o.count}</span></span>`).join("")
     : `<span style="color:var(--faint)">${_trText("повторных нарушителей пока нет")}</span>`;
 }
 async function escSave(){
@@ -2249,11 +2257,11 @@ async function renderCrs(){
       : "";
     el.innerHTML=list.length?list.map(x=>`
       <div class="flex items-center gap-2 py-1.5 border-b border-slate-800/60 last:border-0">
-        <span class="mono text-slate-200 w-32 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc(x.ip)}')" title="профиль">${esc(x.ip)} ↗</span>
+        <span class="mono text-slate-200 w-32 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${escJs(x.ip)}')" title="профиль">${esc(x.ip)} ↗</span>
         <span class="mono text-amber-300 shrink-0 w-12 text-right" title="CRS hits">${fmt(x.count)}</span>
         <span class="flex-1 min-w-0 flex flex-wrap gap-1">${(x.families||[]).map(f=>`<span class="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[10px]">${esc(f)}</span>`).join("")}</span>
         ${x.cf?`<span class="text-[10px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">${_trText("за CF")}</span>`
-             :`<button onclick="crsBan('${esc(x.ip)}',${x.count})" class="text-[11px] px-2 py-0.5 rounded bg-red-600/70 text-white hover:bg-red-600 shrink-0">${_trText("бан")}</button>`}
+             :`<button onclick="crsBan('${escJs(x.ip)}',${x.count})" class="text-[11px] px-2 py-0.5 rounded bg-red-600/70 text-white hover:bg-red-600 shrink-0">${_trText("бан")}</button>`}
       </div>`).join("")
       : `<div class="text-slate-600 text-xs">${_trText("чисто — срабатываний WAF нет за окно")} (${esc(d.window||w)})</div>`;
   }catch(e){ el.innerHTML=`<div class="text-red-300 text-xs">${_trText("ошибка загрузки")}</div>`; }
@@ -2284,9 +2292,9 @@ function _verdictBadge(ip){
 }
 function _bcRow(x,i,isCf,fn){
   const rv=_reviewedSet.has(x.ip);
-  const rvBtn=`<button onclick="toggleReviewed('${esc(x.ip)}',this)" title="${rv?'снять отметку «просмотрено»':'пометить просмотренным'}" class="text-[11px] px-1.5 py-0.5 rounded shrink-0 ${rv?'bg-emerald-600/70 text-white hover:bg-emerald-600':'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}">${rv?'✓ просмотрено':'пометить'}</button>`;
+  const rvBtn=`<button onclick="toggleReviewed('${escJs(x.ip)}',this)" title="${rv?'снять отметку «просмотрено»':'пометить просмотренным'}" class="text-[11px] px-1.5 py-0.5 rounded shrink-0 ${rv?'bg-emerald-600/70 text-white hover:bg-emerald-600':'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}">${rv?'✓ просмотрено':'пометить'}</button>`;
   return `<div data-ip="${esc(x.ip)}" class="flex items-center gap-x-2 gap-y-1 py-1.5 border-b border-slate-800/60 last:border-0 flex-wrap${rv?' grayscale opacity-60':''}">
-    <span class="mono text-[13px] text-slate-200 shrink-0 cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc(x.ip)}')" title="профиль / вся инфа">${esc(x.ip)} ↗</span>
+    <span class="mono text-[13px] text-slate-200 shrink-0 cursor-pointer hover:text-indigo-300" onclick="openProfile('${escJs(x.ip)}')" title="профиль / вся инфа">${esc(x.ip)} ↗</span>
     <span class="text-xs text-slate-500 shrink-0 truncate max-w-[120px]" title="${esc(countryLabel(x.country))}">${countryLabel(x.country)}</span>
     <span class="mono text-amber-300 shrink-0 tabular-nums" title="хитов 4xx">${fmt(x.count)}</span>
     <span class="shrink-0 flex gap-1">${_sigBadges(x)}${_verdictBadge(x.ip)}</span>
@@ -2455,7 +2463,7 @@ async function openIps(country){
     if(!d.ips||!d.ips.length){body.innerHTML=`<div class="text-slate-500 text-sm">нет данных</div>`;return;}
     const max=Math.max(...d.ips.map(x=>x.count));lastIPs=d.ips.map(x=>x.ip);
     body.innerHTML=`<div class="flex justify-end mb-2"><button onclick="exportList(lastIPs,'ips-${esc(country)}.txt')" class="text-xs px-2 py-1 rounded bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25">⤓ экспорт всех IP</button></div>`+
-      d.ips.map(x=>`<div class="cursor-pointer hover:bg-slate-800/40 -mx-1 px-1 rounded" onclick="openProfile('${esc(x.ip)}')"><div class="flex justify-between text-xs mb-0.5"><span class="mono text-slate-300">${esc(x.ip)} <span class="text-slate-600">↗</span></span><span class="mono text-indigo-300">${fmt(x.count)}</span></div><div class="bar-bg"><div class="h-full rounded" style="width:${(x.count/max*100).toFixed(0)}%;background:#6366f199"></div></div></div>`).join("");
+      d.ips.map(x=>`<div class="cursor-pointer hover:bg-slate-800/40 -mx-1 px-1 rounded" onclick="openProfile('${escJs(x.ip)}')"><div class="flex justify-between text-xs mb-0.5"><span class="mono text-slate-300">${esc(x.ip)} <span class="text-slate-600">↗</span></span><span class="mono text-indigo-300">${fmt(x.count)}</span></div><div class="bar-bg"><div class="h-full rounded" style="width:${(x.count/max*100).toFixed(0)}%;background:#6366f199"></div></div></div>`).join("");
   }catch(e){body.innerHTML=`<div class="text-red-300 text-sm">ошибка запроса</div>`;}
 }
 function reqTable(rows){
@@ -2479,7 +2487,7 @@ function reqTable(rows){
       return `<tr class="border-t border-slate-800/50 hover:bg-slate-800/30 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden')">
       <td class="text-slate-600 w-3">▸</td>
       <td class="py-1 mono text-slate-500 whitespace-nowrap" title="${ago(r.ts)} назад">${dt(r.ts)}</td>
-      <td class="mono text-slate-300"><span class="cursor-pointer hover:text-indigo-300" onclick="event.stopPropagation();openProfile('${esc(r.ip)}')">${esc(r.ip||"")}</span> ${cfBadge(r.ip)}</td>
+      <td class="mono text-slate-300"><span class="cursor-pointer hover:text-indigo-300" onclick="event.stopPropagation();openProfile('${escJs(r.ip)}')">${esc(r.ip||"")}</span> ${cfBadge(r.ip)}</td>
       <td class="text-slate-600">${esc(r.country||"")}</td>
       <td class="mono text-slate-400">${esc(r.method||"")}</td>
       <td class="mono text-slate-300 max-w-[420px]"><div class="flex items-center gap-1"><span class="truncate" title="${esc(r.path)}">${esc(r.path||"")}</span><button data-p="${esc(r.path||"").replace(/"/g,'&quot;')}" onclick="event.stopPropagation();abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">+</button></div></td>
@@ -2984,8 +2992,8 @@ async function loadIngBackends(){
         <span class="mono text-[12px] text-slate-200 truncate">${esc(b.url)}</span>
         ${b.token_set?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">🔑</span>`:""}
         ${active?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-300 shrink-0">${_trText('активно')}</span>`
-                :`<button onclick="ingBackendActivate('${esc(b.id)}')" class="text-[11px] text-indigo-300 hover:text-indigo-200 shrink-0">${_trText('сделать активным')}</button>`}
-        <button onclick="ingBackendDelete('${esc(b.id)}')" class="text-[11px] text-rose-400/80 hover:text-rose-300 shrink-0 ml-auto">${_trText('удалить')}</button>
+                :`<button onclick="ingBackendActivate('${escJs(b.id)}')" class="text-[11px] text-indigo-300 hover:text-indigo-200 shrink-0">${_trText('сделать активным')}</button>`}
+        <button onclick="ingBackendDelete('${escJs(b.id)}')" class="text-[11px] text-rose-400/80 hover:text-rose-300 shrink-0 ml-auto">${_trText('удалить')}</button>
       </div>`;
     }).join(""):`<div class="text-slate-600 text-xs">${_trText('пока нет — проверь соединение и нажми Save')}</div>`;
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
@@ -3173,7 +3181,7 @@ function nfChannelRow(c,i){
     <input type="hidden" data-cf="type" value="${tg?'telegram':'slack'}">
     <span class="flex items-center gap-1 shrink-0 ml-auto">
       ${c.last?`<span class="${c.last.ok?'text-emerald-400':'text-red-400'}" title="${esc((c.last&&c.last.error)||'')}">${c.last.ok?'✓':'✗'}</span>`:""}
-      <button onclick="nfTest('${esc(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${_trText('тест')}</button>
+      <button onclick="nfTest('${escJs(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${_trText('тест')}</button>
       <button onclick="nfDelChannel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
     </span>
   </div>`;
@@ -3359,7 +3367,7 @@ function _nodeCard(n){
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?_trText("онлайн"):"offline"} · ${_ago(n.last_seen)}</span>
-          ${isDash?"":`<button onclick="deleteNode('${esc(n.id)}','${esc(n.backend||'')}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">${_trText("отозвать")}</button>`}
+          ${isDash?"":`<button onclick="deleteNode('${escJs(n.id)}','${escJs(n.backend||'')}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">${_trText("отозвать")}</button>`}
         </div>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-[11px]">
@@ -3509,7 +3517,7 @@ function _attachMenu(r, kind){
   const order=["nginx-file","cloudflare","ingress-cm"];
   const types=[...new Set(ts.map(t=>t.type))].sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
   const close="this.closest('details').removeAttribute('open')";
-  const row=(inner,tok)=>`<button type="button" onclick="${close};attachAdd('${kind}','${esc(r.id)}','${tok}')" class="attach-row">${inner}</button>`;
+  const row=(inner,tok)=>`<button type="button" onclick="${close};attachAdd('${kind}','${escJs(r.id)}','${tok}')" class="attach-row">${inner}</button>`;
   let m="";
   if(gs.length) m+=`<div class="attach-sec">🗂 ${_trText('группы')}</div>`+gs.map(g=>row(`<span>${esc(g)}</span><span class="attach-res">→ ${esc(_grpResolve(g))}</span>`,"g:"+esc(g))).join("");
   types.forEach(ty=>{const mt=_typeMeta(ty);
@@ -3519,12 +3527,12 @@ function _attachMenu(r, kind){
 }
 function _attachUI(r, kind){
   const all=!!r.all;
-  const chip=(label,tok)=>`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${label}<button onclick="attachRemove('${kind}','${esc(r.id)}','${tok}')" class="text-slate-500 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`;
+  const chip=(label,tok)=>`<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${label}<button onclick="attachRemove('${kind}','${escJs(r.id)}','${tok}')" class="text-slate-500 hover:text-rose-300" title="${_trText('убрать')}">×</button></span>`;
   const gChips=(r.groups||[]).map(g=>chip("🗂 "+esc(g)+' <span style="color:var(--faint)">→ '+esc(_grpResolve(g))+'</span>',"g:"+esc(g))).join(" ");
   const tChips=(r.targets||[]).map(t=>chip(_typeIcon(_tgtTypeById(t))+" "+esc(t),"t:"+esc(t))).join(" ");
   return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
     <span style="color:var(--faint)">🎯 ${_trText('привязка')}:</span>
-    <button onclick="attachAll('${kind}','${esc(r.id)}',${!all})" class="px-1.5 py-0.5 rounded border ${all?'bg-emerald-600/30 border-emerald-500/40 text-emerald-200':'border-slate-700 text-slate-500 hover:text-slate-300'}">${_trText('все таргеты')}</button>
+    <button onclick="attachAll('${kind}','${escJs(r.id)}',${!all})" class="px-1.5 py-0.5 rounded border ${all?'bg-emerald-600/30 border-emerald-500/40 text-emerald-200':'border-slate-700 text-slate-500 hover:text-slate-300'}">${_trText('все таргеты')}</button>
     ${all?"":gChips+" "+tChips+_attachMenu(r,kind)}
   </div>`;
 }
@@ -3651,10 +3659,10 @@ function _p403RenderList(){
     const meta=[r.added_by?esc(r.added_by):"",r.ts?_p403fmtDate(r.ts):"",plen+" симв."].filter(Boolean).join(" · ");
     return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded-lg px-3.5 py-3 ${en?'':'opacity-60'}">
       <div class="flex items-start gap-2.5">
-        <button onclick="p403Toggle('${esc(r.id)}',${!en},'${esc(r.backend||'')}')" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
+        <button onclick="p403Toggle('${escJs(r.id)}',${!en},'${escJs(r.backend||'')}')" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <button onclick="setMainRule('path','${esc(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
+            <button onclick="setMainRule('path','${escJs(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
             <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>${_beBadge(r.backend)}
             ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">основное</span>':''}
           </div>
@@ -3662,8 +3670,8 @@ function _p403RenderList(){
         </div>
         <div class="flex items-center gap-1 shrink-0">
           <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">паттерн&nbsp;▾</button>
-          <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
-          <button onclick="p403Delete('${esc(r.id)}','${esc(r.backend||'')}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
+          <button onclick="p403EditOpen('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
+          <button onclick="p403Delete('${escJs(r.id)}','${escJs(r.backend||'')}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
         </div>
       </div>
       <div class="mt-2 pt-2 border-t border-slate-800/60">
@@ -3722,18 +3730,18 @@ function _p403RenderEditor(id){
   panel.innerHTML=`
     <div class="flex items-center gap-2 mb-2">
       <span class="text-[11px] text-slate-500 shrink-0">имя:</span>
-      <input value="${esc(st.name)}" oninput="_p403EditState['${esc(id)}'].name=this.value" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 flex-1"/>
+      <input value="${esc(st.name)}" oninput="_p403EditState['${escJs(id)}'].name=this.value" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 flex-1"/>
     </div>
     <div class="text-[11px] text-slate-500 mb-1">путей: ${st.parts.length} — × чтобы убрать <span class="text-slate-600">(ⓡ = регэксп, наведи — увидишь точный паттерн)</span></div>
     <div class="flex flex-wrap gap-1 mb-2">
-      ${st.parts.map((p,i)=>{const h=_p403Humanize(p);return `<span class="inline-flex items-center gap-1 bg-slate-800 rounded px-1.5 py-0.5 text-[11px]"><span class="mono truncate max-w-[280px] ${h.regex?'text-amber-300':'text-slate-300'}" title="${esc(p)}">${esc(h.text)}${h.regex?' <span class="text-[9px] text-amber-500">ⓡ</span>':''}</span><button onclick="p403EditDel('${esc(id)}',${i})" title="убрать" class="text-rose-400 hover:text-rose-300 font-bold">×</button></span>`}).join("")||'<span class="text-slate-600 text-[11px]">пусто</span>'}
+      ${st.parts.map((p,i)=>{const h=_p403Humanize(p);return `<span class="inline-flex items-center gap-1 bg-slate-800 rounded px-1.5 py-0.5 text-[11px]"><span class="mono truncate max-w-[280px] ${h.regex?'text-amber-300':'text-slate-300'}" title="${esc(p)}">${esc(h.text)}${h.regex?' <span class="text-[9px] text-amber-500">ⓡ</span>':''}</span><button onclick="p403EditDel('${escJs(id)}',${i})" title="убрать" class="text-rose-400 hover:text-rose-300 font-bold">×</button></span>`}).join("")||'<span class="text-slate-600 text-[11px]">пусто</span>'}
     </div>
     <div class="flex items-center gap-2 mb-2">
-      <input id="ed-add-${esc(id)}" onkeydown="if(event.key==='Enter')p403EditAdd('${esc(id)}')" placeholder="добавить путь (как «Путь содержит», напр. /.env)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono flex-1"/>
-      <button onclick="p403EditAdd('${esc(id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700 shrink-0">+ путь</button>
+      <input id="ed-add-${esc(id)}" onkeydown="if(event.key==='Enter')p403EditAdd('${escJs(id)}')" placeholder="добавить путь (как «Путь содержит», напр. /.env)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono flex-1"/>
+      <button onclick="p403EditAdd('${escJs(id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700 shrink-0">+ путь</button>
     </div>
     <div class="flex items-center gap-2">
-      <button onclick="p403EditSave('${esc(id)}')" class="text-xs px-3 py-1 rounded bg-emerald-600/80 text-white hover:bg-emerald-600">Сохранить</button>
+      <button onclick="p403EditSave('${escJs(id)}')" class="text-xs px-3 py-1 rounded bg-emerald-600/80 text-white hover:bg-emerald-600">Сохранить</button>
       <button onclick="document.getElementById('ed-${esc(id)}').classList.add('hidden')" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300">отмена</button>
     </div>`;
 }
@@ -4031,7 +4039,7 @@ async function abWhy(){
       out.innerHTML=`<div class="card border-emerald-500/25 bg-emerald-500/5 p-3">
         <div class="text-emerald-300 text-sm">✓ <span class="mono">${esc(ip)}</span> НЕ в денлисте — автобаном/блоклистом не банился.${d.static_deny?' <span class="text-amber-300">(но это приватный/уже-denied статический диапазон)</span>':''}</div>
         <div class="text-[11px] text-slate-500 mt-1">Если у него есть 403 — он от nginx-правила (сканер-блок) или приложения, не от нашего бана.</div>
-        <button onclick="openProfile('${esc(ip)}')" class="text-[11px] mt-2 px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">профиль IP →</button></div>`;
+        <button onclick="openProfile('${escJs(ip)}')" class="text-[11px] mt-2 px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">профиль IP →</button></div>`;
       return;
     }
     const e=d.entry||{}, tt=!e.ttl?"навсегда":(e.ttl>=86400?(e.ttl/86400)+"д":(e.ttl>=3600?(e.ttl/3600)+"ч":e.ttl+"с"));
@@ -4086,11 +4094,11 @@ function _renderAbLogPage(){
     const pp=e.paths||[];
     const pathStr=pp.length?pp.slice(0,2).map(x=>`<span class="mono text-amber-300">${esc(x.path)}</span> <span class="text-slate-600">(${fmt(x.count)})</span>`).join(", ")+(pp.length>2?` <span class="text-slate-600">+${pp.length-2}</span>`:""):'<span class="text-slate-600">пути не сохранены</span>';
     const isBlock=e.action==="block", active=e.active;
-    const action=isBlock?(active?`<button onclick="abLogUnban('${esc(e.cidr)}',this)" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">↩ разбан</button>`:`<span class="text-[11px] text-slate-600">снят</span>`):"";
+    const action=isBlock?(active?`<button onclick="abLogUnban('${escJs(e.cidr)}',this)" class="text-[11px] px-2 py-0.5 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">↩ разбан</button>`:`<span class="text-[11px] text-slate-600">снят</span>`):"";
     return `<div class="flex items-center gap-2 text-xs py-1.5 border-b border-slate-800/60${isBlock&&!active?' opacity-50':''}">
       <span class="text-slate-500 mono whitespace-nowrap shrink-0">${dt(e.ts)}</span>
       <span class="shrink-0">${act[e.action]||esc(e.action)}</span>
-      <span class="mono text-slate-200 cursor-pointer hover:text-indigo-300 shrink-0" onclick="openProfile('${esc(ip)}')">${esc(e.cidr)}</span>${cfBadge(ip)}
+      <span class="mono text-slate-200 cursor-pointer hover:text-indigo-300 shrink-0" onclick="openProfile('${escJs(ip)}')">${esc(e.cidr)}</span>${cfBadge(ip)}
       ${rule?`<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] border border-indigo-500/30 shrink-0">${esc(rule)}</span>`:""}
       <span class="text-[11px] text-slate-500 flex-1 min-w-0 truncate" title="сошлось по путям">${pathStr}</span>
       <span class="shrink-0">${action}</span>
@@ -4145,7 +4153,7 @@ async function abPathMenu(path,btn){
   html+=`<button onclick="addToMainFromMenu(this)" class="block w-full text-left px-2 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-200 font-medium">➕ в основные (403 + автобан)</button>`;
   html+=`<div class="text-[9px] text-slate-600 px-1.5 pb-1">${mainP?("403: "+esc(mainP)):'<span class="text-amber-400">403 не выбрано ★</span>'} · ${mainA?("автобан: "+esc(mainA)):'<span class="text-amber-400">автобан не выбрано ★</span>'}</div>`;
   html+=`<div class="border-t border-slate-800 my-1"></div><div class="text-[10px] text-slate-600 px-1.5 py-0.5">🚫 добавить в правило 403:</div>`;
-  if(p403rules.length)html+=p403rules.map(r=>`<button onclick="p403AppendToRule('${esc(r.id)}',this)" class="block w-full text-left px-2 py-1 rounded hover:bg-rose-500/20 text-slate-200">${r.enabled!==false?'🟢':'⚪'} ${esc(r.name)}</button>`).join("");
+  if(p403rules.length)html+=p403rules.map(r=>`<button onclick="p403AppendToRule('${escJs(r.id)}',this)" class="block w-full text-left px-2 py-1 rounded hover:bg-rose-500/20 text-slate-200">${r.enabled!==false?'🟢':'⚪'} ${esc(r.name)}</button>`).join("");
   html+=`<button onclick="p403AddPathFromMenu(this)" class="block w-full text-left px-2 py-1 rounded hover:bg-rose-500/20 text-rose-300">＋ новое 403-правило</button>`;
   html+=`<div class="border-t border-slate-800 my-1"></div><div class="text-[10px] text-slate-600 px-1.5 py-0.5">⛔ в автобан (бан IP по порогу):</div>`;
   if(abrules.length)html+=abrules.map(r=>`<button onclick="abAddPathToRule(${r.id},this)" class="block w-full text-left px-2 py-1 rounded hover:bg-indigo-500/20 text-slate-200">${r.enabled?'🟢':'⚪'} ${esc(r.name)} <span class="text-slate-600">≥${r.threshold}/${r.window}</span></button>`).join("");
@@ -4208,7 +4216,7 @@ function renderAbPresets(){
       <span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(grp.g)}</span>
       <button onclick="abAddPresetGroup(${gi})" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ все</button>
     </div>
-    <div class="flex flex-wrap gap-1.5">${grp.p.map(p=>`<button onclick="abAddPresetPath('${esc(p).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-1 rounded bg-slate-800/70 text-slate-300 hover:bg-indigo-500/20 hover:text-indigo-200 mono border border-slate-700/50">${esc(p)}</button>`).join("")}</div>
+    <div class="flex flex-wrap gap-1.5">${grp.p.map(p=>`<button onclick="abAddPresetPath('${escJs(p).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-1 rounded bg-slate-800/70 text-slate-300 hover:bg-indigo-500/20 hover:text-indigo-200 mono border border-slate-700/50">${esc(p)}</button>`).join("")}</div>
   </div>`).join("");
 }
 function _abEnsurePathMode(){
@@ -4389,14 +4397,14 @@ function renderGroups(){
     const members=_grpDraft[g]||[];
     const chips=members.map(tid=>{
       const ty=_targetType(tid);
-      return `<span class="chip">${ty?_typeIcon(ty):""}${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(_typeLabel(ty))}</span>`:''} <span onclick="grpRemoveTarget('${esc(g)}','${esc(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
+      return `<span class="chip">${ty?_typeIcon(ty):""}${esc(tid)}${ty?` <span style="color:var(--faint)">${esc(_typeLabel(ty))}</span>`:''} <span onclick="grpRemoveTarget('${escJs(g)}','${escJs(tid)}')" style="cursor:pointer;color:var(--crit)">×</span></span>`;
     }).join(" ")||`<span class="text-[11px] text-slate-600">${_trText('пусто')}</span>`;
     const avail=allTargets.filter(t=>!members.includes(t.id));
     return `<div class="grp-card">
       <div class="flex items-center gap-2 mb-2 flex-wrap">
         ${folder}<span class="grp-name mono text-[13px]">${esc(g)}</span>
         <span class="flex items-center gap-1" title="${_trText('через какие бэкенды эта группа применяет баны/403')}">${_levelBadges(members)}</span>
-        <button onclick="grpDelete('${esc(g)}')" class="ml-auto text-[11px] text-rose-300 hover:bg-rose-500/10 rounded px-1.5 py-0.5">${_trText('удалить группу')}</button>
+        <button onclick="grpDelete('${escJs(g)}')" class="ml-auto text-[11px] text-rose-300 hover:bg-rose-500/10 rounded px-1.5 py-0.5">${_trText('удалить группу')}</button>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">${chips} ${_grpAddMenu(g,avail)}</div>
     </div>`;
@@ -4410,7 +4418,7 @@ function _grpAddMenu(g,avail){
   const close="this.closest('details').removeAttribute('open')";
   let m="";
   types.forEach(ty=>{const mt=_typeMeta(ty);
-    m+=`<div class="attach-sec">${mt.svg} ${esc(mt.lbl)}</div>`+avail.filter(t=>t.type===ty).map(t=>`<button type="button" onclick="${close};grpAddTarget('${esc(g)}','${esc(t.id)}')" class="attach-row">${mt.svg}<span>${esc(t.id)}</span></button>`).join("");});
+    m+=`<div class="attach-sec">${mt.svg} ${esc(mt.lbl)}</div>`+avail.filter(t=>t.type===ty).map(t=>`<button type="button" onclick="${close};grpAddTarget('${escJs(g)}','${escJs(t.id)}')" class="attach-row">${mt.svg}<span>${esc(t.id)}</span></button>`).join("");});
   return `<details class="attach-dd"><summary class="attach-add">＋ ${_trText('таргет')}</summary><div class="attach-menu">${m}</div></details>`;
 }
 function grpNew(){
@@ -4598,7 +4606,7 @@ async function abPreview(rule){
     if(!m.length){out.innerHTML=`<div class="text-emerald-300/80 text-xs">0 новых IP под условие (≥${d.threshold} за ${d.window}).${abNote} Никого нового бы не забанило.</div>`;return;}
     out.innerHTML=`<div class="text-[12px] text-slate-400 mb-2">Забанило бы <b class="text-red-300">${m.length}</b> новых IP (≥${d.threshold} за ${d.window})${abNote}:</div>`+
       m.map(x=>`<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-800/60">
-        <span class="mono text-slate-200 cursor-pointer hover:text-indigo-300 min-w-0 truncate" onclick="openProfile('${esc(x.ip)}')">${flag(x.country)} ${esc(x.ip)} ↗</span>
+        <span class="mono text-slate-200 cursor-pointer hover:text-indigo-300 min-w-0 truncate" onclick="openProfile('${escJs(x.ip)}')">${flag(x.country)} ${esc(x.ip)} ↗</span>
         <span class="flex items-center gap-1.5 shrink-0">${cfBadge(x.ip)}<span class="mono text-red-300">${fmt(x.count)}</span></span></div>
         ${x.paths&&x.paths.length?`<div class="text-[11px] text-slate-600 mono truncate mb-1">${x.paths.map(esc).join(" · ")}</div>`:""}`).join("");
   }catch(e){out.innerHTML=`<div class="text-red-300 text-xs">ошибка: ${esc(e.message||String(e))}</div>`;}
