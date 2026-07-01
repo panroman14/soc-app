@@ -1069,6 +1069,9 @@ const esc=s=>String(s==null?"":s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&
 const escJs=s=>String(s==null?"":s)
   .replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r?\n/g,"\\n")
   .replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+// escAttr: value for a double-quoted HTML attribute (esc handles &<>, then " → &quot;).
+// NB: NOT escJs — an attribute read via dataset must keep a literal ', not \'.
+const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 // окружения убраны из UI — env-скоупинг логов оставлен инертным (всегда пустой env).
 const _env="";
 function _withEnv(url){ return url; }
@@ -1542,8 +1545,10 @@ function _lgBody(extra){
 }
 function lgReadState(){ _lg.omni=(document.getElementById("lg-omni").value||"").trim(); _lg.raw=(document.getElementById("lg-raw").value||"").trim(); }
 function lgApplyOmni(){ lgReadState(); _lg.endNs=null; _lg.winMin=null; lgRun(); }
+// quote-aware tokenizer so a facet value with spaces (path:"/a b") stays one token (Q4)
+function _lgToks(s){ return (String(s||"").match(/(?:[^\s"]+|"[^"]*")+/g)||[]).map(t=>t.trim()).filter(Boolean); }
 function lgQuick(tok){
-  const el=document.getElementById("lg-omni"); const parts=(el.value||"").trim().split(/\s+/).filter(Boolean);
+  const el=document.getElementById("lg-omni"); const parts=_lgToks((el.value||"").trim());
   el.value=(parts.includes(tok)?parts.filter(t=>t!==tok):parts.concat(tok)).join(" ");
   lgApplyOmni();
 }
@@ -2514,7 +2519,7 @@ function reqTable(rows){
       <td class="mono text-slate-300"><span class="cursor-pointer hover:text-indigo-300" onclick="event.stopPropagation();openProfile('${escJs(r.ip)}')">${esc(r.ip||"")}</span> ${cfBadge(r.ip)}</td>
       <td class="text-slate-600">${esc(r.country||"")}</td>
       <td class="mono text-slate-400">${esc(r.method||"")}</td>
-      <td class="mono text-slate-300 max-w-[420px]"><div class="flex items-center gap-1"><span class="truncate" title="${esc(r.path)}">${esc(r.path||"")}</span><button data-p="${esc(r.path||"").replace(/"/g,'&quot;')}" onclick="event.stopPropagation();abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">+</button></div></td>
+      <td class="mono text-slate-300 max-w-[420px]"><div class="flex items-center gap-1"><span class="truncate" title="${esc(r.path)}">${esc(r.path||"")}</span><button data-p="${escAttr(r.path||"")}" onclick="event.stopPropagation();abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20 shrink-0">+</button></div></td>
       <td class="mono ${sc(String(r.status))}">${esc(r.status||"")}</td>
       <td class="text-slate-500 truncate max-w-[200px]" title="${esc(r.host)}">${esc(r.host||"")}</td></tr>${detail}`;
     }).join("")}
@@ -4230,7 +4235,7 @@ function abPathRows(arr){
     return `<div class="flex justify-between items-center text-xs gap-1">
       <span class="mono text-slate-300 truncate" title="${esc(k)}">${esc(k.slice(0,40))}</span>
       <span class="flex items-center gap-1 shrink-0"><span class="mono text-amber-300">${fmt(x.count)}</span>
-      <button data-p="${esc(k).replace(/"/g,'&quot;')}" onclick="abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">+ правило</button></span></div>`;
+      <button data-p="${escAttr(k)}" onclick="abPathMenu(this.dataset.p,this)" title="добавить путь в правило (403 или автобан)" class="text-[10px] px-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">+ правило</button></span></div>`;
   }).join("")||'<span class="text-slate-600 text-xs">—</span>';
 }
 function renderAbPresets(){

@@ -325,6 +325,13 @@ def _parse_omnibar(text):
             if f in loki._LOG_FIELDS and v:
                 if f == "status" and re.match(r"^[2345]xx$", v, re.I):
                     chips.append({"field": "status", "op": "class", "value": v[0]})
+                elif f == "status" and re.match(r"^[<>]=?\d{3}$", v):
+                    # status:>=400 / >400 / >=500 → class-range digits (Q1). >=N → the
+                    # first digit and all higher classes; the "errors" quick button uses this.
+                    d = int(v.lstrip("<>=")[0])
+                    digits = "".join(str(x) for x in range(d, 6)) if v[0] == ">" else \
+                             "".join(str(x) for x in range(1, d + 1))
+                    chips.append({"field": "status", "op": "class", "value": digits})
                 elif f == "rt" and v[0] in "><=":
                     chips.append({"field": "rt", "op": "gte", "value": re.sub(r"[^\d.]", "", v)})
                 else:
@@ -819,19 +826,36 @@ def _write_fanout(method, path, payload, backend_ids):
         results.append({"backend": bid, "ok": ok, "status": st, "resp": body})
     all_ok = all(oks)
     # Roll up per-backend bodies so the UI's res.blocked/removed/active/skipped keys
-    # still work on a fleet (B1): sum numbers, concat lists, first-wins otherwise.
+    # still work on a fleet: sum numbers, concat lists, first-wins otherwise. Special
+    # cases: set-like CIDR lists are UNION-deduped (Q2 — an IP banned on N backends is
+    # one ban, not N); backend-local gauges take max not sum (Q3 — "active rules" isn't
+    # additive across the fleet). Type mismatches across backend versions are skipped
+    # from the aggregate rather than crashing (C5), leaving the truth in results[].
+    _UNION = {"blocked", "skipped", "removed", "created", "unblocked", "already"}
+    _MAX = {"active"}
     agg = {}
     for b in bodies:
         for k, v in b.items():
             if k in ("ok", "multi", "results", "partial", "backend", "status", "error"):
                 continue
             if isinstance(v, bool):
+                if k in agg and not isinstance(agg[k], bool):
+                    continue
                 agg[k] = agg.get(k, False) or v
             elif isinstance(v, (int, float)):
-                agg[k] = agg.get(k, 0) + v
+                if k in agg and not isinstance(agg[k], (int, float)):
+                    continue
+                agg[k] = max(agg.get(k, v), v) if k in _MAX else agg.get(k, 0) + v
             elif isinstance(v, list):
-                agg.setdefault(k, [])
-                agg[k] += v
+                if k in agg and not isinstance(agg[k], list):
+                    continue
+                cur = agg.setdefault(k, [])
+                if k in _UNION:
+                    for x in v:
+                        if x not in cur:
+                            cur.append(x)
+                else:
+                    cur += v
             elif k not in agg:
                 agg[k] = v
     failed = [r["backend"] for r in results if not r["ok"]]

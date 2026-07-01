@@ -212,9 +212,9 @@ def _chip_clause(field, op, value):
     if not f or value is None or value == "":
         return ""
     v = str(value)
-    if f == "status" and op == "class":      # 4xx/5xx → status=~"4.."
-        d = re.sub(r"\D", "", v)[:1] or "4"
-        return '| status=~"%s.."' % d
+    if f == "status" and op == "class":      # 4xx → status=~"4.." ; "45" → "[45].."
+        d = re.sub(r"\D", "", v) or "4"
+        return '| status=~"[%s].."' % d if len(d) > 1 else '| status=~"%s.."' % d
     if f == "rt" and op == "gte":            # latency >= seconds
         try:
             return "| rt > %f" % float(v)
