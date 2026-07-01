@@ -4120,7 +4120,7 @@ function _tfSync(){ _tf.feeds=[...document.querySelectorAll("#tf-list [data-tf]"
   url:d.querySelector('[data-tff="url"]').value.trim(),
   enabled:d.querySelector('.sw').classList.contains('on')})); }
 function tfToggle(btn){ const on=!btn.classList.contains("on"); btn.classList.toggle("on",on);
-  document.getElementById("tf-body").classList.toggle("hidden",!on); }
+  document.getElementById("tf-body").classList.toggle("hidden",!on); tfSave(); }
 function tfAdd(){ _tfSync(); _tf.feeds.push({name:"",url:"",enabled:true}); renderThreatFeeds(); }
 function tfDel(i){ _tfSync(); _tf.feeds.splice(i,1); renderThreatFeeds(); }
 function tfPreset(i){ _tfSync(); const p=_tf.presets[i]; if(p&&!_tf.feeds.some(f=>f.url===p.url))_tf.feeds.push({name:p.name,url:p.url,enabled:true}); renderThreatFeeds(); }
