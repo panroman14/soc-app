@@ -75,6 +75,12 @@ def upsert(env_id="", name="", loki_url="", cloudflare=None, ingress=None):
     eid = _slug(env_id) or _slug(name)
     if not eid:
         raise ValueError("env id or name required")
+    # Refuse to persist a CF token into a plaintext ConfigMap store (S6).
+    from . import config
+    if cloudflare and str(cloudflare.get("token") or "").strip() and config.STORE == "configmap":
+        raise ValueError(
+            "CF-токен нельзя хранить в configmap-сторе (ConfigMap — открытый текст). "
+            "Используйте STORE=sqlite или задайте токен через ENV.")
     now = int(time.time())
     with _LOCK:
         d = _load()

@@ -97,6 +97,13 @@ def upsert(target_id, fields):
     tid = _slug(target_id) or _slug(fields.get("name") or "")
     if not tid:
         raise ValueError("нужен id или имя CF-таргета")
+    # A ConfigMap store is plaintext — refuse to persist a CF API token there (S6),
+    # mirroring the settings.py guard. Non-blank token + configmap store → reject.
+    from . import config
+    if str(fields.get("token") or "").strip() and config.STORE == "configmap":
+        raise ValueError(
+            "CF-токен нельзя хранить в configmap-сторе (ConfigMap — открытый текст). "
+            "Используйте STORE=sqlite или задайте токен через ENV.")
     now = int(time.time())
     with _LOCK:
         d = _load()
