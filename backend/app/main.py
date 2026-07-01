@@ -742,10 +742,12 @@ def _backends(scope=None):
     return lst
 
 
-def _fanout(method, path, payload=None, scope=None, timeout=15):
+def _fanout(method, path, payload=None, scope=None, timeout=6):
     """Hit every in-scope backend concurrently. Returns [(id, status, body, err)]
     preserving fleet order; err is a string on failure else None. Never raises —
-    a dead backend yields an err entry so callers can surface partial results."""
+    a dead backend yields an err entry so callers can surface partial results.
+    Short default timeout (Pf3): one slow backend must not stall a merged read for
+    15s — the partial-result contract degrades it gracefully. Writes keep 15s."""
     from concurrent.futures import ThreadPoolExecutor
     bes = _backends(scope)
     if not bes:
@@ -780,9 +782,18 @@ def _fanout_list(path, key, scope=None):
 
 
 # ── Phase 2: route writes to the backend(s) that own the relevant target/group ──
+_ti_cache = {}     # scope -> (ts, (tb, gb)); short TTL so a routed write isn't a fresh fan-out each time
+_health_cache = {"t": 0, "k": None, "d": None}   # cached fleet-health probe (Pf2)
+
+
 def _targets_index(scope=None):
     """Fan out /targets and build {target_id: [backends]} and {group: [backends]}
-    from the fleet — the map that tells a write which backend(s) to hit."""
+    from the fleet — the map that tells a write which backend(s) to hit. Cached ~8s
+    (Pf2): a burst of routed writes (autoban tick, bulk ban) reuses one fan-out."""
+    key = scope or "__all__"
+    hit = _ti_cache.get(key)
+    if hit and (time.time() - hit[0]) < 8:
+        return hit[1]
     tb, gb = {}, {}
     for bid, _st, body, err in _fanout("GET", "/targets", scope=scope):
         if err:
@@ -793,6 +804,7 @@ def _targets_index(scope=None):
                 tb.setdefault(tid, []).append(bid)
         for gname in ((body or {}).get("groups", {}) or {}).keys():
             gb.setdefault(gname, []).append(bid)
+    _ti_cache[key] = (time.time(), (tb, gb))
     return tb, gb
 
 
@@ -2116,11 +2128,16 @@ async def api_backend_scope_set(request: Request):
 def api_backends_health():
     """Probe every backend in parallel: reachable (/healthz, no auth) + token valid
     (/targets, Bearer) + round-trip latency. Powers the fleet health indicator and
-    the 'data may be incomplete' warning when a backend is down."""
+    the 'data may be incomplete' warning when a backend is down. Cached ~12s (Pf2)
+    so the UI's periodic poll doesn't fire 2×N probes every interval."""
     from concurrent.futures import ThreadPoolExecutor
     bes = _backends("__all__")
     if not bes:
         return {"backends": []}
+    ckey = tuple(b[0] for b in bes)
+    hit = _health_cache.get("d")
+    if hit is not None and _health_cache.get("k") == ckey and (time.time() - _health_cache["t"]) < 12:
+        return hit
 
     def probe(b):
         bid, url, tok = b
@@ -2140,7 +2157,9 @@ def api_backends_health():
                 "token_ok": token_ok, "latency_ms": lat, "error": err}
 
     with ThreadPoolExecutor(max_workers=min(8, len(bes))) as ex:
-        return {"backends": list(ex.map(probe, bes))}
+        out = {"backends": list(ex.map(probe, bes))}
+    _health_cache.update({"t": time.time(), "k": ckey, "d": out})
+    return out
 
 
 @app.post("/api/ingress_apis/test")
