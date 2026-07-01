@@ -36,6 +36,12 @@ def validate_pattern(pattern, force=False):
         raise BlockError("паттерн слишком длинный (>%d символов)" % _MAX_PATTERN_LEN)
     if '"' in pattern:
         raise BlockError('кавычка " в паттерне сломает nginx-конфиг — убери её')
+    # S8: control chars (newline/CR/NUL/tab/etc.) are valid in a Python regex but,
+    # spliced into an nginx `if ($request_uri ~* "…")` snippet, can break out of the
+    # directive or inject config. `force` never bypasses this — it's a hard rule.
+    bad = next((c for c in pattern if ord(c) < 0x20 or ord(c) == 0x7f), None)
+    if bad is not None:
+        raise BlockError("управляющий символ (0x%02x) в паттерне запрещён" % ord(bad))
     try:
         rx = re.compile(pattern, re.IGNORECASE)  # nginx uses ~* (case-insensitive)
     except re.error as e:
