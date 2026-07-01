@@ -300,48 +300,204 @@ def api_log_label_values(name: str, env: str = ""):
         return {"enabled": True, "name": name, "values": loki.log_label_values(name)}
 
 
+_FACET_FIELDS = ("status", "method", "path", "ip", "country", "host", "ua")
+
+
+def _parse_omnibar(text):
+    """Datadog-style omnibar → {chips, search, attacks_only}. Grammar: facet:value,
+    -facet:value (neq), status:4xx (class), rt:>1.5 (gte), bare words → free-text.
+    Values never reach LogQL raw — they become escaped chips (see loki._chip_clause)."""
+    import shlex
+    chips, words, attacks = [], [], False
+    try:
+        toks = shlex.split(text or "")
+    except ValueError:
+        toks = (text or "").split()
+    for tok in toks:
+        if tok.lower() in ("attacks", "attack", "атаки"):
+            attacks = True
+            continue
+        neg = tok.startswith("-")
+        t = tok[1:] if neg else tok
+        if ":" in t:
+            f, _, v = t.partition(":")
+            f = {"code": "status", "url": "path", "uri": "path"}.get(f, f)
+            if f in loki._LOG_FIELDS and v:
+                if f == "status" and re.match(r"^[2345]xx$", v, re.I):
+                    chips.append({"field": "status", "op": "class", "value": v[0]})
+                elif f == "rt" and v[0] in "><=":
+                    chips.append({"field": "rt", "op": "gte", "value": re.sub(r"[^\d.]", "", v)})
+                else:
+                    chips.append({"field": f, "op": "neq" if neg else "eq", "value": v})
+                continue
+        words.append(tok)
+    return {"chips": chips, "search": " ".join(words), "attacks_only": attacks}
+
+
 def _logql_from_body(body):
+    chips = list(body.get("chips") or [])
+    search = body.get("search") or ""
+    attacks = bool(body.get("attacks_only"))
+    if body.get("omnibar"):                       # omnibar text → escaped chips (Logs v2)
+        p = _parse_omnibar(body["omnibar"])
+        chips += p["chips"]
+        search = (search + " " + p["search"]).strip()
+        attacks = attacks or p["attacks_only"]
     return loki.build_logql(
-        sources=body.get("sources") or {}, chips=body.get("chips") or [],
-        search=body.get("search") or "", regex=bool(body.get("regex")),
-        attacks_only=bool(body.get("attacks_only")), raw=body.get("raw") or "")
+        sources=body.get("sources") or {}, chips=chips, search=search,
+        regex=bool(body.get("regex")), attacks_only=attacks, raw=body.get("raw") or "")
+
+
+# ── Loki-source registry: fan logs across N Loki backends (20 VMs + 2 clusters) ──
+def _log_sources():
+    return db.setting_get("log_sources", {"items": {}}) or {"items": {}}
+
+
+def _loki_targets(selected=None):
+    """[(id, url)] Loki backends to query: registered sources, or config.LOKI_URL as
+    implicit id 'default'. `selected` (list of ids) narrows the set."""
+    items = _log_sources().get("items") or {}
+    lst = [(sid, e.get("url")) for sid, e in items.items() if e.get("url")]
+    if not lst and config.LOKI_URL:
+        lst = [("default", config.LOKI_URL)]
+    if selected:
+        sel = set(selected)
+        return [t for t in lst if t[0] in sel] or lst
+    return lst
+
+
+def _loki_fanout(fn, selected=None):
+    """Run fn() against each Loki source concurrently (loki.scope sets the base URL).
+    Returns [(source_id, result_or_None, error_or_None)]."""
+    from concurrent.futures import ThreadPoolExecutor
+    tg = _loki_targets(selected)
+    if not tg:
+        return []
+
+    def one(t):
+        sid, url = t
+        try:
+            with loki.scope(sid, url):
+                return (sid, fn(), None)
+        except Exception as e:
+            return (sid, None, str(e))
+    with ThreadPoolExecutor(max_workers=min(8, len(tg))) as ex:
+        return list(ex.map(one, tg))
+
+
+@app.get("/api/log_sources")
+def api_log_sources_get():
+    items = [{"id": sid, "url": e.get("url", ""), "label": e.get("label", sid)}
+             for sid, e in (_log_sources().get("items") or {}).items()]
+    return {"items": sorted(items, key=lambda x: x["id"]),
+            "default": (not items) and bool(config.LOKI_URL)}
+
+
+@app.post("/api/log_sources")
+async def api_log_sources_save(request: Request):
+    body = await request.json()
+    url = (body.get("url") or "").strip().rstrip("/")
+    ok_egress, egress_err = _egress_check(url)      # SSRF guard (reuses S2)
+    if not ok_egress:
+        return JSONResponse({"ok": False, "error": egress_err}, status_code=400)
+    sid = _ing_slug(body.get("id") or body.get("label") or url.split("://", 1)[-1])
+    if not sid:
+        return JSONResponse({"ok": False, "error": "нужен id/label"}, status_code=400)
+    d = _log_sources()
+    d.setdefault("items", {})[sid] = {"url": url, "label": (body.get("label") or sid)[:60]}
+    db.setting_set("log_sources", d)
+    return {"ok": True, "id": sid}
+
+
+@app.post("/api/log_sources/delete")
+async def api_log_sources_delete(request: Request):
+    body = await request.json()
+    d = _log_sources()
+    existed = (body.get("id") or "") in (d.get("items") or {})
+    if existed:
+        d["items"].pop(body["id"])
+        db.setting_set("log_sources", d)
+    return {"ok": True, "deleted": existed}
 
 
 @app.post("/api/logs/query")
 async def api_logs_query(request: Request):
-    """Structured Live-Logs query → parsed rows (newest first). Body: {sources,
-    chips, search, regex, attacks_only, raw, minutes, end_ns, limit, env}."""
-    if not config.LOKI_URL:
+    """Structured Live-Logs query fanned across the selected Loki sources, merged
+    newest-first and tagged with `source`. Body: {sources, chips, search, omnibar,
+    regex, attacks_only, minutes, end_ns, limit, log_sources:[ids]}."""
+    if not _loki_targets():
         return {"enabled": False, "rows": []}
     body = await request.json()
     q = _logql_from_body(body)
-    mins = min(max(int(body.get("minutes") or 15), 1), 1440)
+    mins = min(max(int(body.get("minutes") or 15), 1), 10080)   # up to 7d
     limit = min(int(body.get("limit") or 300), 1000)
-    try:
-        with loki.scope(body.get("env") or "", _env_loki_url(body.get("env") or "")):
-            rows = loki.query_logs(q, mins, end_ns=body.get("end_ns"), limit=limit)
-        # cursor for "load older": page forward from the oldest row's ts (Logs v2).
-        next_cursor = (rows[-1]["ts"] * 10**6 - 1) if len(rows) >= limit else None
-        return {"enabled": True, "query": q, "rows": rows, "next_cursor": next_cursor}
-    except Exception as e:
-        return {"enabled": True, "query": q, "rows": [], "error": str(e)}
+    rows, statuses = [], []
+    for sid, res, err in _loki_fanout(
+            lambda: loki.query_logs(q, mins, end_ns=body.get("end_ns"), limit=limit),
+            body.get("log_sources")):
+        statuses.append({"id": sid, "ok": err is None, "count": len(res or []), "error": err})
+        for r in (res or []):
+            r["source"] = sid
+            rows.append(r)
+    rows.sort(key=lambda r: -r["ts"])
+    rows = rows[:limit]
+    next_cursor = (rows[-1]["ts"] * 10**6 - 1) if len(rows) >= limit else None
+    return {"enabled": True, "query": q, "rows": rows, "sources": statuses,
+            "next_cursor": next_cursor}
 
 
 @app.post("/api/logs/histogram")
 async def api_logs_histogram(request: Request):
-    if not config.LOKI_URL:
+    if not _loki_targets():
         return {"enabled": False, "points": []}
     body = await request.json()
     q = _logql_from_body(body)
-    mins = min(max(int(body.get("minutes") or 15), 1), 1440)
-    try:
-        with loki.scope(body.get("env") or "", _env_loki_url(body.get("env") or "")):
-            # by_class → stacked 2xx/3xx/4xx/5xx series (Datadog-style volume chart)
-            if body.get("by_class"):
-                return {"enabled": True, **loki.log_histogram_by_class(q, mins)}
-            return {"enabled": True, **loki.log_histogram(q, mins)}
-    except Exception as e:
-        return {"enabled": True, "points": [], "error": str(e)}
+    mins = min(max(int(body.get("minutes") or 15), 1), 10080)
+    by_class = bool(body.get("by_class"))
+    fn = (lambda: loki.log_histogram_by_class(q, mins)) if by_class \
+        else (lambda: loki.log_histogram(q, mins))
+    merged_series, merged_pts, step = {}, {}, None
+    for _sid, res, err in _loki_fanout(fn, body.get("log_sources")):
+        if err or not res:
+            continue
+        step = res.get("step", step)
+        if by_class:                              # sum per-class series across sources
+            for cls, pts in (res.get("series") or {}).items():
+                acc = merged_series.setdefault(cls, {})
+                for p in pts:
+                    acc[p["t"]] = acc.get(p["t"], 0) + p["v"]
+        else:
+            for p in res.get("points") or []:
+                merged_pts[p["t"]] = merged_pts.get(p["t"], 0) + p["v"]
+    if by_class:
+        series = {c: sorted(({"t": t, "v": v} for t, v in d.items()), key=lambda p: p["t"])
+                  for c, d in merged_series.items()}
+        return {"enabled": True, "step": step or 60, "series": series}
+    pts = sorted(({"t": t, "v": v} for t, v in merged_pts.items()), key=lambda p: p["t"])
+    return {"enabled": True, "step": step or 60, "points": pts}
+
+
+@app.post("/api/logs/facets")
+async def api_logs_facets(request: Request):
+    """Facet value counts (top values per field) across the selected sources."""
+    if not _loki_targets():
+        return {"enabled": False, "facets": {}}
+    body = await request.json()
+    q = _logql_from_body(body)
+    mins = min(max(int(body.get("minutes") or 15), 1), 10080)
+    fields = [f for f in (body.get("fields") or _FACET_FIELDS) if f in loki._LOG_FIELDS]
+    merged = {}
+    for _sid, res, err in _loki_fanout(lambda: loki.log_facets(q, fields, mins),
+                                       body.get("log_sources")):
+        if err or not res:
+            continue
+        for f, vals in res.items():
+            acc = merged.setdefault(f, {})
+            for it in vals:
+                acc[it["value"]] = acc.get(it["value"], 0) + it["count"]
+    facets = {f: sorted(({"value": k, "count": n} for k, n in d.items()),
+                        key=lambda x: -x["count"])[:10] for f, d in merged.items()}
+    return {"enabled": True, "facets": facets}
 
 
 @app.get("/api/log_views")

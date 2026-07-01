@@ -333,6 +333,36 @@ def log_histogram_by_class(query, minutes=15, buckets=60):
     return {"step": step, "series": series}
 
 
+def log_facets(query, fields, minutes=15, topn=10):
+    """Datadog-style facet counts: for each field, the top values by request count
+    over the window. Returns {field: [{value, count}, …]}."""
+    import time as _t
+    end = int(_t.time())
+    start = end - int(minutes) * 60
+    win = max(1, int(minutes))
+    out = {}
+    for f in fields:
+        if f not in _LOG_FIELDS:
+            continue
+        metric = "topk(%d, sum by (%s) (count_over_time(%s [%dm])))" % (topn, f, query, win)
+        try:
+            res = _get("/loki/api/v1/query_range", {"query": metric, "start": str(start),
+                       "end": str(end), "step": str(max(1, end - start))})
+        except Exception:
+            out[f] = []
+            continue
+        vals = {}
+        for s in res:
+            v = (s.get("metric", {}) or {}).get(f)
+            if v is None or v == "":
+                continue
+            mx = max((float(x[1]) for x in s.get("values", [])), default=0.0)
+            vals[v] = max(vals.get(v, 0.0), mx)
+        out[f] = sorted(({"value": k, "count": int(n)} for k, n in vals.items()),
+                        key=lambda x: -x["count"])[:topn]
+    return out
+
+
 def scalar(expr):
     """Instant query returning a single number (0 if empty)."""
     res = _get("/loki/api/v1/query", {"query": "sum(count_over_time(" + expr + " [" + W + "]))"})
