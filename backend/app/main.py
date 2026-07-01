@@ -615,14 +615,39 @@ def _write_fanout(method, path, payload, backend_ids):
     if len(ids) == 1:
         url, tok = bmap[ids[0]]
         return _bcall_to(url, tok, method, path, payload)
-    results, ok_any = [], False
+    results, bodies, oks = [], [], []
     for bid in ids:
         url, tok = bmap[bid]
         st, body = _bcall_to(url, tok, method, path, payload)
         ok = st is not None and st < 400
-        ok_any = ok_any or ok
+        oks.append(ok)
+        if isinstance(body, dict):
+            bodies.append(body)
         results.append({"backend": bid, "ok": ok, "status": st, "resp": body})
-    return (200 if ok_any else 502), {"ok": ok_any, "multi": True, "results": results}
+    all_ok = all(oks)
+    # Roll up per-backend bodies so the UI's res.blocked/removed/active/skipped keys
+    # still work on a fleet (B1): sum numbers, concat lists, first-wins otherwise.
+    agg = {}
+    for b in bodies:
+        for k, v in b.items():
+            if k in ("ok", "multi", "results", "partial", "backend", "status", "error"):
+                continue
+            if isinstance(v, bool):
+                agg[k] = agg.get(k, False) or v
+            elif isinstance(v, (int, float)):
+                agg[k] = agg.get(k, 0) + v
+            elif isinstance(v, list):
+                agg.setdefault(k, [])
+                agg[k] += v
+            elif k not in agg:
+                agg[k] = v
+    failed = [r["backend"] for r in results if not r["ok"]]
+    out = {**agg, "ok": all_ok, "multi": True, "results": results}
+    if failed:                                   # partial failure ≠ success (B2)
+        out["partial"] = True
+        out["error"] = "не применилось на: " + ", ".join(failed)
+    # 200 only if every backend succeeded; partial/none → 502 so the UI shows it.
+    return (200 if all_ok else 502), out
 
 
 @app.get("/api/ban_targets")
