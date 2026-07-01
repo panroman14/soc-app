@@ -262,7 +262,8 @@ def build_logql(sources=None, chips=None, search="", regex=False, attacks_only=F
 
 def _parse_line(ts_ns, line, labels, with_date=False):
     """Turn a raw json log line into a structured row for the table."""
-    row = {"ts": ts_ns // 10**6, "time": _fmt_ns(ts_ns, with_date), "line": line, "labels": labels}
+    row = {"ts": ts_ns // 10**6, "ts_ns": ts_ns, "time": _fmt_ns(ts_ns, with_date),
+           "line": line, "labels": labels}
     try:
         o = json.loads(line)
     except Exception:

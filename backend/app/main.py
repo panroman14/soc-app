@@ -460,7 +460,9 @@ async def api_logs_query(request: Request):
             rows.append(r)
     rows.sort(key=lambda r: -r["ts"])
     rows = rows[:limit]
-    next_cursor = (rows[-1]["ts"] * 10**6 - 1) if len(rows) >= limit else None
+    # cursor in true ns (not reconstructed from ms) so no rows are skipped/dupd across
+    # a page boundary within the same millisecond (C4)
+    next_cursor = (rows[-1].get("ts_ns", rows[-1]["ts"] * 10**6) - 1) if len(rows) >= limit else None
     return {"enabled": True, "query": q, "rows": rows, "sources": statuses,
             "next_cursor": next_cursor}
 
@@ -1226,10 +1228,12 @@ def api_blocklist():
 
 @app.get("/api/blocklist_audit")
 def api_blocklist_audit(limit: int = 100):
+    limit = min(max(int(limit), 1), 1000)
     audit, errors = _fanout_list("/audit?limit=%d" % limit, "audit")
-    # newest first across the merged fleet (each row carries ts)
+    # newest first across the merged fleet, then trim to `limit` (Pf4 — don't return
+    # N×limit rows on a fleet; each backend already capped its own /audit at `limit`)
     audit.sort(key=lambda r: r.get("ts", 0) if isinstance(r, dict) else 0, reverse=True)
-    return JSONResponse({"audit": audit, "backend_errors": errors})
+    return JSONResponse({"audit": audit[:limit], "backend_errors": errors})
 
 
 @app.get("/api/reviewed")

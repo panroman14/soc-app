@@ -1574,12 +1574,14 @@ async function _lgFetch(){
   clearTimeout(_lgTimer);
   if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgTail,5000);
 }
+const _lgKey=r=>(r.ts_ns||r.ts)+"|"+(r.line||"");   // ns+line identity (C4)
 async function lgTail(){
-  const gen=_lgGen, maxTs=_lg.rows.length?_lg.rows[0].ts:0;
+  const gen=_lgGen, maxNs=_lg.rows.length?(_lg.rows[0].ts_ns||_lg.rows[0].ts*1e6):0;
   try{
     const q=await _post("/api/logs/query", _lgBody({limit:100}));
     if(gen!==_lgGen)return;                         // filter changed mid-flight → drop (C3)
-    const fresh=(q.rows||[]).filter(r=>r.ts>maxTs);
+    const seen=new Set(_lg.rows.map(_lgKey));
+    const fresh=(q.rows||[]).filter(r=>(r.ts_ns||r.ts*1e6)>maxNs && !seen.has(_lgKey(r)));
     if(fresh.length){ _lg.rows=fresh.concat(_lg.rows).slice(0,1000); lgRenderRows(); lgStats(q); }
   }catch(e){}
   clearTimeout(_lgTimer);
@@ -1589,7 +1591,8 @@ async function lgLoadOlder(){
   if(!_lg.cursor)return;
   try{
     const q=await _post("/api/logs/query", _lgBody({limit:200, end_ns:_lg.cursor}));
-    _lg.rows=_lg.rows.concat(q.rows||[]); _lg.cursor=q.next_cursor||null;
+    const seen=new Set(_lg.rows.map(_lgKey));       // dedup across the page boundary (C4)
+    _lg.rows=_lg.rows.concat((q.rows||[]).filter(r=>!seen.has(_lgKey(r)))); _lg.cursor=q.next_cursor||null;
     lgRenderRows(); document.getElementById("lg-more").classList.toggle("hidden", !_lg.cursor);
   }catch(e){}
 }
