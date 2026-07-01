@@ -1124,10 +1124,10 @@ def api_autoban_why(ip: str = ""):
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return JSONResponse({"ip": ip, "error": "невалидный IP"}, status_code=400)
-    _, bl = _blocklist_call("GET", "/list")
+    blocks, _ = _fanout_list("/list", "blocks")     # across the whole fleet (B3)
     entry = None
     best_prefix = -1
-    for b in (bl or {}).get("blocks", []):
+    for b in blocks:
         try:
             net = ipaddress.ip_network(b["cidr"], strict=False)
             # pick the MOST specific covering block (largest prefixlen) so a /32
@@ -1136,9 +1136,9 @@ def api_autoban_why(ip: str = ""):
                 entry, best_prefix = b, net.prefixlen
         except Exception:
             pass
-    _, au = _blocklist_call("GET", "/audit?limit=500")
+    audit_rows, _ = _fanout_list("/audit?limit=500", "audit")
     audit = []
-    for e in (au or {}).get("audit", []):
+    for e in audit_rows:
         c = e.get("cidr") or ""
         if c == ip or (entry and c == entry["cidr"]) or ("/" not in c and c == ip):
             audit.append(e)
@@ -1176,12 +1176,12 @@ def api_autoban_log(limit: int = 200):
     """Auto-ban audit (by=autoban) enriched with: the example paths captured at ban
     time, and whether the ban is STILL active (so the UI shows 'разбан' only for live
     bans and marks unbanned/expired ones — the audit itself is append-only history)."""
-    _, au = _blocklist_call("GET", "/audit?limit=500")
-    _, bl = _blocklist_call("GET", "/list")
-    active = {b.get("cidr") for b in (bl or {}).get("blocks", [])}
+    audit_rows, _ = _fanout_list("/audit?limit=500", "audit")   # whole fleet (B3)
+    blocks, _ = _fanout_list("/list", "blocks")
+    active = {b.get("cidr") for b in blocks}
     paths_map = db.setting_get("autoban_ban_paths", {}) or {}
     out = []
-    for e in (au or {}).get("audit", []):
+    for e in sorted(audit_rows, key=lambda r: r.get("ts", 0), reverse=True):
         if (e.get("by") or "").lower() != "autoban":
             continue
         cidr = e.get("cidr") or ""
@@ -1408,7 +1408,8 @@ def autoban_run_once():
         elif akey[1]:                     # legacy single group
             payload["group"] = akey[1]
         try:
-            _, resp = _blocklist_call("POST", "/block_bulk", payload)
+            # route to the backend(s) that own this attachment (B5) — not just active
+            _, resp = _write_fanout("POST", "/block_bulk", payload, _route_for(payload))
             if resp and resp.get("ok"):
                 banned_cidrs.extend(resp.get("blocked") or [])
             else:
@@ -1507,16 +1508,17 @@ def threat_feed_run_once(manual=False):
         name = f.get("name") or f.get("url")
         try:
             cidrs = _parse_feed_lines(_fetch_feed(f["url"]))
-            if not config.BLOCKLIST_API_URL:
+            if not _backends("__all__"):
                 raise RuntimeError("blocklist-api не настроен")
             banned = 0
+            ids = _route_for({"group": group})     # owners of the feed's group (B5)
             for i in range(0, len(cidrs), 2000):   # chunk so each bulk call stays sane
                 chunk = cidrs[i:i + 2000]
                 payload = {"items": [{"cidr": c, "reason": "feed: " + name} for c in chunk],
                            "ttl": ttl, "added_by": "feed", "force": False}
                 if group:
                     payload["group"] = group
-                _, resp = _blocklist_call("POST", "/block_bulk", payload)
+                _, resp = _write_fanout("POST", "/block_bulk", payload, ids)
                 if resp and resp.get("ok"):
                     banned += len(resp.get("blocked") or [])
             total += banned
@@ -2271,12 +2273,18 @@ _bc_lock = threading.Lock()  # avoid overlapping heavy computes (pile-up → 429
 
 
 def _blocked_nets():
-    """Active blocklist CIDRs (from blocklist-api) as ip_network objects."""
-    _, bl = _blocklist_call("GET", "/list")
+    """Active blocklist CIDRs across the whole fleet as ip_network objects (B4) —
+    so 'already banned, skip' dedup sees bans on any backend, not just the active."""
+    blocks, _ = _fanout_list("/list", "blocks")
     nets = []
-    for b in (bl or {}).get("blocks", []):
+    seen = set()
+    for b in blocks:
+        c = b.get("cidr")
+        if not c or c in seen:
+            continue
+        seen.add(c)
         try:
-            nets.append(ipaddress.ip_network(b["cidr"], strict=False))
+            nets.append(ipaddress.ip_network(c, strict=False))
         except Exception:
             pass
     return nets
