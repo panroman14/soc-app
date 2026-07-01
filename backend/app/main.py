@@ -316,11 +316,13 @@ async def api_logs_query(request: Request):
     body = await request.json()
     q = _logql_from_body(body)
     mins = min(max(int(body.get("minutes") or 15), 1), 1440)
+    limit = min(int(body.get("limit") or 300), 1000)
     try:
         with loki.scope(body.get("env") or "", _env_loki_url(body.get("env") or "")):
-            rows = loki.query_logs(q, mins, end_ns=body.get("end_ns"),
-                                   limit=min(int(body.get("limit") or 300), 1000))
-        return {"enabled": True, "query": q, "rows": rows}
+            rows = loki.query_logs(q, mins, end_ns=body.get("end_ns"), limit=limit)
+        # cursor for "load older": page forward from the oldest row's ts (Logs v2).
+        next_cursor = (rows[-1]["ts"] * 10**6 - 1) if len(rows) >= limit else None
+        return {"enabled": True, "query": q, "rows": rows, "next_cursor": next_cursor}
     except Exception as e:
         return {"enabled": True, "query": q, "rows": [], "error": str(e)}
 
@@ -334,6 +336,9 @@ async def api_logs_histogram(request: Request):
     mins = min(max(int(body.get("minutes") or 15), 1), 1440)
     try:
         with loki.scope(body.get("env") or "", _env_loki_url(body.get("env") or "")):
+            # by_class → stacked 2xx/3xx/4xx/5xx series (Datadog-style volume chart)
+            if body.get("by_class"):
+                return {"enabled": True, **loki.log_histogram_by_class(q, mins)}
             return {"enabled": True, **loki.log_histogram(q, mins)}
     except Exception as e:
         return {"enabled": True, "points": [], "error": str(e)}

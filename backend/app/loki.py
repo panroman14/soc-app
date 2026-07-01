@@ -111,10 +111,11 @@ def _get(path, params, _retries=2):
             raise
 
 
-def _fmt_ns(ns):
+def _fmt_ns(ns, with_date=False):
     import datetime
     try:
-        return datetime.datetime.fromtimestamp(ns / 1e9).strftime("%H:%M:%S")
+        dt = datetime.datetime.fromtimestamp(ns / 1e9)
+        return dt.strftime("%m-%d %H:%M:%S" if with_date else "%H:%M:%S")
     except Exception:
         return ""
 
@@ -191,9 +192,22 @@ def _sel_with_sources(sources):
     return "{" + ",".join(parts) + "}"
 
 
+def _lbl_escape(s):
+    r"""Escape a value for a LogQL double-quoted string (exact/neq match): backslash
+    and double-quote only, so it cannot terminate the string or inject a clause."""
+    return str(s).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _re2_esc(s):
+    """Escape RE2 metacharacters for a Loki regex match (=~/!~)."""
+    return re.sub(r'([.+*?()\[\]{}^$|\\])', r'\\\1', str(s))
+
+
 def _chip_clause(field, op, value):
     """One filter chip -> a LogQL pipeline clause operating on the json-extracted
-    label `field`. op: eq|neq|re|gte|class (class = status family like '4')."""
+    label `field`. op: eq|neq|re|gte|class (class = status family like '4').
+    Values are escaped (S5/bug#5): exact matches escape \\ and ", regex uses RE2
+    escaping (op 're' matches a literal substring, not attacker RE2)."""
     f = field if field in _LOG_FIELDS else None
     if not f or value is None or value == "":
         return ""
@@ -206,11 +220,11 @@ def _chip_clause(field, op, value):
             return "| rt > %f" % float(v)
         except ValueError:
             return ""
-    if op == "re":
-        return '| %s=~"%s"' % (f, v.replace('"', '.'))
+    if op == "re":                            # "contains" — literal substring, escaped
+        return '| %s=~"%s"' % (f, _re2_esc(v))
     if op == "neq":
-        return '| %s!="%s"' % (f, v.replace('"', '.'))
-    return '| %s="%s"' % (f, v.replace('"', '.'))
+        return '| %s!="%s"' % (f, _lbl_escape(v))
+    return '| %s="%s"' % (f, _lbl_escape(v))
 
 
 def build_logql(sources=None, chips=None, search="", regex=False, attacks_only=False, raw=""):
@@ -225,8 +239,10 @@ def build_logql(sources=None, chips=None, search="", regex=False, attacks_only=F
     if attacks_only:
         q += " |~ `%s`" % _ATTACK_RE
     if search:
-        s = search.replace("`", "")
-        q += (" |~ `%s`" % s) if regex else (' |= "%s"' % s.replace('"', '.'))
+        if regex:                              # power-user regex: strip backticks
+            q += " |~ `%s`" % search.replace("`", "")
+        else:                                  # plain substring, properly escaped
+            q += ' |= "%s"' % _lbl_escape(search)
     # one json stage extracting every field we filter on or render
     q += " | json " + ", ".join('%s="%s"' % (k, v) for k, v in _LOG_FIELDS.items())
     for c in (chips or []):
@@ -234,9 +250,9 @@ def build_logql(sources=None, chips=None, search="", regex=False, attacks_only=F
     return re.sub(r"\s+", " ", q).strip()
 
 
-def _parse_line(ts_ns, line, labels):
+def _parse_line(ts_ns, line, labels, with_date=False):
     """Turn a raw json log line into a structured row for the table."""
-    row = {"ts": ts_ns // 10**6, "time": _fmt_ns(ts_ns), "line": line, "labels": labels}
+    row = {"ts": ts_ns // 10**6, "time": _fmt_ns(ts_ns, with_date), "line": line, "labels": labels}
     try:
         o = json.loads(line)
     except Exception:
@@ -262,11 +278,12 @@ def query_logs(query, minutes=15, end_ns=None, limit=300):
     start = end - int(minutes) * 60 * 10**9
     res = _get("/loki/api/v1/query_range", {"query": query, "start": str(start),
                "end": str(end), "limit": str(min(int(limit), 1000)), "direction": "backward"})
+    with_date = int(minutes) > 1440          # multi-day window → show date in the row
     rows = []
     for s in res:
         lbl = s.get("stream", {})
         for v in s.get("values", []):
-            rows.append(_parse_line(int(v[0]), v[1], lbl))
+            rows.append(_parse_line(int(v[0]), v[1], lbl, with_date))
     rows.sort(key=lambda r: -r["ts"])
     return rows[:limit]
 
@@ -289,6 +306,31 @@ def log_histogram(query, minutes=15, buckets=60):
             pts.append({"t": int(ts), "v": float(val)})
     pts.sort(key=lambda p: p["t"])
     return {"step": step, "points": pts}
+
+
+def log_histogram_by_class(query, minutes=15, buckets=60):
+    """Datadog-style stacked volume: request count per time bucket split by status
+    class (2xx/3xx/4xx/5xx). Uses label_format to derive the class from status, then
+    sums by it. Returns {step, series:{"2xx":[{t,v}],…}}."""
+    import time as _t
+    end = int(_t.time())
+    start = end - int(minutes) * 60
+    step = max(1, (end - start) // max(1, buckets))
+    # first digit of status → class bucket; group the count_over_time by it
+    metric = ('sum by (cls) (count_over_time(%s | label_format '
+              'cls=`{{ printf "%%.1sxx" .status }}` [%ds]))' % (query, step))
+    try:
+        res = _get("/loki/api/v1/query_range", {"query": metric, "start": str(start),
+                   "end": str(end), "step": str(step)})
+    except Exception:
+        return {"step": step, "series": {}}
+    series = {}
+    for s in res:
+        cls = (s.get("metric", {}) or {}).get("cls") or "?"
+        pts = [{"t": int(ts), "v": float(val)} for ts, val in s.get("values", [])]
+        pts.sort(key=lambda p: p["t"])
+        series[cls] = pts
+    return {"step": step, "series": series}
 
 
 def scalar(expr):
