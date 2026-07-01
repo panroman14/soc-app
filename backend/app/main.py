@@ -611,7 +611,7 @@ def api_ban_targets_check(id: str = ""):
     """«Проверить» — live probe of targets (CF token/list/rule, last errors)."""
     import urllib.parse as _up
     path = "/targets/check" + ("?id=" + _up.quote(id, safe="") if id else "")
-    status, body = _blocklist_call("GET", path)
+    status, body = _bcall_to(*_scoped_backend(), "GET", path)
     return JSONResponse(body or {"checks": [], "error": "нет ответа"}, status_code=status or 502)
 
 
@@ -630,7 +630,7 @@ def api_settings():
     bl = {}
     locked = False
     if config.BLOCKLIST_API_URL:
-        _, body = _blocklist_call("GET", "/settings")
+        _, body = _bcall_to(*_scoped_backend(), "GET", "/settings")
         bl = (body or {}).get("settings", {})
         locked = bool((body or {}).get("locked"))
     return JSONResponse({"settings": {**llm_view, **bl}, "locked": locked,
@@ -655,7 +655,7 @@ async def api_settings_save(request: Request):
             remote[k] = v
     err = None
     if remote and config.BLOCKLIST_API_URL:
-        status, resp = _blocklist_call("POST", "/settings", {"updates": remote})
+        status, resp = _bcall_to(*_scoped_backend(), "POST", "/settings", {"updates": remote})
         if status and status >= 400:
             err = (resp or {}).get("error", "ошибка blocklist-api")
         else:
@@ -732,6 +732,18 @@ def _one_backend(bid):
     return config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN
 
 
+def _scoped_backend():
+    """(url, token) for config reads/writes (settings / notify): per-backend data,
+    so it follows the picker — the chosen backend when scope is specific, else the
+    active/env default. Not merged (backends can hold different config)."""
+    sc = (_ing_apis().get("scope") or "__all__")
+    if sc != "__all__":
+        for b in _backends("__all__"):
+            if b[0] == sc:
+                return b[1], b[2]
+    return config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN
+
+
 @app.post("/api/cf_targets")
 async def api_cf_targets_save(request: Request):
     body = await request.json()
@@ -752,21 +764,21 @@ async def api_cf_targets_delete(request: Request):
 def api_notify_config():
     if not config.BLOCKLIST_API_URL:
         return JSONResponse({"enabled": False, "channels": [], "rules": []})
-    _, body = _blocklist_call("GET", "/notify_config")
+    _, body = _bcall_to(*_scoped_backend(), "GET", "/notify_config")
     return JSONResponse({"enabled": True, **(body or {})})
 
 
 @app.post("/api/notify_config")
 async def api_notify_config_save(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/notify_config", body)
+    status, resp = _bcall_to(*_scoped_backend(), "POST", "/notify_config", body)
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
 @app.post("/api/notify/test")
 async def api_notify_test(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/notify/test", {"channel": body.get("channel", "")})
+    status, resp = _bcall_to(*_scoped_backend(), "POST", "/notify/test", {"channel": body.get("channel", "")})
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
@@ -1616,8 +1628,27 @@ def api_path_rules():
 
 @app.get("/api/path_status")
 def api_path_status():
-    status, resp = _blocklist_call("GET", "/path_status")
-    return JSONResponse(resp or {"rendered_ok": False, "error": "нет ответа"}, status_code=status or 502)
+    if not _backends("__all__"):
+        return JSONResponse({"rendered_ok": False, "error": "нет ответа"})
+    targets, off, enabled_all, count, enc, rok, errors = {}, set(), True, 0, 0, True, {}
+    for bid, _st, body, err in _fanout("GET", "/path_status"):
+        if err:
+            errors[bid] = err; rok = False; continue
+        body = body or {}
+        tg = body.get("targets") or {}
+        entries = tg.items() if isinstance(tg, dict) else enumerate(tg)
+        for tid, tv in entries:
+            if isinstance(tv, dict):
+                tv = dict(tv); tv.setdefault("backend", bid)
+            targets["%s/%s" % (bid, tid)] = tv   # unique key keeps every target (ids collide)
+        enabled_all = enabled_all and bool(body.get("enabled", True))
+        off |= set(body.get("off_types") or [])
+        count += body.get("count", 0) or 0
+        enc += body.get("enabled_count", 0) or 0
+        rok = rok and bool(body.get("rendered_ok"))
+    return JSONResponse({"enabled": enabled_all, "off_types": sorted(off), "count": count,
+                         "enabled_count": enc, "rendered_ok": rok, "targets": targets,
+                         "backend_errors": errors})
 
 
 @app.get("/api/protected_paths")
