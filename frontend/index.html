@@ -403,23 +403,6 @@
       </div>
     </div>
 
-    <section id="ab-esc-sec" class="card p-4 mb-4">
-      <div class="env-row mb-1">
-        <div><span class="text-sm font-medium text-slate-200">📈 <span data-i18n="esc.h">Escalation ladder</span></span>
-          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="esc.sub">Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.</p></div>
-        <button type="button" class="sw" id="esc-enabled" onclick="escUiToggle(this)" aria-label="toggle escalation"><i></i></button>
-      </div>
-      <div id="esc-body" class="hidden">
-      <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
-        <label class="block flex-1 min-w-[220px]"><span data-i18n="esc.ladder">TTL ladder (1st, 2nd, 3rd… offense)</span><input id="esc-ladder" placeholder="1h, 6h, 24h, 7d, forever" class="input mono mt-1"></label>
-        <label class="block"><span data-i18n="esc.memory">Forgive after (days)</span><input id="esc-memory" type="number" min="1" value="30" class="input mono mt-1 w-28"></label>
-        <button onclick="escSave()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
-        <span id="esc-msg" class="text-[11px]" style="color:var(--faint)"></span>
-      </div>
-      <div id="esc-offenders" class="mt-3 text-[11px]"></div>
-      </div>
-    </section>
-
     <div class="card p-4 mb-4">
       <div class="flex items-center gap-2 mb-3 flex-wrap">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><rect x="9" y="15" width="6" height="6" rx="1"/><path d="M6 9v3a1 1 0 0 0 1 1h11"/><path d="M12 13v2"/></svg>
@@ -429,46 +412,6 @@
       </div>
       <div id="ban-targets" class="text-sm text-slate-400">загрузка…</div>
     </div>
-
-    <section id="ab-prot-sec" class="card p-4 mb-4">
-      <div class="flex items-center gap-2 cursor-pointer select-none" onclick="abProtToggle()">
-        <span id="ab-prot-chev" style="color:var(--faint)">▸</span>
-        <span class="text-sm font-medium text-slate-200">🛡️ Защищённые пути</span>
-        <span class="text-[11px] text-slate-500">— автобан их НИКОГДА не банит, и в 403 их добавить НЕЛЬЗЯ (общий предохранитель)</span>
-      </div>
-      <div id="ab-protected-body" class="hidden mt-3">
-        <div class="flex items-center gap-1.5 flex-wrap mb-2">
-          <input id="ab-ignore-inp" placeholder="/новый/путь" onkeydown="if(event.key==='Enter')abIgnoreAdd()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono w-44">
-          <button onclick="abIgnoreAdd()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ добавить</button>
-          <button onclick="abIgnoreSave()" class="text-[11px] px-2 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-600">Сохранить</button>
-          <span id="ab-ignore-msg" class="text-[11px] text-slate-500"></span>
-        </div>
-        <div id="ab-ignore" class="flex flex-wrap gap-1.5"></div>
-      </div>
-    </section>
-
-    <section class="card p-4 mb-4">
-      <div class="env-row mb-1">
-        <div><span class="text-sm font-medium text-slate-200">📡 <span data-i18n="tf.h">Threat feeds</span></span>
-          <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tf.sub">Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.</p></div>
-        <button type="button" class="sw" id="tf-enabled" onclick="tfToggle(this)" aria-label="toggle feeds"><i></i></button>
-      </div>
-      <div id="tf-body" class="hidden">
-      <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
-        <label class="block">Group<input id="tf-group" placeholder="threat-feeds" class="input mono mt-1 w-40"></label>
-        <label class="block"><span data-i18n="tf.every">Refresh every (h)</span><input id="tf-refresh" type="number" min="1" value="6" class="input mono mt-1 w-24"></label>
-        <button onclick="tfSave()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
-        <button onclick="tfRefresh(this)" class="btn btn-xs" data-i18n="tf.now">Refresh now</button>
-        <span id="tf-msg" class="text-[11px]" style="color:var(--faint)"></span>
-      </div>
-      <div id="tf-list" class="mt-3 space-y-1.5"></div>
-      <div class="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
-        <button onclick="tfAdd()" class="btn btn-ghost btn-xs" data-i18n="tf.add">＋ feed</button>
-        <span style="color:var(--faint)" data-i18n="tf.presets">presets:</span>
-        <span id="tf-presets" class="flex gap-1 flex-wrap"></span>
-      </div>
-      </div>
-    </section>
 
     <div class="grid lg:grid-cols-2 gap-4 mb-4">
       <section class="card p-4">
@@ -870,6 +813,7 @@
     <div class="setwrap">
     <div class="setnav">
       <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span>🔔</span><span data-i18n="set.notify">Notifications</span></button>
+      <button id="ssub-autoban" onclick="setSub('autoban')" class="setnav-btn"><span>🚫</span><span data-i18n="set.autoban">Auto-ban</span></button>
       <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span>⚙️</span><span data-i18n="set.global">Global</span></button>
     </div>
     <div>
@@ -895,6 +839,66 @@
       <div id="nf-rules" class="space-y-2"></div>
       <div id="nf-msg" class="text-[11px] mt-3"></div>
     </section>
+
+    <!-- ── Auto-ban: escalation / protected paths / threat feeds ── -->
+    <div id="ssec-autoban" class="hidden space-y-4">
+      <section id="ab-esc-sec" class="card p-4">
+        <div class="env-row mb-1">
+          <div><span class="text-sm font-medium text-slate-200">📈 <span data-i18n="esc.h">Escalation ladder</span></span>
+            <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="esc.sub">Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.</p></div>
+          <button type="button" class="sw" id="esc-enabled" onclick="escUiToggle(this)" aria-label="toggle escalation"><i></i></button>
+        </div>
+        <div id="esc-body" class="hidden">
+        <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
+          <label class="block flex-1 min-w-[220px]"><span data-i18n="esc.ladder">TTL ladder (1st, 2nd, 3rd… offense)</span><input id="esc-ladder" placeholder="1h, 6h, 24h, 7d, forever" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="esc.memory">Forgive after (days)</span><input id="esc-memory" type="number" min="1" value="30" class="input mono mt-1 w-28"></label>
+          <button onclick="escSave()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+          <span id="esc-msg" class="text-[11px]" style="color:var(--faint)"></span>
+        </div>
+        <div id="esc-offenders" class="mt-3 text-[11px]"></div>
+        </div>
+      </section>
+
+      <section id="ab-prot-sec" class="card p-4">
+        <div class="flex items-center gap-2 cursor-pointer select-none" onclick="abProtToggle()">
+          <span id="ab-prot-chev" style="color:var(--faint)">▸</span>
+          <span class="text-sm font-medium text-slate-200">🛡️ Защищённые пути</span>
+          <span class="text-[11px] text-slate-500">— автобан их НИКОГДА не банит, и в 403 их добавить НЕЛЬЗЯ (общий предохранитель)</span>
+        </div>
+        <div id="ab-protected-body" class="hidden mt-3">
+          <div class="flex items-center gap-1.5 flex-wrap mb-2">
+            <input id="ab-ignore-inp" placeholder="/новый/путь" onkeydown="if(event.key==='Enter')abIgnoreAdd()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono w-44">
+            <button onclick="abIgnoreAdd()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ добавить</button>
+            <button onclick="abIgnoreSave()" class="text-[11px] px-2 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-600">Сохранить</button>
+            <span id="ab-ignore-msg" class="text-[11px] text-slate-500"></span>
+          </div>
+          <div id="ab-ignore" class="flex flex-wrap gap-1.5"></div>
+        </div>
+      </section>
+
+      <section class="card p-4">
+        <div class="env-row mb-1">
+          <div><span class="text-sm font-medium text-slate-200">📡 <span data-i18n="tf.h">Threat feeds</span></span>
+            <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tf.sub">Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.</p></div>
+          <button type="button" class="sw" id="tf-enabled" onclick="tfToggle(this)" aria-label="toggle feeds"><i></i></button>
+        </div>
+        <div id="tf-body" class="hidden">
+        <div class="flex flex-wrap items-end gap-2 mt-2 text-[11px]">
+          <label class="block">Group<input id="tf-group" placeholder="threat-feeds" class="input mono mt-1 w-40"></label>
+          <label class="block"><span data-i18n="tf.every">Refresh every (h)</span><input id="tf-refresh" type="number" min="1" value="6" class="input mono mt-1 w-24"></label>
+          <button onclick="tfSave()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+          <button onclick="tfRefresh(this)" class="btn btn-xs" data-i18n="tf.now">Refresh now</button>
+          <span id="tf-msg" class="text-[11px]" style="color:var(--faint)"></span>
+        </div>
+        <div id="tf-list" class="mt-3 space-y-1.5"></div>
+        <div class="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
+          <button onclick="tfAdd()" class="btn btn-ghost btn-xs" data-i18n="tf.add">＋ feed</button>
+          <span style="color:var(--faint)" data-i18n="tf.presets">presets:</span>
+          <span id="tf-presets" class="flex gap-1 flex-wrap"></span>
+        </div>
+        </div>
+      </section>
+    </div>
 
     <!-- ── Глобальные ── -->
     <section id="ssec-global" class="hidden card p-4">
@@ -1082,7 +1086,7 @@ const I18N={en:{
   "ing.s2":"Logs into Loki","ing.s2.sub":"The dashboard reads traffic/attacks from Loki. You need one of:","ing.s2.a":"Loki + Promtail already in the cluster","ing.s2.a2":"— then just give the dashboard access to that Loki (set its URL in the dashboard config/deploy).","ing.s2.b":"Loki only on the dashboard","ing.s2.b2":"— then install Promtail in the cluster so it ships ingress-nginx logs to the dashboard's Loki. URL below:",
   "ing.s3":"values.yaml — where the target is set","ing.s3.sub":"The ingress target IS the controller's namespace + ConfigMap pair. Same values as the command above:",
   "nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","tg.add":"Add","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
-  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.global":"Global",
+  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.autoban":"Auto-ban","set.global":"Global",
   "cft.h":"Cloudflare targets","cft.sub":"A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).","cft.new":"New CF target",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
   "set.global.sub":"LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.",
@@ -1108,7 +1112,7 @@ const I18N={en:{
   "ing.s2":"Логи в Loki","ing.s2.sub":"Дашборд читает трафик/атаки из Loki. Нужен один из вариантов:","ing.s2.a":"Loki + Promtail уже в кластере","ing.s2.a2":"— тогда просто дай дашборду доступ к этому Loki (укажи его URL в настройках/при деплое дашборда).","ing.s2.b":"Loki только на дашборде","ing.s2.b2":"— тогда поставь Promtail в кластер, чтобы он слал логи ingress-nginx в Loki дашборда. URL ниже:",
   "ing.s3":"values.yaml — где указывается таргет","ing.s3.sub":"Таргет ingress — это и есть пара «namespace + ConfigMap контроллера». Те же значения, что в команде выше:",
   "nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","tg.add":"Добавить","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
-  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.global":"Глобальные",
+  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.autoban":"Автобан","set.global":"Глобальные",
   "cft.h":"Cloudflare-таргеты","cft.sub":"Именованный аккаунт/зона Cloudflare, который привязывается к группам и 403-правилам как любой таргет. Токен write-only (хранится на сервере, показывается только как «задан»).","cft.new":"Новый CF-таргет",
   "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
   "env.ing.hint":"Эндпоинт кластера тут не нужен: blocklist-api работает внутри кластера и патчит этот ConfigMap через свой ServiceAccount. Дашборд общается только с blocklist-api (адрес задаётся в BLOCKLIST_API_URL при деплое).",
@@ -2255,11 +2259,12 @@ function _ttlToSec(t){ t=String(t).trim().toLowerCase(); if(!t||t==="forever"||t
 function escUiToggle(btn){ btn.classList.toggle("on"); const b=document.getElementById("esc-body"); if(b)b.classList.toggle("hidden",!btn.classList.contains("on")); }
 function abProtToggle(){ const b=document.getElementById("ab-protected-body"),c=document.getElementById("ab-prot-chev"); if(!b)return; const open=b.classList.toggle("hidden")===false; if(c)c.textContent=open?"▾":"▸"; }
 async function loadEscalation(){
+  const en=document.getElementById("esc-enabled"); if(!en)return;   // section lives in Settings now
   let d; try{ d=await (await fetch("/api/autoban/escalation")).json(); }catch(e){ return; }
-  document.getElementById("esc-enabled").classList.toggle("on",!!d.enabled);
+  en.classList.toggle("on",!!d.enabled);
   const eb=document.getElementById("esc-body"); if(eb)eb.classList.toggle("hidden",!d.enabled);
-  const lad=document.getElementById("esc-ladder"); if(document.activeElement!==lad)lad.value=(d.ladder||[]).map(_secToTtl).join(", ");
-  const mem=document.getElementById("esc-memory"); if(document.activeElement!==mem)mem.value=d.memory_days||30;
+  const lad=document.getElementById("esc-ladder"); if(lad&&document.activeElement!==lad)lad.value=(d.ladder||[]).map(_secToTtl).join(", ");
+  const mem=document.getElementById("esc-memory"); if(mem&&document.activeElement!==mem)mem.value=d.memory_days||30;
   const off=d.offenders||[];
   document.getElementById("esc-offenders").innerHTML=off.length
     ? `<div class="text-slate-500 mb-1">${_trText("повторные нарушители")}:</div>`+off.slice(0,12).map(o=>
@@ -2945,11 +2950,17 @@ function renderJournal(){
 let _sub="notify";
 function setSub(name){
   _sub=name;
-  [["notify","ssec-notify"],["global","ssec-global"]].forEach(([n,sec])=>{
+  [["notify","ssec-notify"],["autoban","ssec-autoban"],["global","ssec-global"]].forEach(([n,sec])=>{
     document.getElementById(sec).classList.toggle("hidden",n!==name);
     document.getElementById("ssub-"+n).className="setnav-btn"+(n===name?" on":"");
   });
   if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
+  if(name==="autoban"){ loadEscalation(); loadThreatFeeds(); loadProtectedPaths(); }
+}
+async function loadProtectedPaths(){
+  try{ const d=await fetch("/api/autoban/rules").then(r=>r.json());
+    _abIgnore=Array.isArray(d.ignore_paths)?d.ignore_paths:[]; renderAbIgnore();
+  }catch(e){}
 }
 // ── Targets: подвкладки (nginx-ноды / Cloudflare / группы) ─────────────────────
 let _tsub="nginx";
@@ -4079,8 +4090,9 @@ async function abIgnoreSave(){
 // ── threat feeds (#2) ──────────────────────────────────────────────────────
 let _tf={feeds:[],presets:[],status:{},enabled:false};
 async function loadThreatFeeds(){
+  const en0=document.getElementById("tf-enabled"); if(!en0)return;   // section lives in Settings now
   try{ _tf=await (await fetch("/api/threat_feeds")).json(); }catch(e){ return; }
-  const en=document.getElementById("tf-enabled"); if(en)en.classList.toggle("on",!!_tf.enabled);
+  en0.classList.toggle("on",!!_tf.enabled);
   document.getElementById("tf-body").classList.toggle("hidden",!_tf.enabled);
   const g=document.getElementById("tf-group"); if(g&&!g.value)g.value=_tf.group||"";
   const rf=document.getElementById("tf-refresh"); if(rf)rf.value=_tf.refresh_hours||6;
