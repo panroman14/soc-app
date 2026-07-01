@@ -783,17 +783,20 @@ def _targets_index(scope=None):
 
 def _route_for(attachment, scope=None):
     """Which backend ids a write with this attachment ({groups,targets,all} or a
-    legacy single `group`) should go to. Unresolved / 'all' / empty → whole fleet
-    (so a manual Ban IP with no target broadcasts)."""
+    legacy single `group`) should go to.
+
+    - no attachment / 'all' / no groups+targets → whole fleet (intended broadcast,
+      e.g. a manual Ban IP with no target).
+    - named groups/targets that RESOLVE → their owning backends.
+    - named groups/targets that resolve to NOTHING (typo / renamed / stale) → [] so
+      the write fails loudly (X3) rather than silently banning fleet-wide."""
     all_ids = [b[0] for b in _backends(scope)]
-    if not attachment:
-        return all_ids
-    if attachment.get("all"):
+    if not attachment or attachment.get("all"):
         return all_ids
     groups = attachment.get("groups") or ([attachment["group"]] if attachment.get("group") else [])
     targets = attachment.get("targets") or []
     if not groups and not targets:
-        return all_ids
+        return all_ids                       # nothing specified → broadcast intended
     tb, gb = _targets_index(scope)
     picked = set()
     for g in groups:
@@ -801,7 +804,12 @@ def _route_for(attachment, scope=None):
     for t in targets:
         picked.update(tb.get(t, []))
     picked &= set(all_ids)
-    return sorted(picked) if picked else all_ids
+    if picked:
+        return sorted(picked)
+    # named-but-unresolved: on a real fleet, fail-closed ([]) so a stale/typo'd group
+    # doesn't silently ban everywhere (X3). With ≤1 backend there's no fleet-wide
+    # surprise and the backend itself validates the group, so keep the old broadcast.
+    return all_ids if len(all_ids) <= 1 else []
 
 
 def _write_fanout(method, path, payload, backend_ids):

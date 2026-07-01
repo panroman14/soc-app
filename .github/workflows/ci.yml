@@ -38,6 +38,11 @@ jobs:
           print("yaml ok")
           PY
 
+      - name: Unit tests (fan-out / LogQL / egress)
+        run: |
+          python -m pip install --quiet -r backend/requirements.txt
+          python backend/tests/test_units.py
+
       - name: End-to-end smoke test (blocklist-api)
         run: ./tests/smoke.sh
 
