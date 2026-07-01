@@ -432,19 +432,19 @@ def api_trusted():
 
 
 # --- blocklist (proxy to in-cluster blocklist-api) ---
-def _blocklist_call(method, path, payload=None):
-    """Call blocklist-api with the bearer token. Returns (status, body)."""
+def _bcall_to(base_url, token, method, path, payload=None, timeout=15):
+    """Call ONE blocklist-api backend. Returns (status, body)."""
     import urllib.request as _ur
     import urllib.error as _ue
-    if not config.BLOCKLIST_API_URL:
+    if not base_url:
         return None, {"error": "blocklist-api не настроен (BLOCKLIST_API_URL пуст)"}
-    url = config.BLOCKLIST_API_URL.rstrip("/") + path
+    url = base_url.rstrip("/") + path
     data = json.dumps(payload).encode() if payload is not None else None
     req = _ur.Request(url, data=data, method=method,
                       headers={"Content-Type": "application/json",
-                               "Authorization": "Bearer " + config.BLOCKLIST_API_TOKEN})
+                               "Authorization": "Bearer " + (token or "")})
     try:
-        with _ur.urlopen(req, timeout=15) as r:
+        with _ur.urlopen(req, timeout=timeout) as r:
             return r.status, json.loads(r.read().decode())
     except _ue.HTTPError as e:
         try:
@@ -453,6 +453,66 @@ def _blocklist_call(method, path, payload=None):
             return e.code, {"error": "HTTP %s" % e.code}
     except Exception as e:
         return None, {"error": str(e)}
+
+
+def _blocklist_call(method, path, payload=None):
+    """Call the single active backend (config.*). Kept for writes / non-fan-out
+    paths; multi-backend reads use _fanout()."""
+    return _bcall_to(config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN, method, path, payload)
+
+
+def _backends(scope=None):
+    """The blocklist-api fleet as [(id, url, token)]. Sources: the registered
+    ingress_apis items, or — if none registered — the env/override default as a
+    single implicit backend id 'default'. `scope` (or the stored scope) narrows to
+    one backend; '__all__' (default) returns the whole fleet."""
+    d = _ing_apis()
+    items = d.get("items") or {}
+    lst = [(tid, (e.get("url") or "").rstrip("/"), e.get("token") or "")
+           for tid, e in items.items() if e.get("url")]
+    if not lst and config.BLOCKLIST_API_URL:
+        lst = [("default", config.BLOCKLIST_API_URL.rstrip("/"), config.BLOCKLIST_API_TOKEN)]
+    sc = scope or d.get("scope") or "__all__"
+    if sc and sc != "__all__":
+        return [b for b in lst if b[0] == sc] or lst
+    return lst
+
+
+def _fanout(method, path, payload=None, scope=None, timeout=15):
+    """Hit every in-scope backend concurrently. Returns [(id, status, body, err)]
+    preserving fleet order; err is a string on failure else None. Never raises —
+    a dead backend yields an err entry so callers can surface partial results."""
+    from concurrent.futures import ThreadPoolExecutor
+    bes = _backends(scope)
+    if not bes:
+        return []
+
+    def one(b):
+        bid, url, tok = b
+        st, body = _bcall_to(url, tok, method, path, payload, timeout=timeout)
+        ok = st is not None and st < 400
+        err = None if ok else ((body or {}).get("error") if isinstance(body, dict) else None) \
+            or ("HTTP %s" % st if st else "нет связи")
+        return (bid, st, body, err)
+
+    with ThreadPoolExecutor(max_workers=min(8, len(bes))) as ex:
+        return list(ex.map(one, bes))
+
+
+def _fanout_list(path, key, scope=None):
+    """GET `path` on each in-scope backend and concatenate body[key] lists, tagging
+    every dict row with its `backend` id. Returns (items, errors_by_backend)."""
+    items, errors = [], {}
+    for bid, _st, body, err in _fanout("GET", path, scope=scope):
+        if err:
+            errors[bid] = err
+            continue
+        for row in (body or {}).get(key, []) or []:
+            if isinstance(row, dict):
+                row = dict(row)
+                row.setdefault("backend", bid)
+            items.append(row)
+    return items, errors
 
 
 @app.get("/api/ban_targets")
@@ -576,10 +636,10 @@ async def api_environments_delete(request: Request):
 # ── named Cloudflare targets (registry) ─────────────────────────────────────────
 @app.get("/api/cf_targets")
 def api_cf_targets():
-    if not config.BLOCKLIST_API_URL:
+    if not _backends("__all__"):
         return JSONResponse({"enabled": False, "targets": []})
-    _, body = _blocklist_call("GET", "/cf_targets")
-    return JSONResponse({"enabled": True, **(body or {})})
+    targets, errors = _fanout_list("/cf_targets", "targets")
+    return JSONResponse({"enabled": True, "targets": targets, "backend_errors": errors})
 
 
 @app.post("/api/cf_targets")
@@ -661,12 +721,11 @@ def api_nodes():
     """Enrolled nginx-VM agents + liveness/host metrics (the «Ноды» tab).
     The dashboard host itself is always prepended as a `role:dashboard` node."""
     dash = _dashboard_node()
-    if not config.BLOCKLIST_API_URL:
+    if not _backends("__all__"):
         return JSONResponse({"enabled": True, "nodes": [dash]})
-    _, body = _blocklist_call("GET", "/nodes")
-    body = body or {}
-    nodes = [dash] + list(body.get("nodes", []))
-    return JSONResponse({"enabled": True, **body, "nodes": nodes})
+    nodes, errors = _fanout_list("/nodes", "nodes")
+    return JSONResponse({"enabled": True, "nodes": [dash] + nodes,
+                         "backend_errors": errors})
 
 
 @app.post("/api/nodes/delete")
@@ -701,16 +760,18 @@ def api_nodes_install():
 
 @app.get("/api/blocklist")
 def api_blocklist():
-    if not config.BLOCKLIST_API_URL:
+    if not _backends("__all__"):
         return JSONResponse({"enabled": False, "blocks": []})
-    _, body = _blocklist_call("GET", "/list")
-    return JSONResponse({"enabled": True, **(body or {})})
+    blocks, errors = _fanout_list("/list", "blocks")
+    return JSONResponse({"enabled": True, "blocks": blocks, "backend_errors": errors})
 
 
 @app.get("/api/blocklist_audit")
 def api_blocklist_audit(limit: int = 100):
-    _, body = _blocklist_call("GET", "/audit?limit=%d" % limit)
-    return JSONResponse(body or {"audit": []})
+    audit, errors = _fanout_list("/audit?limit=%d" % limit, "audit")
+    # newest first across the merged fleet (each row carries ts)
+    audit.sort(key=lambda r: r.get("ts", 0) if isinstance(r, dict) else 0, reverse=True)
+    return JSONResponse({"audit": audit, "backend_errors": errors})
 
 
 @app.get("/api/reviewed")
@@ -1544,7 +1605,30 @@ def api_ingress_apis_list():
     d = _ing_apis()
     items = [{"id": tid, "url": e.get("url", ""), "token_set": bool(e.get("token"))}
              for tid, e in d["items"].items()]
-    return {"items": sorted(items, key=lambda x: x["id"]), "active": d.get("active", "")}
+    return {"items": sorted(items, key=lambda x: x["id"]), "active": d.get("active", ""),
+            "scope": d.get("scope", "__all__")}
+
+
+@app.get("/api/backend_scope")
+def api_backend_scope_get():
+    """Current fan-out scope + the fleet the dashboard can read across."""
+    d = _ing_apis()
+    return {"scope": d.get("scope", "__all__"),
+            "backends": [{"id": bid, "url": url} for bid, url, _tok in _backends("__all__")]}
+
+
+@app.post("/api/backend_scope")
+async def api_backend_scope_set(request: Request):
+    """Set the read scope: '__all__' (whole fleet) or a specific backend id."""
+    body = await request.json()
+    sc = (body.get("scope") or "__all__").strip()
+    ids = {b[0] for b in _backends("__all__")}
+    if sc != "__all__" and sc not in ids:
+        return JSONResponse({"ok": False, "error": "неизвестный бэкенд"}, status_code=400)
+    d = _ing_apis()
+    d["scope"] = sc
+    _ing_apis_save(d)
+    return {"ok": True, "scope": sc}
 
 
 @app.post("/api/ingress_apis/test")

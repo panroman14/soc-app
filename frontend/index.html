@@ -230,6 +230,7 @@
       <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
     </div>
     <span id="updated" class="hidden"></span>
+    <select id="scope-sel" onchange="setBackendScope(this.value)" class="btn btn-ghost btn-xs hidden" title="backend scope" style="max-width:150px"></select>
     <button id="lang-btn" onclick="toggleLang()" class="iconbtn-x btn btn-ghost btn-xs" title="language">EN</button>
     <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
     <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
@@ -1136,6 +1137,31 @@ function applyI18n(){
 }
 function toggleLang(){ _lang=_lang==="en"?"ru":"en"; localStorage.setItem("soc_lang",_lang); location.reload(); }
 
+// ── backend fan-out scope (whole fleet vs one blocklist-api) ──────────────────
+let _scope="__all__", _backends=[];
+async function loadScope(){
+  try{
+    const d=await fetch("/api/backend_scope").then(r=>r.json());
+    _scope=d.scope||"__all__"; _backends=d.backends||[];
+    const sel=document.getElementById("scope-sel"); if(!sel)return;
+    // only worth showing when there's more than one backend to choose between
+    if(_backends.length<2){ sel.classList.add("hidden"); return; }
+    sel.classList.remove("hidden");
+    sel.innerHTML=`<option value="__all__">${_trText("все бэкенды")} (${_backends.length})</option>`
+      +_backends.map(b=>`<option value="${esc(b.id)}">${esc(b.id)}</option>`).join("");
+    sel.value=_scope;
+  }catch(e){}
+}
+async function setBackendScope(sc){
+  try{ await fetch("/api/backend_scope",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc})}); location.reload(); }
+  catch(e){ uiAlert("не удалось: "+(e.message||e)); }
+}
+// small per-row badge naming the backend a row came from (only when fleet>1)
+function _beBadge(b){
+  if(!b||_backends.length<2)return "";
+  return `<span class="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-400 mono ml-1" title="backend">${esc(b)}</span>`;
+}
+
 // ── live RU→EN translation (en default; ru shows source). Covers dynamically
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
@@ -1409,6 +1435,7 @@ const RU2EN={
   "# promtail → Loki дашборда":"# promtail → dashboard's Loki","# blocklist-api/values.yaml — таргет ingress = ns + CM контроллера":"# blocklist-api/values.yaml — ingress target = ns + controller CM",
   "# (собирает поды":"# (collects pods","; в Loki прилетят как job=ingress-nginx)":"; they arrive in Loki as job=ingress-nginx)",
   "режется сам путь, на всех привязанных таргетах.":"the path itself is cut, on all attached targets.","режется сам путь, на всех доменах окружения.":"the path itself is cut, on all domains of the environment.",
+  "все бэкенды":"all backends",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
@@ -2117,7 +2144,7 @@ function _renderBlPage(){
                   :`<span class="text-[11px] shrink-0" style="color:var(--faint)">∞ ${_trText('навсегда')}</span>`;
    return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
       <span class="mono text-slate-200 w-40 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc((e.cidr||'').split('/')[0])}')">${esc(e.cidr)}</span>
-      ${cfBadge((e.cidr||'').split('/')[0])}${abChip}
+      ${cfBadge((e.cidr||'').split('/')[0])}${abChip}${_beBadge(e.backend)}
       <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="${esc(e.reason||"")}">${esc(e.reason||"")}</span>
       <span class="text-[11px] text-slate-500 shrink-0">${esc(e.added_by||"")} · ${dt(e.ts)}</span>
       ${ttl}
@@ -3303,6 +3330,7 @@ function _nodeCard(n){
           <span class="text-sm font-medium text-slate-200 truncate">${esc(n.id)}</span>
           ${isDash?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300">${_trText("дашборд")}</span>`:""}
           ${n.group?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">🎯 ${esc(n.group)}</span>`:""}
+          ${isDash?"":_beBadge(n.backend)}
           ${nginxBad?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-300">nginx -t ✗</span>`:""}
         </div>
         <div class="flex items-center gap-2 shrink-0">
@@ -4639,7 +4667,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();initCards();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();loadBranding();
+applyI18n();initCards();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();loadBranding();loadScope();
 setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
 setInterval(()=>{if(isActive())renderBlocklist();},60000);
 setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
