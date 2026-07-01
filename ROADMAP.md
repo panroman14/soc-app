@@ -21,10 +21,13 @@
 
 ### Матрица приоритетов
 
+> **Прогресс:** ✅ **P0 закрыт** (S1 `c64c4c3`, S2 `2806d92`, S3 `a23acd7`, S6 `e59ff04`).
+> ✅ **P1 закрыт** (B1/B2 `0675b2e`, B3/B4/B5 `a10d7c1`, B6 `34db720`, S7 `84bd51c`). Дальше — P2.
+
 | P | Тема | Пункты |
 |---|------|--------|
-| **P0** (сразу) | Auth fail-closed (оба сервиса) · SSRF egress-allowlist · enroll-секрет не отдавать · CF-токены не в ConfigMap | S1, S2, S3, S6 |
-| **P1** (скоро) | Fan-out корректность (ложные «0 забанено», частичный сбой=успех, why/log/executor/feeds однобэкендные) · JS-инъекция в onclick · supply-chain образа | B1–B6, S4, S7 |
+| **P0** ✅ DONE | Auth fail-closed (оба сервиса) · SSRF egress-allowlist · enroll-секрет не отдавать · CF-токены не в ConfigMap | S1, S2, S3, S6 |
+| **P1** ✅ DONE | Fan-out корректность (ложные «0 забанено», частичный сбой=успех, why/log/executor/feeds однобэкендные) · JS-инъекция в onclick · supply-chain образа | B1–B6, S7 |
 | **P2** | Logs Explorer v2 (Datadog-style) · CORS/CSRF/заголовки · инъекция в nginx snippet · pod hardening | LOGS, S5, S8, S9 |
 | **P3** | Оптимизации (кэш targets-index, пагинация, таймауты), тесты fan-out, UX-мелочи | OPT, полировка |
 
