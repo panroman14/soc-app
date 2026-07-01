@@ -113,63 +113,33 @@ def test_route_for_fail_closed_on_fleet():
 
 
 # ── _write_fanout (aggregation, dedup, max, partial, type-mix) ────────────────
-def test_backends_registry_only_ignores_env():
-    # the registry is the single source of truth — env BLOCKLIST_API_URL must NOT be
-    # injected into the fleet at call time (it is seeded once at startup instead).
-    os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
+def test_home_backend_always_in_fleet_but_hidden():
+    # the implicit HOME backend (env BLOCKLIST_API_URL) is ALWAYS a fleet member for
+    # reads — where the local nginx nodes / CF live — under the reserved id __home__,
+    # alongside any registered ingress clusters.
+    os.environ["BLOCKLIST_API_URL"] = "http://blocklist:8080"
     os.environ["BLOCKLIST_API_TOKEN"] = "tok"
-    m.config.BLOCKLIST_API_URL = "http://c2:8080"
-    m._ing_apis = lambda: {"items": {"c2": {"url": "http://c2:8080", "token": "t"}}, "scope": "__all__"}
-    urls = {b[1] for b in m._backends("__all__")}
-    assert urls == {"http://c2:8080"}                  # only the registry, no env ghost
+    m.config.BLOCKLIST_API_URL = "http://k8s:8080"     # a registry backend is "active"
+    m._ing_apis = lambda: {"items": {"k8s": {"url": "http://k8s:8080", "token": "t"}}, "scope": "__all__"}
+    fleet = {b[0]: b[1] for b in m._backends("__all__")}
+    assert fleet[m.HOME_BID] == "http://blocklist:8080"   # home present, reserved id
+    assert fleet["k8s"] == "http://k8s:8080"              # registry cluster present too
 
 
-def _seed_env(store):
-    m.db.setting_get = lambda k, d=None: store.get(k, d)
-    m.db.setting_set = lambda k, v: store.__setitem__(k, v)
-    m._ing_apis = lambda: store.get("ingress_apis", {"items": {}, "active": ""})
-    m._ing_apis_save = lambda v: store.__setitem__("ingress_apis", v)
+def test_home_backend_deduped_when_user_added_it():
+    # if the user also registered the home URL explicitly, don't double it — the
+    # registry row wins, no __home__ ghost with the same URL.
+    os.environ["BLOCKLIST_API_URL"] = "http://blocklist:8080"
+    m._ing_apis = lambda: {"items": {"local": {"url": "http://blocklist:8080", "token": "t"}}, "scope": "__all__"}
+    fleet = m._backends("__all__")
+    assert m.HOME_BID not in {b[0] for b in fleet}
+    assert sum(1 for b in fleet if b[1] == "http://blocklist:8080") == 1
 
 
-def test_seed_registry_from_env():
-    # first boot with an empty registry + env URL → migrate it in as 'default' once.
-    store = {}
-    _seed_env(store)
-    os.environ["BLOCKLIST_API_URL"] = "http://seed:8080"
-    os.environ["BLOCKLIST_API_TOKEN"] = "stok"
-    m._seed_registry_from_env()
-    d = store["ingress_apis"]
-    assert d["items"]["default"] == {"url": "http://seed:8080", "token": "stok"}
-    assert d["active"] == "default" and d["seeded"] is True
-    # idempotent: a second call (e.g. after the user deleted 'default') re-seeds nothing
-    store["ingress_apis"] = {"items": {}, "active": "", "seeded": True}
-    m._seed_registry_from_env()
-    assert store["ingress_apis"]["items"] == {}        # stays deleted, not resurrected
-
-
-def test_seed_adds_original_alongside_existing_backend():
-    # THE upgrade case: a new ingress was already registered, but the original
-    # cluster lived only in env. Seeding must add it ALONGSIDE, not skip.
-    store = {"ingress_apis": {"items": {"newing": {"url": "http://newing:8080", "token": "n"}},
-                              "active": "newing"}}
-    _seed_env(store)
-    os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
-    os.environ["BLOCKLIST_API_TOKEN"] = "otok"
-    m._seed_registry_from_env()
-    it = store["ingress_apis"]["items"]
-    assert it["default"] == {"url": "http://orig:8080", "token": "otok"}  # original preserved
-    assert it["newing"]["url"] == "http://newing:8080"                    # new one kept
-    assert store["ingress_apis"]["active"] == "newing"                    # active untouched
-
-
-def test_seed_dedupes_when_env_already_registered():
-    # env URL already in the registry (under any id) → don't add a duplicate 'default'.
-    store = {"ingress_apis": {"items": {"c": {"url": "http://orig:8080", "token": "t"}}, "active": "c"}}
-    _seed_env(store)
-    os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
-    m._seed_registry_from_env()
-    assert "default" not in store["ingress_apis"]["items"]
-    assert store["ingress_apis"]["seeded"] is True
+def test_home_id_never_produced_by_slug():
+    # a hostname can never slug into the reserved id, so registry logic can't collide
+    assert m._ing_slug("__home__.example.com") != m.HOME_BID
+    assert m._ing_slug("k8s-ingress.example.com") != m.HOME_BID
 
 
 def _bcall_seq(pairs):

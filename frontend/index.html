@@ -1153,7 +1153,7 @@ async function loadScope(){
     if(_backends.length<2){ sel.classList.add("hidden"); return; }
     sel.classList.remove("hidden");
     sel.innerHTML=`<option value="__all__">${_trText("все бэкенды")} (${_backends.length})</option>`
-      +_backends.map(b=>`<option value="${esc(b.id)}">${esc(b.id)}</option>`).join("");
+      +_backends.map(b=>`<option value="${esc(b.id)}">${esc(_beName(b.id))}</option>`).join("");
     sel.value=_scope;
     loadBackendHealth();
   }catch(e){}
@@ -1167,8 +1167,11 @@ async function setBackendScope(sc){
 function _beBadge(b){
   if(!b||_backends.length<2)return "";
   const arr=(Array.isArray(b)?b:[b]).filter(Boolean);
-  return arr.map(x=>`<span class="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-400 mono ml-1" title="backend">${esc(x)}</span>`).join("");
+  return arr.map(x=>`<span class="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-400 mono ml-1" title="backend">${esc(_beName(x))}</span>`).join("");
 }
+// human-readable backend name. The implicit HOME backend (id "__home__") owns the
+// local nginx nodes / CF — show it as "локальный", not the reserved id / raw URL.
+function _beName(id){ return id==="__home__"?_trText("локальный"):id; }
 // fleet health indicator + "data may be incomplete" warning when a backend is down
 async function loadBackendHealth(){
   const el=document.getElementById("be-health"); if(!el)return;
@@ -1178,11 +1181,11 @@ async function loadBackendHealth(){
     const bes=d.backends||[]; const bad=bes.filter(b=>!b.reachable||b.token_ok===false);
     if(!bad.length){
       el.className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-400";
-      el.textContent="● "+bes.length; el.title=bes.map(b=>`${b.id}: ${b.latency_ms}ms`).join("\n");
+      el.textContent="● "+bes.length; el.title=bes.map(b=>`${_beName(b.id)}: ${b.latency_ms}ms`).join("\n");
     }else{
       el.className="text-[11px] px-1.5 py-0.5 rounded bg-rose-900/50 text-rose-300";
       el.textContent="⚠ "+bad.length+"/"+bes.length;
-      el.title=bad.map(b=>`${b.id}: ${b.error||(b.token_ok===false?"токен не принят":"недоступен")}`).join("\n")
+      el.title=bad.map(b=>`${_beName(b.id)}: ${b.error||(b.token_ok===false?"токен не принят":"недоступен")}`).join("\n")
         +"\n— данные ниже могут быть неполными";
     }
     el.classList.remove("hidden");
@@ -1462,7 +1465,7 @@ const RU2EN={
   "# promtail → Loki дашборда":"# promtail → dashboard's Loki","# blocklist-api/values.yaml — таргет ingress = ns + CM контроллера":"# blocklist-api/values.yaml — ingress target = ns + controller CM",
   "# (собирает поды":"# (collects pods","; в Loki прилетят как job=ingress-nginx)":"; they arrive in Loki as job=ingress-nginx)",
   "режется сам путь, на всех привязанных таргетах.":"the path itself is cut, on all attached targets.","режется сам путь, на всех доменах окружения.":"the path itself is cut, on all domains of the environment.",
-  "все бэкенды":"all backends","данные ниже могут быть неполными":"data below may be incomplete","недоступен":"unreachable",
+  "все бэкенды":"all backends","данные ниже могут быть неполными":"data below may be incomplete","недоступен":"unreachable","локальный":"local",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }

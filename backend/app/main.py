@@ -229,7 +229,6 @@ def insight_loop():
 
 @app.on_event("startup")
 def _startup():
-    _seed_registry_from_env()
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=analytics_loop, daemon=True).start()
     threading.Thread(target=insight_loop, daemon=True).start()
@@ -742,17 +741,32 @@ def _blocklist_call(method, path, payload=None):
     return _bcall_to(config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN, method, path, payload)
 
 
+# Reserved id for the dashboard's own HOME backend — the deploy-time
+# BLOCKLIST_API_URL running next to the dashboard (STORE=file), which owns the local
+# nginx-file nodes + Cloudflare targets. It is ALWAYS a fleet member for reads but is
+# NEVER a registry row (not listed, not deletable in the GUI). The double-underscore
+# id can't be produced by _ing_slug from a hostname, so registry logic (list / save /
+# activate / delete) never mistakes a user-added ingress cluster for the home backend
+# or vice-versa. Do NOT put this id into ingress_apis.items.
+HOME_BID = "__home__"
+
+
 def _backends(scope=None):
-    """The blocklist-api fleet as [(id, url, token)]. The registry (ingress_apis
-    items) is the SINGLE source of truth — the deploy-time env BLOCKLIST_API_URL is
-    NOT consulted here; it is seeded into the registry once at startup (see
-    _seed_registry_from_env) so it becomes an ordinary 'default' entry the GUI can
-    rename/delete. `scope` (or the stored scope) narrows to one backend; '__all__'
-    (default) returns the whole fleet."""
+    """The blocklist-api fleet as [(id, url, token)]. Members:
+      • the registered ingress_apis items (the extra clusters you add in the GUI), and
+      • the implicit HOME backend (env BLOCKLIST_API_URL, id HOME_BID) where the local
+        nginx nodes / CF live — always present for reads, deduped by URL, never a
+        registry row.
+    `scope` (or the stored scope) narrows to one backend; '__all__' (default) returns
+    the whole fleet."""
     d = _ing_apis()
     items = d.get("items") or {}
     lst = [(tid, (e.get("url") or "").rstrip("/"), e.get("token") or "")
-           for tid, e in items.items() if e.get("url")]
+           for tid, e in items.items() if e.get("url") and tid != HOME_BID]
+    urls = {u for _, u, _ in lst}
+    home_url = (os.environ.get("BLOCKLIST_API_URL", "") or "").rstrip("/")
+    if home_url and home_url not in urls:   # skip if the user also added it explicitly
+        lst = [(HOME_BID, home_url, os.environ.get("BLOCKLIST_API_TOKEN", "") or "")] + lst
     sc = scope or d.get("scope") or "__all__"
     if sc and sc != "__all__":
         return [b for b in lst if b[0] == sc] or lst
@@ -2098,33 +2112,6 @@ def _ing_slug(s):
     return _re.sub(r"[^a-z0-9_.:-]+", "-", (s or "").strip().lower()).strip("-")[:48]
 
 
-def _seed_registry_from_env():
-    """Deploy-time / upgrade migration: ONCE (guarded by the `seeded` flag), if a
-    BLOCKLIST_API_URL was provided via env (compose/helm), migrate it into the
-    registry as a normal 'default' entry — UNLESS a backend with that URL is already
-    registered. This runs even when the registry is non-empty: on upgrade from the
-    old env-in-fleet model, the original cluster lived only in env (never in the
-    registry) while a newly-connected ingress already occupied items — seeding must
-    add the original alongside it, not skip because items exist. This is the ONLY
-    place env feeds the fleet; afterwards the registry is authoritative and the GUI
-    can rename/delete the entry without it being resurrected from env (the flag makes
-    a GUI-deleted 'default' stay deleted across restarts)."""
-    d = _ing_apis()
-    if d.get("seeded"):
-        return
-    url = (os.environ.get("BLOCKLIST_API_URL", "") or "").strip().rstrip("/")
-    d["seeded"] = True
-    items = d.setdefault("items", {})
-    already = any((e.get("url") or "").rstrip("/") == url for e in items.values())
-    if url and not already:
-        tok = os.environ.get("BLOCKLIST_API_TOKEN", "") or ""
-        items["default"] = {"url": url, "token": tok}
-        if not d.get("active"):
-            d["active"] = "default"
-        log.info("[registry] seeded 'default' backend from env BLOCKLIST_API_URL=%s" % url)
-    _ing_apis_save(d)
-
-
 def _set_active_backend(url, token=None):
     """Point the dashboard at this blocklist-api, live, no restart (mirrors into
     the same override _apply_blocklist_override reads on the next process start)."""
@@ -2142,8 +2129,10 @@ def _set_active_backend(url, token=None):
 def api_ingress_apis_list():
     """Registered blocklist-api backends. Token is write-only (token_set bool only)."""
     d = _ing_apis()
+    # HOME_BID is never stored in items, but filter defensively so the implicit home
+    # backend can never surface as a deletable registry row.
     items = [{"id": tid, "url": e.get("url", ""), "token_set": bool(e.get("token"))}
-             for tid, e in d["items"].items()]
+             for tid, e in d["items"].items() if tid != HOME_BID]
     return {"items": sorted(items, key=lambda x: x["id"]), "active": d.get("active", ""),
             "scope": d.get("scope", "__all__")}
 
@@ -2255,6 +2244,8 @@ async def api_ingress_apis_save(request: Request):
     tid = _ing_slug(body.get("id") or url.split("://", 1)[-1])
     if not tid:
         return JSONResponse({"ok": False, "error": "не удалось определить id из URL"}, status_code=400)
+    if tid == HOME_BID:   # reserved for the implicit home backend — can't be a registry row
+        return JSONResponse({"ok": False, "error": "это зарезервированный id"}, status_code=400)
     d = _ing_apis()
     cur = dict(d["items"].get(tid) or {})
     cur["url"] = url
@@ -2292,7 +2283,9 @@ async def api_ingress_apis_delete(request: Request):
         if d.get("active") == tid:
             # the dashboard was pointed at this backend (via _set_active_backend);
             # deleting it must not strand the dashboard on a now-dead URL. Move to
-            # another registered backend if one remains, else clear the pointer.
+            # another registered backend if one remains, else fall back to the HOME
+            # backend (env BLOCKLIST_API_URL) — never strand config on a dead/empty URL,
+            # the home backend always exists and owns the local nginx nodes / CF.
             nxt = next(iter(d["items"].items()), None)
             if nxt:
                 d["active"] = nxt[0]
@@ -2300,8 +2293,8 @@ async def api_ingress_apis_delete(request: Request):
             else:
                 d["active"] = ""
                 db.setting_set("blocklist_api_override", {})
-                config.BLOCKLIST_API_URL = ""
-                config.BLOCKLIST_API_TOKEN = ""
+                config.BLOCKLIST_API_URL = os.environ.get("BLOCKLIST_API_URL", "")
+                config.BLOCKLIST_API_TOKEN = os.environ.get("BLOCKLIST_API_TOKEN", "")
             reset = True
         _ing_apis_save(d)
     return {"ok": True, "deleted": existed, "reset_to_default": reset}
