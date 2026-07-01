@@ -1079,7 +1079,7 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","db.preset":"+ preset…","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.","нет ingress-таргетов":"no ingress targets",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","db.preset":"+ preset…","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"Registered ingress-nginx (k8s) backends — each is its own entity you can name, edit and remove. Its in-cluster ingress-cm targets are listed under it.","нет ingress-таргетов":"no ingress targets",
   "ing.setup":"Setup cluster","ing.setup.h":"Connect a cluster","ing.setup.sub":"Three steps: deploy blocklist-api into the cluster, wire logs into Loki, and make sure the values target points at your ingress-nginx.",
   "ing.s1":"Install blocklist-api (Helm)","ing.s1.sub":"The chart carries the RBAC to patch the ingress-nginx ConfigMap — a web form can't, Helm can. Run it with cluster-admin.","ing.s1.after":"After install, point the dashboard at the API: BLOCKLIST_API_URL=https://<hostname>",
   "ing.connect":"After install — verify the dashboard can reach this API:","ing.connect.hint":"Host and token are taken from the fields above. Save registers this connection in the list below — it becomes active immediately.",
@@ -1107,7 +1107,7 @@ const I18N={en:{
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","db.preset":"+ пресет…","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"ingress-nginx (k8s) таргеты — задаются в BAN_TARGETS blocklist-api (внутри кластера). Здесь только просмотр.",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","db.preset":"+ пресет…","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"Зарегистрированные ingress-nginx (k8s) бэкенды — каждый отдельная сущность: имя, правка, удаление. Его ingress-cm таргеты показаны под ним.",
   "ing.setup":"Подключить кластер","ing.setup.h":"Подключить кластер","ing.setup.sub":"Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.",
   "ing.s1":"Установить blocklist-api (Helm)","ing.s1.sub":"Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.","ing.s1.after":"После установки укажи дашборду адрес API: BLOCKLIST_API_URL=https://<хостнейм>",
   "ing.connect":"После установки — проверь, что дашборд достучится до этого API:","ing.connect.hint":"Хост и токен берутся из полей выше. Save регистрирует это подключение в списке ниже — активным становится сразу.",
@@ -1170,8 +1170,9 @@ function _beBadge(b){
   return arr.map(x=>`<span class="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-400 mono ml-1" title="backend">${esc(_beName(x))}</span>`).join("");
 }
 // human-readable backend name. The implicit HOME backend (id "__home__") owns the
-// local nginx nodes / CF — show it as "локальный", not the reserved id / raw URL.
-function _beName(id){ return id==="__home__"?_trText("локальный"):id; }
+// local nginx nodes / CF — show it as the "worker" (lives in the System section),
+// not the reserved id / raw URL. Registry backends prefer their friendly name.
+function _beName(id){ if(id==="__home__")return _trText("worker"); const b=(_backends||[]).find(x=>x.id===id); return (b&&b.name)||id; }
 // fleet health indicator + "data may be incomplete" warning when a backend is down
 async function loadBackendHealth(){
   const el=document.getElementById("be-health"); if(!el)return;
@@ -1466,6 +1467,8 @@ const RU2EN={
   "# (собирает поды":"# (collects pods","; в Loki прилетят как job=ingress-nginx)":"; they arrive in Loki as job=ingress-nginx)",
   "режется сам путь, на всех привязанных таргетах.":"the path itself is cut, on all attached targets.","режется сам путь, на всех доменах окружения.":"the path itself is cut, on all domains of the environment.",
   "все бэкенды":"all backends","данные ниже могут быть неполными":"data below may be incomplete","недоступен":"unreachable","локальный":"local",
+  "править":"edit","имя":"name","не удалось: ":"failed: ","оставь пустым — не менять":"leave blank to keep","локальный blocklist-api":"local blocklist-api",
+  "нет подключённых ingress — нажми «Setup cluster», чтобы добавить":"no ingress connected — click «Setup cluster» to add one",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
@@ -2968,17 +2971,72 @@ function setTsub(name){
   if(name==="nginx")loadNodes(); if(name==="cf")loadCfTargets(); if(name==="ingress")loadIngress();
   if(name==="groups")loadGroups(); if(name==="system")loadSystem();
 }
-// ingress-cm таргеты — read-only список (создаются в BAN_TARGETS внутри кластера)
+// Ingress = each registered ingress backend is its own manageable entity (name /
+// edit / delete / activate). Under each we nest its ingress-cm targets (tagged by
+// backend on /api/ban_targets). The implicit HOME backend is NOT shown here — it
+// lives in the System section as the "worker".
+let _ingEdit=null;   // id of the entity currently being edited inline
+const _ING_SVG='<svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#326CE5" d="M12 2 3.6 6v8L12 22l8.4-8V6L12 2z"/><circle cx="12" cy="12" r="3.1" fill="#fff"/></svg>';
 async function loadIngress(){
   const el=document.getElementById("ingress-list");if(!el)return;
-  try{ const d=await fetch("/api/ban_targets").then(r=>r.json());
-    if(d.enabled===false){ el.innerHTML='<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>'; return; }
-    const ing=(d.targets||[]).filter(t=>t.type==="ingress-cm");
-    el.innerHTML=ing.length?ing.map(t=>`<div class="bg-slate-950/50 border border-slate-800 rounded-lg p-3 flex items-center gap-2">
-      <svg viewBox="0 0 24 24" width="15" height="15" class="shrink-0"><path fill="#326CE5" d="M12 2 3.6 6v8L12 22l8.4-8V6L12 2z"/><circle cx="12" cy="12" r="3.1" fill="#fff"/></svg>
-      <span class="mono text-sm text-slate-200">${esc(t.id)}</span>${t.env?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">env: ${esc(t.env)}</span>`:""}</div>`).join("")
-      :`<div class="text-slate-500 text-xs">${_trText("нет ingress-таргетов")}</div>`;
+  try{
+    const [reg,tg]=await Promise.all([
+      fetch("/api/ingress_apis").then(r=>r.json()),
+      fetch("/api/ban_targets").then(r=>r.json()).catch(()=>({targets:[]}))
+    ]);
+    const items=(reg.items||[]);
+    const targets=(tg.targets||[]);
+    if(!items.length){
+      el.innerHTML=`<div class="text-slate-500 text-xs">${_trText("нет подключённых ingress — нажми «Setup cluster», чтобы добавить")}</div>`;
+      return;
+    }
+    el.innerHTML=items.map(b=>{
+      const active=b.id===reg.active;
+      const nm=b.name||b.id;
+      const cm=targets.filter(t=>t.type==="ingress-cm" && (t.backend===b.id));
+      const editing=_ingEdit===b.id;
+      const head=`<div class="flex items-center gap-2 flex-wrap">
+        ${_ING_SVG}
+        <span class="text-sm font-semibold text-slate-100 truncate">${esc(nm)}</span>
+        ${active?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-300 shrink-0">${_trText('активно')}</span>`:""}
+        ${b.token_set?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">🔑</span>`:""}
+        <span class="mono text-[10px] text-slate-500 truncate">${esc(b.url)}</span>
+        <span class="ml-auto flex items-center gap-2 shrink-0">
+          ${active?"":`<button onclick="ingBackendActivate('${escJs(b.id)}')" class="text-[11px] text-indigo-300 hover:text-indigo-200">${_trText('сделать активным')}</button>`}
+          <button onclick="ingEntityEdit('${escJs(b.id)}')" class="text-[11px] text-slate-300 hover:text-slate-100">${_trText('править')}</button>
+          <button onclick="ingBackendDelete('${escJs(b.id)}')" class="text-[11px] text-rose-400/80 hover:text-rose-300">${_trText('удалить')}</button>
+        </span>
+      </div>`;
+      const editForm=editing?`<div class="mt-2 grid sm:grid-cols-3 gap-2 text-[11px]" style="color:var(--muted)">
+        <label class="block"><span>${_trText("имя")}</span><input id="inge-name-${escAttr(b.id)}" value="${escAttr(b.name||"")}" placeholder="${escAttr(b.id)}" class="input mono mt-1"></label>
+        <label class="block"><span>URL</span><input id="inge-url-${escAttr(b.id)}" value="${escAttr(b.url||"")}" class="input mono mt-1"></label>
+        <label class="block"><span>Token</span><input id="inge-token-${escAttr(b.id)}" placeholder="${_trText("оставь пустым — не менять")}" class="input mono mt-1"></label>
+        <div class="sm:col-span-3 flex gap-2">
+          <button onclick="ingEntitySave('${escJs(b.id)}')" class="text-[11px] px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white">${_trText('сохранить')}</button>
+          <button onclick="ingEntityEdit(null)" class="text-[11px] px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200">${_trText('отмена')}</button>
+        </div>
+      </div>`:"";
+      const cmRows=cm.length?`<div class="mt-2 pl-6 space-y-1">${cm.map(t=>`<div class="flex items-center gap-2 text-[12px]">
+        <span class="w-1.5 h-1.5 rounded-full bg-sky-400/70 shrink-0"></span>
+        <span class="mono text-slate-300">${esc(t.id)}</span>
+        ${t.env?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">env: ${esc(t.env)}</span>`:""}</div>`).join("")}</div>`
+        :`<div class="mt-2 pl-6 text-[11px] text-slate-600">${_trText("нет ingress-таргетов")}</div>`;
+      return `<div class="bg-slate-950/50 border ${active?'border-emerald-600/30':'border-slate-800'} rounded-lg p-3">${head}${editForm}${cmRows}</div>`;
+    }).join("");
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+}
+function ingEntityEdit(id){ _ingEdit=id; loadIngress(); }
+async function ingEntitySave(id){
+  const name=(document.getElementById("inge-name-"+id)||{}).value||"";
+  const url=((document.getElementById("inge-url-"+id)||{}).value||"").trim();
+  const token=((document.getElementById("inge-token-"+id)||{}).value||"").trim();
+  const body={id,url,name};        // keep the same id so the URL edit updates in place
+  if(token)body.token=token;       // blank = keep existing secret
+  try{
+    const r=await fetch("/api/ingress_apis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(x=>x.json());
+    if(!r.ok){ uiAlert(_trText("не удалось: ")+(r.error||"")); return; }
+    _ingEdit=null; loadIngress();
+  }catch(e){ uiAlert("не удалось: "+(e.message||e)); }
 }
 // ── Ingress: «Подключить кластер» (генератор helm-команды + promtail + values) ──
 // "Setup cluster" always starts a FRESH new-cluster form — it registers a NEW
@@ -3391,7 +3449,19 @@ function renderSystem(d){
   const el=document.getElementById("system-list");if(!el)return;
   if(d.enabled===false){ el.innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>`; return; }
   const sys=(d.nodes||[]).filter(n=>n.role==="dashboard");
-  el.innerHTML=sys.length?sys.map(_nodeCard).join(""):`<div class="text-slate-500 text-xs">${_trText("нет данных о хосте")}</div>`;
+  const cards=sys.length?sys.map(_nodeCard):[];
+  // the local blocklist-api ("worker") — the home backend that drives nginx nodes + CF.
+  const home=(_backends||[]).find(b=>b.id==="__home__");
+  if(home){
+    cards.push(`<div class="bg-slate-950/50 border border-indigo-700/40 rounded-lg p-3 flex items-center gap-2 flex-wrap">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+      <span class="text-sm font-medium text-slate-200">${_trText("worker")}</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300">${_trText("локальный blocklist-api")}</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">nginx · CF</span>
+      <span class="mono text-[10px] text-slate-500 truncate ml-auto">${esc(home.url||"")}</span>
+    </div>`);
+  }
+  el.innerHTML=cards.length?cards.join(""):`<div class="text-slate-500 text-xs">${_trText("нет данных о хосте")}</div>`;
 }
 function _nodeCard(n){
     const m=n.metrics||{}, online=n.online, isDash=n.role==="dashboard";

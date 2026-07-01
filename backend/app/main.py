@@ -2131,7 +2131,8 @@ def api_ingress_apis_list():
     d = _ing_apis()
     # HOME_BID is never stored in items, but filter defensively so the implicit home
     # backend can never surface as a deletable registry row.
-    items = [{"id": tid, "url": e.get("url", ""), "token_set": bool(e.get("token"))}
+    items = [{"id": tid, "url": e.get("url", ""), "name": e.get("name", ""),
+              "token_set": bool(e.get("token"))}
              for tid, e in d["items"].items() if tid != HOME_BID]
     return {"items": sorted(items, key=lambda x: x["id"]), "active": d.get("active", ""),
             "scope": d.get("scope", "__all__")}
@@ -2141,8 +2142,10 @@ def api_ingress_apis_list():
 def api_backend_scope_get():
     """Current fan-out scope + the fleet the dashboard can read across."""
     d = _ing_apis()
+    names = {tid: (e.get("name") or "") for tid, e in (d.get("items") or {}).items()}
     return {"scope": d.get("scope", "__all__"),
-            "backends": [{"id": bid, "url": url} for bid, url, _tok in _backends("__all__")]}
+            "backends": [{"id": bid, "url": url, "name": names.get(bid, "")}
+                         for bid, url, _tok in _backends("__all__")]}
 
 
 @app.post("/api/backend_scope")
@@ -2251,9 +2254,12 @@ async def api_ingress_apis_save(request: Request):
     cur["url"] = url
     if body.get("token"):   # blank = keep existing secret on update
         cur["token"] = body["token"]
+    if body.get("name") is not None:   # friendly display name (blank clears)
+        cur["name"] = (body.get("name") or "").strip()[:60]
     d["items"][tid] = cur
     _ing_apis_save(d)
-    return {"ok": True, "id": tid, "url": cur["url"], "token_set": bool(cur.get("token"))}
+    return {"ok": True, "id": tid, "url": cur["url"], "name": cur.get("name", ""),
+            "token_set": bool(cur.get("token"))}
 
 
 @app.post("/api/ingress_apis/activate")
