@@ -163,8 +163,12 @@
   .lg-tree-val{display:flex;align-items:center;gap:6px;padding:2px 4px 2px 18px;border-radius:5px;cursor:pointer;color:#94a3b8;font-size:11px}
   .lg-tree-val:hover{background:#1e293b}
   .lg-tree-val input{accent-color:var(--accent)}
-  .lg-hist{height:42px;display:flex;align-items:flex-end;gap:1px;background:#0a0e14;border:1px solid var(--border);border-radius:8px;padding:3px}
-  .lg-hist .bar{flex:1;background:#3b82f6aa;border-radius:1px 1px 0 0;min-height:1px;transition:height .15s}
+  .lg-hist{height:56px;display:flex;align-items:flex-end;gap:1px;background:#0a0e14;border:1px solid var(--border);border-radius:8px;padding:3px}
+  .lg-hist .bar{flex:1;background:transparent;min-height:1px;cursor:pointer;overflow:hidden;border-radius:1px 1px 0 0}
+  .lg-hist .bar:hover{outline:1px solid #ffffff22}
+  .lg-facet-v{display:flex;gap:6px;align-items:center;padding:2px 4px;border-radius:4px;cursor:pointer;color:#94a3b8}
+  .lg-facet-v:hover{background:#1e293b;color:#cbd5e1}
+  .lg-facet-v .truncate{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lg-table{background:#0a0e14;border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:64vh;font-size:11.5px}
   .lg-row{display:grid;grid-template-columns:62px 120px 46px 36px 1fr 48px 28px;gap:8px;padding:3px 8px;border-bottom:1px solid #131a26;cursor:pointer;align-items:center}
   .lg-row:hover{background:#111826}
@@ -921,69 +925,58 @@
   </div><!-- /view-settings -->
 
   <div id="view-logs" class="hidden">
+    <!-- omnibar + toolbar -->
+    <div class="card p-3 mb-2">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <input id="lg-omni" class="input mono flex-1" style="min-width:240px" spellcheck="false"
+               placeholder="status:5xx  method:POST  -country:US  path:/wp-*  rt:>1  free text …  (Enter)"
+               onkeydown="if(event.key==='Enter')lgApplyOmni()">
+        <select id="lg-mins" class="input" style="width:auto" onchange="lgRun()">
+          <option value="5">5m</option><option value="15" selected>15m</option><option value="60">1h</option>
+          <option value="360">6h</option><option value="1440">24h</option><option value="10080">7d</option>
+        </select>
+        <button onclick="lgApplyOmni()" class="btn btn-primary btn-xs">▸ <span data-i18n="logs.filter">run</span></button>
+        <button id="lg-tail-btn" onclick="lgTailToggle()" class="btn btn-ghost btn-xs">▶ <span data-i18n="logs.follow">tail</span></button>
+        <button onclick="lgRawToggle()" id="lg-rawmode-btn" class="btn btn-ghost btn-xs" title="structured / raw">⇄ <span data-i18n="logs.parsed">table</span></button>
+        <button onclick="lgViewSave()" class="btn btn-ghost btn-xs" title="save view">💾</button>
+        <button onclick="lgExport()" class="btn btn-ghost btn-xs">⬇ <span data-i18n="logs.export">export</span></button>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap mt-2">
+        <span class="text-[10px] uppercase tracking-wide text-slate-500 mr-1">quick</span>
+        <button onclick="lgQuick('status:>=400')" class="btn btn-ghost btn-xs">errors</button>
+        <button onclick="lgQuick('status:4xx')" class="btn btn-ghost btn-xs">4xx</button>
+        <button onclick="lgQuick('status:5xx')" class="btn btn-ghost btn-xs">5xx</button>
+        <button onclick="lgQuick('attacks')" class="btn btn-ghost btn-xs">⚠ attacks</button>
+        <button onclick="lgQuick('rt:>1')" class="btn btn-ghost btn-xs">slow</button>
+        <span class="lg-sep"></span>
+        <button onclick="lgSourcesOpen()" id="lg-src-btn" class="btn btn-ghost btn-xs" title="log sources">🗄 sources</button>
+        <div id="lg-src-status" class="text-[11px]"></div>
+      </div>
+      <div id="lg-src-panel" class="hidden mt-2 pt-2 border-t" style="border-color:var(--border)"></div>
+    </div>
+
     <div class="lg-explorer">
-      <!-- LEFT: source picker -->
+      <!-- LEFT: facets -->
       <aside class="card p-3 lg-aside">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-[12px] font-semibold text-slate-200" data-i18n="logs.sources">Sources</h3>
-          <button onclick="lgLoadTree()" class="text-[11px] text-slate-500 hover:text-slate-300" title="refresh">↻</button>
+          <h3 class="text-[12px] font-semibold text-slate-200">Facets</h3>
+          <button onclick="lgLoadFacets()" class="text-[11px] text-slate-500 hover:text-slate-300" title="refresh">↻</button>
         </div>
-        <div id="lg-tree" class="space-y-1 text-[12px]"><div class="text-slate-600 text-xs">загрузка…</div></div>
+        <div id="lg-facets" class="space-y-2 text-[12px]"><div class="text-slate-600 text-xs">…</div></div>
         <div class="mt-3 pt-2 border-t" style="border-color:var(--border)">
           <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1" data-i18n="logs.views">Saved views</div>
           <div id="lg-views" class="space-y-1"></div>
         </div>
       </aside>
 
-      <!-- RIGHT: filters + histogram + rows -->
+      <!-- RIGHT: histogram + stream -->
       <section class="card p-3 lg-main">
-        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
-          <div><h2 class="text-sm font-medium" data-i18n="logs.title">Live logs</h2></div>
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <select id="lg-mins" class="input" style="width:auto" onchange="lgRun()">
-              <option value="15">15m</option><option value="60">1h</option><option value="360">6h</option><option value="1440">24h</option>
-            </select>
-            <button id="lg-tail-btn" onclick="lgTailToggle()" class="btn btn-ghost btn-xs">▶ <span data-i18n="logs.follow">tail</span></button>
-            <button onclick="lgRun()" class="btn btn-xs" data-i18n="refresh">refresh</button>
-            <button onclick="lgRawToggle()" id="lg-rawmode-btn" class="btn btn-ghost btn-xs" title="raw / parsed">⇄ <span data-i18n="logs.parsed">parsed</span></button>
-            <button onclick="lgExport()" class="btn btn-ghost btn-xs">⬇ <span data-i18n="logs.export">export</span></button>
-          </div>
-        </div>
-
-        <!-- filter bar -->
-        <div class="lg-filterbar mb-2">
-          <div id="lg-chips" class="flex items-center gap-1.5 flex-wrap"></div>
-          <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
-            <div class="lg-addchip">
-              <select id="lg-cf-field" class="input" style="width:auto">
-                <option value="status">status</option><option value="method">method</option>
-                <option value="path">path</option><option value="ip">IP</option>
-                <option value="ua">UA</option><option value="country">country</option>
-                <option value="rt">latency≥(s)</option><option value="host">host</option>
-              </select>
-              <select id="lg-cf-op" class="input" style="width:auto">
-                <option value="eq">=</option><option value="neq">≠</option><option value="re">~</option>
-              </select>
-              <input id="lg-cf-val" class="input mono" style="width:150px" placeholder="value" onkeydown="if(event.key==='Enter')lgAddChip()">
-              <button onclick="lgAddChip()" class="btn btn-ghost btn-xs">+ <span data-i18n="logs.filter">filter</span></button>
-            </div>
-            <span class="lg-sep"></span>
-            <input id="lg-search" class="input mono" style="width:200px" placeholder="🔎 поиск в строках…" oninput="lgSearchDeb()">
-            <label class="btn btn-ghost btn-xs" style="gap:4px" title="regex"><input type="checkbox" id="lg-regex" onchange="lgRun()">.*</label>
-            <label class="btn btn-ghost btn-xs" style="gap:4px"><input type="checkbox" id="lg-attacks" onchange="lgRun()"><span data-i18n="logs.attacks">attacks</span></label>
-            <button onclick="lgViewSave()" class="btn btn-ghost btn-xs" title="save current view">💾</button>
-            <button onclick="lgRawEditToggle()" class="btn btn-ghost btn-xs" title="raw LogQL">{ }</button>
-          </div>
-          <input id="lg-raw" class="input mono hidden mt-1.5" style="width:100%" placeholder='raw LogQL — {app="ingress-nginx"} | json …' oninput="lgRun()">
-        </div>
-
-        <!-- histogram -->
-        <div id="lg-hist" class="lg-hist mb-2" title="drag to zoom (coming)"></div>
+        <div id="lg-hist" class="lg-hist mb-1" title="click a bar to zoom"></div>
         <div id="lg-stats" class="text-[11px] text-slate-500 mb-1"></div>
-
-        <!-- rows -->
-        <div id="lg-table" class="lg-table">
-          <div class="text-slate-600 text-xs p-2">загрузка…</div>
+        <input id="lg-raw" class="input mono hidden mb-2" style="width:100%" placeholder='raw LogQL (power user)' onkeydown="if(event.key==='Enter')lgRun()">
+        <div id="lg-table" class="lg-table"><div class="text-slate-600 text-xs p-2">…</div></div>
+        <div class="text-center mt-2">
+          <button id="lg-more" onclick="lgLoadOlder()" class="btn btn-ghost btn-xs hidden">↓ load older</button>
         </div>
       </section>
     </div>
@@ -1534,100 +1527,81 @@ function renderTray(){
   }).join("");
 }
 
-// ── Live Logs explorer ────────────────────────────────────────────────────────
-const _lg={sources:{},chips:[],search:"",regex:false,attacks:false,raw:"",minutes:15,
-           rawMode:false,tail:false,treeLoaded:false};
-let _lgTimer=null,_lgDeb=null,_lgTreeOpen={};
-function loadLogs(){ if(!_lg.treeLoaded)lgLoadTree(); lgLoadViews(); lgRun(); }
-function _lgBody(extra){ return Object.assign({sources:_lg.sources,chips:_lg.chips,search:_lg.search,
-  regex:_lg.regex,attacks_only:_lg.attacks,raw:_lg.raw,minutes:+document.getElementById("lg-mins").value||15,
-  env:_env||""}, extra||{}); }
-// ── source tree (labels → values) ──
-async function lgLoadTree(){
-  const el=document.getElementById("lg-tree");if(!el)return;
-  try{
-    const d=await fetch(_withEnv("/api/log_labels")).then(r=>r.json());
-    if(d.enabled===false){ el.innerHTML=`<div class="text-slate-600 text-xs">Loki не настроен.</div>`; return; }
-    _lg.treeLoaded=true;
-    const labels=(d.labels||[]).filter(Boolean);
-    if(!labels.length){ el.innerHTML=`<div class="text-slate-600 text-xs">${_trText("нет лейблов")}</div>`; return; }
-    el.innerHTML=labels.map(l=>`<div>
-      <div class="lg-tree-lbl" onclick="lgTreeToggle('${escJs(l)}')"><span id="lgchev-${esc(l)}">▸</span><span class="font-medium">${esc(l)}</span>
-        <span id="lgcount-${esc(l)}" class="ml-auto text-[10px] text-slate-600"></span></div>
-      <div id="lgvals-${esc(l)}" class="hidden"></div></div>`).join("");
-  }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+// ── Live Logs explorer v2 (Datadog-style: omnibar + facets + stacked histogram) ──
+const _lg={omni:"",raw:"",rawMode:false,tail:false,sources:[],rows:[],cursor:null,endNs:null,winMin:null};
+let _lgTimer=null,_lgViews=[],_lgSrcAll=[];
+const _LG_CLS=["2xx","3xx","4xx","5xx"];
+const _LG_COL={"2xx":"#34d399","3xx":"#60a5fa","4xx":"#fbbf24","5xx":"#f87171"};
+function loadLogs(){ lgLoadSources(); lgLoadViews(); lgRun(); }
+function _lgMins(){ return _lg.winMin||(+document.getElementById("lg-mins").value||15); }
+function _lgBody(extra){
+  const b={omnibar:_lg.omni, raw:_lg.raw, minutes:_lgMins()};
+  if(_lg.sources.length)b.log_sources=_lg.sources;
+  if(_lg.endNs)b.end_ns=_lg.endNs;
+  return Object.assign(b, extra||{});
 }
-async function lgTreeToggle(label){
-  const box=document.getElementById("lgvals-"+CSS.escape(label)),chev=document.getElementById("lgchev-"+CSS.escape(label));
-  const open=!box.classList.contains("hidden");
-  if(open){ box.classList.add("hidden"); chev.textContent="▸"; return; }
-  chev.textContent="▾"; box.classList.remove("hidden");
-  if(!box.dataset.loaded){
-    box.innerHTML=`<div class="lg-tree-val text-slate-600">…</div>`;
-    try{
-      const d=await fetch(_withEnv("/api/log_label_values?name="+encodeURIComponent(label))).then(r=>r.json());
-      const vals=(d.values||[]).slice(0,200);
-      const sel=new Set(_lg.sources[label]||[]);
-      box.innerHTML=vals.map(v=>`<label class="lg-tree-val"><input type="checkbox" ${sel.has(v)?"checked":""} onchange="lgSourceToggle('${escJs(label)}','${escJs(v).replace(/'/g,"\\'")}',this.checked)"><span class="mono truncate">${esc(v)}</span></label>`).join("")||`<div class="lg-tree-val text-slate-600">${_trText("пусто")}</div>`;
-      box.dataset.loaded="1";
-    }catch(e){ box.innerHTML=`<div class="lg-tree-val text-red-400">ошибка</div>`; }
-  }
+function lgReadState(){ _lg.omni=(document.getElementById("lg-omni").value||"").trim(); _lg.raw=(document.getElementById("lg-raw").value||"").trim(); }
+function lgApplyOmni(){ lgReadState(); _lg.endNs=null; _lg.winMin=null; lgRun(); }
+function lgQuick(tok){
+  const el=document.getElementById("lg-omni"); const parts=(el.value||"").trim().split(/\s+/).filter(Boolean);
+  el.value=(parts.includes(tok)?parts.filter(t=>t!==tok):parts.concat(tok)).join(" ");
+  lgApplyOmni();
 }
-function lgSourceToggle(label,val,on){
-  const arr=_lg.sources[label]||[];
-  _lg.sources[label]=on?[...new Set([...arr,val])]:arr.filter(x=>x!==val);
-  if(!_lg.sources[label].length)delete _lg.sources[label];
-  const c=document.getElementById("lgcount-"+CSS.escape(label)); if(c)c.textContent=(_lg.sources[label]||[]).length||"";
-  lgRun();
-}
-// ── filter chips ──
-const _LG_OPLBL={eq:"=",neq:"≠",re:"~",class:"",gte:"≥"};
-function lgRenderChips(){
-  const el=document.getElementById("lg-chips");if(!el)return;
-  el.innerHTML=_lg.chips.map((c,i)=>`<span class="lg-chip"><b>${esc(c.field)}</b>${_LG_OPLBL[c.op]||c.op} ${esc(String(c.value))}<button onclick="lgRemoveChip(${i})">✕</button></span>`).join("");
-}
-function lgAddChip(){
-  const f=document.getElementById("lg-cf-field").value,op=document.getElementById("lg-cf-op").value,v=document.getElementById("lg-cf-val").value.trim();
-  if(!v)return;
-  let chip={field:f,op:op,value:v};
-  if(f==="status"&&/^[2345]xx?$/i.test(v))chip={field:"status",op:"class",value:v[0]};
-  if(f==="rt")chip={field:"rt",op:"gte",value:v};
-  _lg.chips.push(chip); document.getElementById("lg-cf-val").value=""; lgRenderChips(); lgRun();
-}
-function lgRemoveChip(i){ _lg.chips.splice(i,1); lgRenderChips(); lgRun(); }
-function lgSearchDeb(){ clearTimeout(_lgDeb); _lgDeb=setTimeout(()=>{ _lg.search=document.getElementById("lg-search").value; lgRun(); },400); }
-function lgRawEditToggle(){ const el=document.getElementById("lg-raw"); el.classList.toggle("hidden"); if(!el.classList.contains("hidden"))el.focus(); }
-function lgRawToggle(){ _lg.rawMode=!_lg.rawMode; const b=document.getElementById("lg-rawmode-btn"); b.querySelector("span").textContent=_lg.rawMode?_trText("raw"):_trText("parsed"); lgRenderRows(); }
 // ── query + render ──
-function lgReadInputs(){ _lg.regex=document.getElementById("lg-regex").checked; _lg.attacks=document.getElementById("lg-attacks").checked; _lg.raw=document.getElementById("lg-raw").value.trim(); }
-let _lgRows=[];
-async function lgRun(){
-  lgReadInputs();
-  const tbl=document.getElementById("lg-table");if(!tbl)return;
+async function lgRun(){ _lg.endNs=null; _lg.winMin=null; return _lgFetch(); }
+async function _lgFetch(){
+  lgReadState();
+  const tbl=document.getElementById("lg-table"); if(!tbl)return;
   try{
     const [q,h]=await Promise.all([
-      fetch("/api/logs/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_lgBody({limit:400}))}).then(r=>r.json()),
-      fetch("/api/logs/histogram",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_lgBody())}).then(r=>r.json())
+      _post("/api/logs/query", _lgBody({limit:200})),
+      _post("/api/logs/histogram", _lgBody({by_class:true}))
     ]);
-    if(q.enabled===false){ tbl.innerHTML=`<div class="text-slate-600 text-xs p-2">Loki не настроен.</div>`; return; }
-    if(q.error){ tbl.innerHTML=`<div class="text-amber-400 text-xs p-2">⚠ ${esc(q.error)}</div>`; }
-    _lgRows=q.rows||[]; lgRenderRows(); lgRenderHist(h.points||[]);
-    const n=_lgRows.length, e4=_lgRows.filter(r=>(r.status||"")[0]==="4").length, e5=_lgRows.filter(r=>(r.status||"")[0]==="5").length;
-    document.getElementById("lg-stats").textContent=`${n} ${_trText("строк")} · 4xx ${n?Math.round(e4/n*100):0}% · 5xx ${n?Math.round(e5/n*100):0}%`;
-  }catch(e){ tbl.innerHTML=`<div class="text-red-400 text-xs p-2">error: ${esc(e.message)}</div>`; }
+    if(q.enabled===false){ tbl.innerHTML='<div class="text-slate-600 text-xs p-2">Loki '+_trText("не настроен")+' (LOKI_URL).</div>'; document.getElementById("lg-hist").innerHTML=""; return; }
+    _lg.rows=q.rows||[]; _lg.cursor=q.next_cursor||null;
+    lgRenderRows(); lgRenderHist(h); lgRenderSrcStatus(q.sources||[]); lgStats(q);
+    document.getElementById("lg-more").classList.toggle("hidden", !_lg.cursor);
+    lgLoadFacets();
+  }catch(e){ tbl.innerHTML='<div class="text-red-400 text-xs p-2">error: '+esc(e.message)+'</div>'; }
   clearTimeout(_lgTimer);
-  if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgRun,5000);
+  if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgTail,5000);
 }
+async function lgTail(){
+  const maxTs=_lg.rows.length?_lg.rows[0].ts:0;
+  try{
+    const q=await _post("/api/logs/query", _lgBody({limit:100}));
+    const fresh=(q.rows||[]).filter(r=>r.ts>maxTs);
+    if(fresh.length){ _lg.rows=fresh.concat(_lg.rows).slice(0,1000); lgRenderRows(); lgStats(q); }
+  }catch(e){}
+  clearTimeout(_lgTimer);
+  if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgTail,5000);
+}
+async function lgLoadOlder(){
+  if(!_lg.cursor)return;
+  try{
+    const q=await _post("/api/logs/query", _lgBody({limit:200, end_ns:_lg.cursor}));
+    _lg.rows=_lg.rows.concat(q.rows||[]); _lg.cursor=q.next_cursor||null;
+    lgRenderRows(); document.getElementById("lg-more").classList.toggle("hidden", !_lg.cursor);
+  }catch(e){}
+}
+function lgZoom(t,step){ _lg.endNs=(t+(step||60))*1e9; _lg.winMin=Math.max(1,Math.round((step||60)*30/60)); _lgFetch(); }
+function lgTailToggle(){ _lg.tail=!_lg.tail; const b=document.getElementById("lg-tail-btn"); b.classList.toggle("btn-primary",_lg.tail); b.querySelector("span").textContent=_lg.tail?_trText("следим…"):_trText("tail"); if(_lg.tail)lgTail(); else clearTimeout(_lgTimer); }
+function lgRawToggle(){ _lg.rawMode=!_lg.rawMode; document.getElementById("lg-rawmode-btn").querySelector("span").textContent=_lg.rawMode?_trText("raw"):_trText("таблица"); lgRenderRows(); }
 function _lgStatusColor(s){const n=+s||0;return n>=500?"#f87171":n>=400?"#fbbf24":n>=300?"#60a5fa":n>=200?"#34d399":"#9aa4b6";}
+function lgStats(q){
+  const n=_lg.rows.length, e4=_lg.rows.filter(r=>(r.status||"")[0]==="4").length, e5=_lg.rows.filter(r=>(r.status||"")[0]==="5").length;
+  document.getElementById("lg-stats").innerHTML=`${n} ${_trText("строк")} · 4xx ${n?Math.round(e4/n*100):0}% · 5xx ${n?Math.round(e5/n*100):0}%`+(q&&q.error?` · <span class="text-amber-400">⚠ ${esc(q.error)}</span>`:"")+(_lg.endNs?' · <button onclick="lgRun()" class="text-indigo-300 hover:text-indigo-200">reset zoom ✕</button>':"");
+}
 function lgRenderRows(){
-  const tbl=document.getElementById("lg-table");if(!tbl)return;
-  if(!_lgRows.length){ tbl.innerHTML=`<div class="text-slate-600 text-xs p-2">${_trText("нет строк под фильтр")}</div>`; return; }
-  if(_lg.rawMode){ tbl.innerHTML=_lgRows.map(r=>`<div class="lg-raw-line"><span style="color:#5b6577">${esc(r.time)}</span> <span style="color:${_lgStatusColor(r.status)}">${esc(r.line)}</span></div>`).join(""); return; }
+  const tbl=document.getElementById("lg-table"); if(!tbl)return;
+  if(!_lg.rows.length){ tbl.innerHTML=`<div class="text-slate-600 text-xs p-2">${_trText("нет строк под фильтр")}</div>`; return; }
+  if(_lg.rawMode){ tbl.innerHTML=_lg.rows.map(r=>`<div class="lg-raw-line"><span style="color:#5b6577">${esc(r.time)}</span> <span style="color:${_lgStatusColor(r.status)}">${esc(r.line)}</span></div>`).join(""); return; }
+  const multi=_lgSrcAll.length>1;
   const head=`<div class="lg-row head"><span>time</span><span>IP</span><span>method</span><span>st</span><span>path</span><span>ms</span><span></span></div>`;
-  tbl.innerHTML=head+_lgRows.map((r,i)=>{
+  tbl.innerHTML=head+_lg.rows.map((r,i)=>{
     const ms=r.rt?Math.round(parseFloat(r.rt)*1000):"";
     return `<div class="lg-row" onclick="lgRowExpand(${i},this)">
-      <span class="mono" style="color:#5b6577">${esc(r.time)}</span>
+      <span class="mono" style="color:#5b6577">${esc(r.time)}${multi&&r.source?` · <span style="color:#475569">${esc(r.source)}</span>`:""}</span>
       <span class="mono">${r.country?flag(r.country)+" ":""}${esc(r.ip||"")}</span>
       <span class="mono text-slate-400">${esc(r.method||"")}</span>
       <span class="mono" style="color:${_lgStatusColor(r.status)}">${esc(r.status||"")}</span>
@@ -1638,16 +1612,17 @@ function lgRenderRows(){
   }).join("");
 }
 function lgRowExpand(i,el){
-  const r=_lgRows[i]; if(!r)return;
-  const nx=el.nextElementSibling;
-  if(nx&&nx.classList.contains("lg-detail")){ nx.remove(); return; }
-  const ip=esc(r.ip||"");
+  const r=_lg.rows[i]; if(!r)return;
+  const nx=el.nextElementSibling; if(nx&&nx.classList.contains("lg-detail")){ nx.remove(); return; }
+  const ip=r.ip||"";
+  const chip=(f,v)=>v?`<button onclick="event.stopPropagation();lgFacetPick('${escJs(f)}','${escJs(String(v))}')" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700" title="filter">${esc(f)}:${esc(String(v))}</button>`:"";
   const d=document.createElement("div"); d.className="lg-detail";
   d.innerHTML=`<div class="flex gap-1.5 mb-2 flex-wrap">
       ${ip?`<button onclick="event.stopPropagation();lgBanIP('${escJs(ip)}')" class="text-[11px] px-2 py-0.5 rounded bg-rose-600/30 text-rose-200 hover:bg-rose-600/50">⛔ ${_trText("забанить IP")}</button>`:""}
-      ${r.path?`<button onclick="event.stopPropagation();lgPathTo403('${escJs(r.path).replace(/'/g,"\\'")}')" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50">🛂 ${_trText("путь в 403")}</button>`:""}
-      ${ip?`<button onclick="event.stopPropagation();quickSearch('${ip}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">👤 ${_trText("профиль")}</button>`:""}
+      ${r.path?`<button onclick="event.stopPropagation();lgPathTo403('${escJs(r.path)}')" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50">🛂 ${_trText("путь в 403")}</button>`:""}
+      ${ip?`<button onclick="event.stopPropagation();quickSearch('${escJs(ip)}')" class="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">👤 ${_trText("профиль")}</button>`:""}
     </div>
+    <div class="flex gap-1 mb-2 flex-wrap">${chip("status",r.status)}${chip("method",r.method)}${chip("ip",r.ip)}${chip("country",r.country)}${chip("host",r.host)}${r.source?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">src:${esc(r.source)}</span>`:""}</div>
     <pre class="mono text-[11px] text-slate-400 whitespace-pre-wrap break-all">${esc((()=>{try{return JSON.stringify(JSON.parse(r.line),null,2);}catch(e){return r.line;}})())}</pre>`;
   el.after(d);
 }
@@ -1657,40 +1632,89 @@ async function lgBanIP(ip){
   uiAlert(r&&r.ok?("✓ "+_trText("забанен")+": "+ip):("не удалось: "+((r&&r.error)||"?")));
 }
 function lgPathTo403(path){ showView('p403'); uiAlert(_trText("открой 403 и добавь путь")+": "+path); }
-function lgRenderHist(points){
-  const el=document.getElementById("lg-hist");if(!el)return;
-  if(!points.length){ el.innerHTML=""; return; }
-  const max=Math.max(...points.map(p=>p.v),1);
-  el.innerHTML=points.map(p=>`<div class="bar" style="height:${Math.max(1,Math.round(p.v/max*100))}%" title="${new Date(p.t*1000).toLocaleTimeString()}: ${Math.round(p.v)}"></div>`).join("");
+function lgFacetPick(field,value){ lgQuick(field+":"+(/\s/.test(value)?('"'+value+'"'):value)); }
+// ── stacked histogram (by status class), click a bar to zoom ──
+function lgRenderHist(h){
+  const el=document.getElementById("lg-hist"); if(!el)return;
+  const series=(h&&h.series)||{}; const step=(h&&h.step)||60;
+  const buckets={}; Object.keys(series).forEach(c=>(series[c]||[]).forEach(p=>{ (buckets[p.t]=buckets[p.t]||{})[c]=p.v; }));
+  const ts=Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  if(!ts.length){ el.innerHTML=""; return; }
+  let max=1; ts.forEach(t=>{ let s=0; _LG_CLS.forEach(c=>s+=buckets[t][c]||0); if(s>max)max=s; });
+  el.innerHTML=ts.map(t=>{
+    const segs=_LG_CLS.map(c=>{ const v=buckets[t][c]||0; return v?`<div style="height:${(v/max*100).toFixed(2)}%;background:${_LG_COL[c]}"></div>`:""; }).join("");
+    const tot=_LG_CLS.reduce((a,c)=>a+(buckets[t][c]||0),0);
+    return `<div class="bar" style="display:flex;flex-direction:column-reverse;align-items:stretch" onclick="lgZoom(${t},${step})" title="${new Date(t*1000).toLocaleString()} · ${Math.round(tot)}">${segs}</div>`;
+  }).join("");
 }
-function lgTailToggle(){ _lg.tail=!_lg.tail; const b=document.getElementById("lg-tail-btn"); b.classList.toggle("btn-primary",_lg.tail); b.querySelector("span").textContent=_lg.tail?_trText("следим…"):_trText("tail"); if(_lg.tail)lgRun(); else clearTimeout(_lgTimer); }
+// ── facets panel (top values per field, click to filter) ──
+async function lgLoadFacets(){
+  const el=document.getElementById("lg-facets"); if(!el)return;
+  try{
+    const d=await _post("/api/logs/facets", _lgBody({}));
+    if(d.enabled===false){ el.innerHTML='<div class="text-slate-600 text-xs">Loki '+_trText("не настроен")+'.</div>'; return; }
+    const f=d.facets||{}; const order=["status","method","country","path","ip","host","ua"];
+    const parts=order.filter(k=>f[k]&&f[k].length).map(k=>{
+      const rows=f[k].map(it=>`<div class="lg-facet-v" onclick="lgFacetPick('${escJs(k)}','${escJs(String(it.value))}')" title="filter"><span class="mono truncate">${k==='country'?flag(String(it.value))+' ':''}${esc(String(it.value))}</span><span class="text-slate-500 ml-auto">${_dbNum(it.count)}</span></div>`).join("");
+      return `<div><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">${esc(k)}</div>${rows}</div>`;
+    });
+    el.innerHTML=parts.join("")||`<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
+  }catch(e){ el.innerHTML='<div class="text-red-400 text-xs">'+_trText("ошибка")+'</div>'; }
+}
+// ── log sources (Loki backends) ──
+async function lgLoadSources(){
+  try{ const d=await fetch("/api/log_sources").then(r=>r.json()); _lgSrcAll=d.items||[]; }catch(e){ _lgSrcAll=[]; }
+  lgUpdateSrcBtn();
+}
+function lgUpdateSrcBtn(){ const b=document.getElementById("lg-src-btn"); if(!b)return; const n=_lg.sources.length; b.innerHTML="🗄 sources"+(n?` (${n})`:(_lgSrcAll.length?` (${_lgSrcAll.length})`:"")); }
+function lgSourcesOpen(){
+  const p=document.getElementById("lg-src-panel"); const wasHidden=p.classList.contains("hidden");
+  p.classList.toggle("hidden"); if(!wasHidden)return;
+  const chks=_lgSrcAll.map(s=>`<span class="inline-flex items-center gap-1"><label class="btn btn-ghost btn-xs" style="gap:4px"><input type="checkbox" ${_lg.sources.includes(s.id)?"checked":""} onchange="lgSrcToggle('${escJs(s.id)}',this.checked)">${esc(s.label||s.id)}</label><button onclick="lgSrcDel('${escJs(s.id)}')" class="text-[11px] text-rose-400/70 hover:text-rose-300">✕</button></span>`).join("");
+  p.innerHTML=`<div class="flex items-center gap-1.5 flex-wrap">${chks||`<span class="text-slate-600 text-xs">${_trText("нет данных")} — добавь Loki URL (иначе используется LOKI_URL по умолчанию)</span>`}
+    <span class="lg-sep"></span>
+    <input id="lg-src-url" class="input mono" style="width:210px" placeholder="https://loki.cluster:3100">
+    <input id="lg-src-label" class="input" style="width:120px" placeholder="label (env/cluster)">
+    <button onclick="lgSrcAdd()" class="btn btn-ghost btn-xs">+ add</button></div>`;
+}
+function lgSrcToggle(id,on){ _lg.sources=on?[...new Set([..._lg.sources,id])]:_lg.sources.filter(x=>x!==id); lgUpdateSrcBtn(); lgRun(); }
+async function lgSrcAdd(){
+  const url=(document.getElementById("lg-src-url").value||"").trim(), label=(document.getElementById("lg-src-label").value||"").trim();
+  if(!url)return; const r=await _post("/api/log_sources",{url,label});
+  if(r.ok){ await lgLoadSources(); document.getElementById("lg-src-panel").classList.add("hidden"); lgSourcesOpen(); }
+  else uiAlert("не удалось: "+(r.error||"?"));
+}
+async function lgSrcDel(id){ if(!await uiConfirm(_trText("Удалить это подключение?")))return; await _post("/api/log_sources/delete",{id}); _lg.sources=_lg.sources.filter(x=>x!==id); await lgLoadSources(); document.getElementById("lg-src-panel").classList.add("hidden"); lgSourcesOpen(); lgRun(); }
+function lgRenderSrcStatus(sources){
+  const el=document.getElementById("lg-src-status"); if(!el)return;
+  const bad=(sources||[]).filter(s=>!s.ok);
+  if(_lgSrcAll.length<2 && !bad.length){ el.textContent=""; return; }
+  if(bad.length){ el.className="text-[11px] text-rose-300"; el.textContent="⚠ "+bad.length+"/"+sources.length+" down"; el.title=bad.map(s=>s.id+": "+(s.error||"?")).join("\n"); }
+  else { el.className="text-[11px] text-emerald-400/70"; el.textContent="● "+sources.length; el.title=sources.map(s=>s.id+": "+s.count).join("\n"); }
+}
+// ── export + saved views ──
 function lgExport(){
-  const data=_lg.rawMode?_lgRows.map(r=>r.line).join("\n"):JSON.stringify(_lgRows,null,2);
+  const data=_lg.rawMode?_lg.rows.map(r=>r.line).join("\n"):JSON.stringify(_lg.rows,null,2);
   const blob=new Blob([data],{type:"text/plain"}); const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download="soc-logs."+(_lg.rawMode?"log":"json"); a.click();
 }
-// ── saved views ──
 async function lgLoadViews(){
   const el=document.getElementById("lg-views");if(!el)return;
   try{ const d=await fetch("/api/log_views").then(r=>r.json()); _lgViews=d.views||[];
     el.innerHTML=_lgViews.length?_lgViews.map((v,i)=>`<div class="flex items-center gap-1"><button onclick="lgViewApply(${i})" class="flex-1 text-left text-[11px] text-indigo-300 hover:text-indigo-200 truncate">${esc(v.name)}</button><button onclick="lgViewDel(${i})" class="text-[11px] text-rose-400/70 hover:text-rose-300">✕</button></div>`).join(""):`<div class="text-slate-600 text-[11px]">—</div>`;
   }catch(e){}
 }
-let _lgViews=[];
 async function lgViewSave(){
-  const name=await uiPrompt(_trText("Название вида:")); if(!name)return;
-  lgReadInputs();
-  _lgViews.push({name:name.trim(),sources:_lg.sources,chips:_lg.chips,search:_lg.search,regex:_lg.regex,attacks:_lg.attacks,raw:_lg.raw,minutes:+document.getElementById("lg-mins").value||15});
+  lgReadState(); const name=await uiPrompt(_trText("Название вида:")); if(!name)return;
+  _lgViews.push({name:name.trim(),omni:_lg.omni,sources:_lg.sources.slice(),minutes:+document.getElementById("lg-mins").value||15,raw:_lg.raw});
   await fetch("/api/log_views",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({views:_lgViews})}); lgLoadViews();
 }
 function lgViewApply(i){
   const v=_lgViews[i]; if(!v)return;
-  _lg.sources=JSON.parse(JSON.stringify(v.sources||{})); _lg.chips=JSON.parse(JSON.stringify(v.chips||[]));
-  _lg.search=v.search||""; _lg.regex=!!v.regex; _lg.attacks=!!v.attacks; _lg.raw=v.raw||"";
-  document.getElementById("lg-search").value=_lg.search; document.getElementById("lg-regex").checked=_lg.regex;
-  document.getElementById("lg-attacks").checked=_lg.attacks; document.getElementById("lg-raw").value=_lg.raw;
+  _lg.omni=v.omni||""; _lg.sources=(v.sources||[]).slice(); _lg.raw=v.raw||"";
+  document.getElementById("lg-omni").value=_lg.omni; document.getElementById("lg-raw").value=_lg.raw;
   if(v.minutes)document.getElementById("lg-mins").value=v.minutes;
-  lgRenderChips(); _lg.treeLoaded=false; lgLoadTree(); lgRun();
+  lgUpdateSrcBtn(); lgRun();
 }
 async function lgViewDel(i){ _lgViews.splice(i,1); await fetch("/api/log_views",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({views:_lgViews})}); lgLoadViews(); }
 
