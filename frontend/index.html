@@ -729,7 +729,7 @@
         </div>
         <span class="flex-1"></span>
         <span id="grp-msg" class="text-[11px]"></span>
-        <button onclick="grpSave()" class="btn btn-primary btn-xs shrink-0">💾 <span data-i18n="save">Save</span></button>
+        <button id="grp-save-btn" onclick="grpSave()" class="btn btn-primary btn-xs shrink-0 hidden">💾 <span data-i18n="save">Save</span></button>
       </div>
     </section>
 
@@ -4450,6 +4450,7 @@ function fillBanGroupSelect(groups,dflt){
 }
 // ── Таргет-группы (редактор BAN_GROUPS) ───────────────────────────────────────
 let _grpDraft=null;   // editable copy of explicit BAN_GROUPS {name:[target id,...]}
+let _grpDirty=false;  // unsaved changes — Save is hidden until something changes
 async function loadGroups(){
   const el=document.getElementById("grp-list");if(!el)return;
   try{
@@ -4459,6 +4460,7 @@ async function loadGroups(){
     if(bt&&bt.enabled!==false)_banGroupInfo={groups:bt.groups||{},targets:bt.targets||[],default_group:bt.default_group||"",cf_edge_paths:!!bt.cf_edge_paths};
     const raw=st&&st.settings&&st.settings.BAN_GROUPS&&st.settings.BAN_GROUPS.value;
     _grpDraft=(raw&&typeof raw==="object")?JSON.parse(JSON.stringify(raw)):{};
+    _grpDirty=false;
     renderGroups();
   }catch(e){ el.innerHTML=`<span class="text-rose-300">ошибка: ${esc(e.message||e)}</span>`; }
 }
@@ -4479,6 +4481,7 @@ function _levelBadges(memberIds){
 }
 function renderGroups(){
   const el=document.getElementById("grp-list");if(!el)return;
+  const sv=document.getElementById("grp-save-btn"); if(sv)sv.classList.toggle("hidden",!_grpDirty);
   if(!_grpDraft){el.textContent="—";return;}
   const names=Object.keys(_grpDraft);
   const allTargets=(_banGroupInfo.targets||[]).filter(t=>t.type!=="noop");
@@ -4522,11 +4525,11 @@ function grpNew(){
   const inp=document.getElementById("grp-new"),name=(inp.value||"").trim();
   if(!name)return; if(!_grpDraft)_grpDraft={};
   if(_grpDraft[name]){uiAlert("такая группа уже есть");return;}
-  _grpDraft[name]=[]; inp.value=""; renderGroups(); grpAddToggle();
+  _grpDraft[name]=[]; _grpDirty=true; inp.value=""; renderGroups(); grpAddToggle();
 }
-function grpDelete(g){ if(_grpDraft){delete _grpDraft[g];renderGroups();} }
-function grpAddTarget(g,tid){ if(!_grpDraft[g])_grpDraft[g]=[]; if(!_grpDraft[g].includes(tid))_grpDraft[g].push(tid); renderGroups(); }
-function grpRemoveTarget(g,tid){ if(_grpDraft[g])_grpDraft[g]=_grpDraft[g].filter(x=>x!==tid); renderGroups(); }
+function grpDelete(g){ if(_grpDraft){delete _grpDraft[g];_grpDirty=true;renderGroups();} }
+function grpAddTarget(g,tid){ if(!_grpDraft[g])_grpDraft[g]=[]; if(!_grpDraft[g].includes(tid)){_grpDraft[g].push(tid);_grpDirty=true;} renderGroups(); }
+function grpRemoveTarget(g,tid){ if(_grpDraft[g])_grpDraft[g]=_grpDraft[g].filter(x=>x!==tid); _grpDirty=true; renderGroups(); }
 async function grpSave(){
   const msg=document.getElementById("grp-msg"); msg.textContent="сохраняю…"; msg.className="text-[11px] mt-2 text-slate-400";
   try{
