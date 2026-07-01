@@ -1454,7 +1454,7 @@ const RU2EN={
   "все бэкенды":"all backends","данные ниже могут быть неполными":"data below may be incomplete","недоступен":"unreachable","локальный":"local",
   "править":"edit","имя":"name","не удалось: ":"failed: ","оставь пустым — не менять":"leave blank to keep","локальный blocklist-api":"local blocklist-api",
   "нет подключённых ingress — нажми «Setup cluster», чтобы добавить":"no ingress connected — click «Setup cluster» to add one",
-  "добавлено":"added","Удалить этот ingress?":"Delete this ingress?",
+  "добавлено":"added","Удалить этот ingress?":"Delete this ingress?","переименовать":"rename","Имя ноды (пусто — вернуть исходное):":"Node name (blank = restore original):",
   "IP в бане":"IP banned","баны идут":"bans active","готов · банов нет":"ready · no bans","простаивает":"idle",
   "активность банов · 24ч":"ban activity · 24h","активности нет":"no activity","приатаченные 403-правила":"attached 403 rules",
   "403-правил нет":"no 403 rules","автобан выкл":"auto-ban off","автобан":"auto-ban","способ применения":"enforcement",
@@ -2983,7 +2983,6 @@ async function loadIngress(){
     }
     el.innerHTML=items.map(b=>{
       const nm=b.name||b.id;
-      const cm=targets.filter(t=>t.type==="ingress-cm" && (t.backend===b.id));
       const editing=_ingEdit===b.id;
       const head=`<div class="flex items-center gap-2 flex-wrap">
         ${_ING_SVG}
@@ -3004,12 +3003,7 @@ async function loadIngress(){
           <button onclick="ingEntityEdit(null)" class="text-[11px] px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200">${_trText('отмена')}</button>
         </div>
       </div>`:"";
-      const cmRows=cm.length?`<div class="mt-2 pl-6 space-y-1">${cm.map(t=>`<div class="flex items-center gap-2 text-[12px]">
-        <span class="w-1.5 h-1.5 rounded-full bg-sky-400/70 shrink-0"></span>
-        <span class="mono text-slate-300">${esc(t.id)}</span>
-        ${t.env?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">env: ${esc(t.env)}</span>`:""}</div>`).join("")}</div>`
-        :`<div class="mt-2 pl-6 text-[11px] text-slate-600">${_trText("нет ingress-таргетов")}</div>`;
-      return `<div class="bg-slate-950/50 border border-slate-800 rounded-lg p-3">${head}${editForm}${cmRows}</div>`;
+      return `<div class="bg-slate-950/50 border border-slate-800 rounded-lg p-3">${head}${editForm}</div>`;
     }).join("");
   }catch(e){ el.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
 }
@@ -3434,7 +3428,8 @@ function _nodeCard(n){
         <div class="flex items-center gap-2 min-w-0">
           <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
           ${isDash?"":_NGINX_ICON}
-          <span class="text-sm font-medium text-slate-200 truncate">${esc(n.id)}</span>
+          <span class="text-sm font-medium text-slate-200 truncate">${esc(n.label||n.id)}</span>
+          ${isDash?"":`<button onclick="renameNode('${escJs(n.id)}','${escJs(n.label||'')}')" title="${_trText('переименовать')}" class="text-slate-600 hover:text-indigo-300 text-[11px] shrink-0">✎</button>`}
           ${isDash?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300">${_trText("дашборд")}</span>`:""}
           ${n.group?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">🎯 ${esc(n.group)}</span>`:""}
           ${isDash?"":_beBadge(n.backend)}
@@ -3474,6 +3469,14 @@ async function deleteNode(id,backend){
   if(!await uiConfirm("Отозвать токен ноды «"+id+"»? Агент перестанет получать баны, пока не перерегистрируется."))return;
   await fetch("/api/nodes/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,backend})});
   loadNodes();
+}
+async function renameNode(id,cur){
+  const name=await uiPrompt(_trText("Имя ноды (пусто — вернуть исходное):"),id,cur||"");
+  if(name===null)return;   // отмена
+  try{
+    const r=await fetch("/api/nodes/label",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,name:(name||"").trim()})}).then(x=>x.json());
+    if(r&&r.ok)loadNodes(); else uiAlert("не удалось: "+((r&&r.error)||"?"));
+  }catch(e){ uiAlert("не удалось: "+(e.message||e)); }
 }
 
 // ── Правила 403 (блокировка по пути) ──────────────────────────────────────────

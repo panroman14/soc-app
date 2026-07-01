@@ -1185,8 +1185,31 @@ def api_nodes():
     if not _backends("__all__"):
         return JSONResponse({"enabled": True, "nodes": [dash]})
     nodes, errors = _fanout_list("/nodes", "nodes")
+    # dashboard-side display labels (rename without touching the agent/blocklist-api)
+    labels = db.setting_get("node_labels", {}) or {}
+    for n in nodes:
+        if isinstance(n, dict) and labels.get(n.get("id")):
+            n["label"] = labels[n["id"]]
     return JSONResponse({"enabled": True, "nodes": [dash] + nodes,
                          "backend_errors": errors})
+
+
+@app.post("/api/nodes/label")
+async def api_nodes_label(request: Request):
+    """Set/clear a dashboard-only display name for a node (keyed by node id). Does not
+    touch the agent or blocklist-api — purely cosmetic overlay."""
+    body = await request.json()
+    nid = (body.get("id") or "").strip()
+    if not nid:
+        return JSONResponse({"ok": False, "error": "нет id"}, status_code=400)
+    name = (body.get("name") or "").strip()[:60]
+    labels = db.setting_get("node_labels", {}) or {}
+    if name:
+        labels[nid] = name
+    else:
+        labels.pop(nid, None)
+    db.setting_set("node_labels", labels)
+    return {"ok": True, "id": nid, "label": name}
 
 
 @app.post("/api/nodes/delete")
