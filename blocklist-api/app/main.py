@@ -39,9 +39,14 @@ async def auth(request: Request, call_next):
     if path == "/healthz" or path.startswith("/install/"):
         return await call_next(request)
 
-    # Dev mode: no admin token configured → open (preserves prior behavior).
+    # No admin token configured → FAIL CLOSED (this is a ban-orchestration API).
+    # Opt into an open API on a trusted host only with an explicit DEV_NO_AUTH=1.
     if not config.TOKEN:
-        return await call_next(request)
+        if config.DEV_NO_AUTH:
+            return await call_next(request)
+        return JSONResponse(
+            {"error": "BLOCKLIST_TOKEN не задан — API закрыт. Задай токен "
+                      "(или DEV_NO_AUTH=1 для доверенного хоста)"}, status_code=503)
 
     token = _bearer(request)
     if token and secrets.compare_digest(token, config.TOKEN):

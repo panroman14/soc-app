@@ -1,3 +1,9 @@
+{{- /* Fail closed: refuse to render a ban API with no auth. Provide a token
+       (--set token=$(openssl rand -hex 32)) or an existingSecret with key
+       BLOCKLIST_TOKEN. To run open on a trusted host, set devNoAuth=true. */ -}}
+{{- if and (not .Values.token) (not .Values.existingSecret) (not .Values.devNoAuth) }}
+{{- fail "blocklist-api: set .Values.token or .Values.existingSecret (BLOCKLIST_TOKEN). To run WITHOUT auth on a trusted host, set --set devNoAuth=true." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,11 +40,16 @@ spec:
           env:
             - name: PYTHONPATH
               value: /deps:/srv
+            {{- if or .Values.token .Values.existingSecret }}
             - name: BLOCKLIST_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "blocklist-api.secretName" . }}
                   key: BLOCKLIST_TOKEN
+            {{- end }}
+            {{- if .Values.devNoAuth }}
+            - { name: DEV_NO_AUTH, value: "1" }   # trusted-host opt-in: API served WITHOUT auth
+            {{- end }}
             - { name: CONTROLLER_NS, value: "{{ .Values.controllerNamespace }}" }
             - { name: CONTROLLER_CM, value: "{{ .Values.controllerConfigMap }}" }
             - { name: DENYLIST_NS, value: "{{ .Release.Namespace }}" }

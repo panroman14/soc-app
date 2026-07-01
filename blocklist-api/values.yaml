@@ -7,6 +7,9 @@ pipPackages: "fastapi==0.111.0 uvicorn[standard]==0.30.1 kubernetes==29.0.0"
 # Leave empty + set existingSecret to reuse a pre-made Secret instead.
 token: ""
 existingSecret: ""   # name of a Secret with key BLOCKLIST_TOKEN (overrides token)
+# Fail-closed guard: the chart refuses to render with no token AND no existingSecret.
+# To run the API WITHOUT auth on a trusted host, set this true (sets DEV_NO_AUTH=1).
+devNoAuth: false
 
 # ingress-nginx controller ConfigMap to patch (where geo/server-snippet land)
 controllerNamespace: ingress-nginx

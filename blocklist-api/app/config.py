@@ -126,8 +126,11 @@ CF_EDGE_PATHS = _env("CF_EDGE_PATHS", "off")  # off | on
 #                              and POST their own /heartbeat (least privilege, revocable).
 #   ENROLL_SECRET            — the "API key" an agent presents to /enroll to self-register
 #                              and receive its node token. Empty → enrollment disabled.
-TOKEN = _env("BLOCKLIST_TOKEN", "")  # required in prod; empty disables auth (dev only)
+TOKEN = _env("BLOCKLIST_TOKEN", "")  # required; empty → FAILS CLOSED unless DEV_NO_AUTH
 ENROLL_SECRET = _env("ENROLL_SECRET", "")        # one shared key agents use to enroll
+# Empty TOKEN fails closed (503 on everything but /healthz). Opt into an open API
+# on a trusted host ONLY with an explicit flag — never silently, it's a ban API.
+DEV_NO_AUTH = _env("DEV_NO_AUTH", "") not in ("0", "", "false", "False")
 
 # Public URL agents on nginx VMs use to reach THIS api (for the install one-liner
 # the dashboard shows). Often differs from the in-cluster BLOCKLIST_API_URL.

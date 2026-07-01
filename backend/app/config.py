@@ -15,9 +15,12 @@ LLM_URL = os.environ.get("LLM_URL", "http://192.0.2.20:11434")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gemma3:4b")
 
 # --- Auth (HTTP Basic) ---
-# If BASIC_AUTH_USER/PASS are unset, auth is DISABLED (dev). Set both in prod.
+# Set both in prod. If UNSET, the dashboard FAILS CLOSED (503 on every non-exempt
+# path) — it is a security appliance (bans/settings/backends), never open by default.
+# To run without auth on a trusted host, opt in explicitly with SOC_DEV_NO_AUTH=1.
 BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "")
+DEV_NO_AUTH = os.environ.get("SOC_DEV_NO_AUTH", "") not in ("0", "", "false", "False")
 # Paths served without auth (Prometheus scrape + health probes).
 AUTH_EXEMPT = {"/metrics", "/api/health"}
 

@@ -54,20 +54,31 @@ async def no_cache_html(request: Request, call_next):
 
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
-    """HTTP Basic auth on everything except AUTH_EXEMPT. No-op if creds unset."""
-    if config.BASIC_AUTH_USER and config.BASIC_AUTH_PASS \
-            and request.url.path not in config.AUTH_EXEMPT:
-        ok = False
-        hdr = request.headers.get("authorization", "")
-        if hdr.startswith("Basic "):
-            try:
-                user, _, pw = base64.b64decode(hdr[6:]).decode().partition(":")
-                ok = (secrets.compare_digest(user, config.BASIC_AUTH_USER)
-                      and secrets.compare_digest(pw, config.BASIC_AUTH_PASS))
-            except Exception:
-                ok = False
-        if not ok:
-            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="soc"'})
+    """HTTP Basic auth on everything except AUTH_EXEMPT.
+
+    FAILS CLOSED: if no creds are configured, every non-exempt path returns 503
+    (this is a ban/settings/backend-control appliance — never open by default).
+    Set SOC_DEV_NO_AUTH=1 to intentionally run without auth on a trusted host."""
+    if request.url.path in config.AUTH_EXEMPT:
+        return await call_next(request)
+    if not (config.BASIC_AUTH_USER and config.BASIC_AUTH_PASS):
+        if config.DEV_NO_AUTH:
+            return await call_next(request)          # explicit dev opt-in
+        return JSONResponse(
+            {"error": "auth не настроен — задай BASIC_AUTH_USER/BASIC_AUTH_PASS "
+                      "(или SOC_DEV_NO_AUTH=1 для доверенного хоста)"},
+            status_code=503)
+    ok = False
+    hdr = request.headers.get("authorization", "")
+    if hdr.startswith("Basic "):
+        try:
+            user, _, pw = base64.b64decode(hdr[6:]).decode().partition(":")
+            ok = (secrets.compare_digest(user, config.BASIC_AUTH_USER)
+                  and secrets.compare_digest(pw, config.BASIC_AUTH_PASS))
+        except Exception:
+            ok = False
+    if not ok:
+        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="soc"'})
     return await call_next(request)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
