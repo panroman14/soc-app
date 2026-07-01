@@ -750,8 +750,18 @@ def _backends(scope=None):
     items = d.get("items") or {}
     lst = [(tid, (e.get("url") or "").rstrip("/"), e.get("token") or "")
            for tid, e in items.items() if e.get("url")]
-    if not lst and config.BLOCKLIST_API_URL:
-        lst = [("default", config.BLOCKLIST_API_URL.rstrip("/"), config.BLOCKLIST_API_TOKEN)]
+    # The dashboard's own default backend (deploy-time BLOCKLIST_API_URL, and any live
+    # override) is ALWAYS a fleet member — registering a new ingress must not drop the
+    # original cluster (where the existing nodes/bans live). Deduped by URL so a backend
+    # already in the registry isn't added twice.
+    urls = {u for _, u, _ in lst}
+    for cand_id, cand_url, cand_tok in (
+            ("default", os.environ.get("BLOCKLIST_API_URL", ""), os.environ.get("BLOCKLIST_API_TOKEN", "")),
+            ("override", config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN)):
+        cand_url = (cand_url or "").rstrip("/")
+        if cand_url and cand_url not in urls:
+            lst = [(cand_id, cand_url, cand_tok)] + lst
+            urls.add(cand_url)
     sc = scope or d.get("scope") or "__all__"
     if sc and sc != "__all__":
         return [b for b in lst if b[0] == sc] or lst

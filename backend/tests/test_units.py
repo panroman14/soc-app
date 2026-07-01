@@ -113,6 +113,20 @@ def test_route_for_fail_closed_on_fleet():
 
 
 # ── _write_fanout (aggregation, dedup, max, partial, type-mix) ────────────────
+def test_backends_keeps_default_when_registry_nonempty():
+    # registering a new ingress backend must NOT drop the deploy-time default cluster
+    # (where existing nodes/bans live) — the reported multi-ingress regression.
+    os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
+    os.environ["BLOCKLIST_API_TOKEN"] = "tok"
+    m.config.BLOCKLIST_API_URL = "http://c2:8080"      # activated the new backend
+    m._ing_apis = lambda: {"items": {"c2": {"url": "http://c2:8080", "token": "t"}}, "scope": "__all__"}
+    urls = {b[1] for b in m._backends("__all__")}
+    assert "http://orig:8080" in urls and "http://c2:8080" in urls   # both present
+    # dedup: env URL that is also a registry URL isn't added twice
+    m._ing_apis = lambda: {"items": {"c": {"url": "http://orig:8080", "token": "t"}}, "scope": "__all__"}
+    assert sum(1 for b in m._backends("__all__") if b[1] == "http://orig:8080") == 1
+
+
 def _bcall_seq(pairs):
     it = iter(pairs)
     m._bcall_to = lambda url, tok, me, pa, pl=None, timeout=15: next(it)
