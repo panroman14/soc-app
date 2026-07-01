@@ -24,7 +24,9 @@
 > **Прогресс:** ✅ **P0 закрыт** (S1 `c64c4c3`, S2 `2806d92`, S3 `a23acd7`, S6 `e59ff04`).
 > ✅ **P1 закрыт** (B1/B2 `0675b2e`, B3/B4/B5 `a10d7c1`, B6 `34db720`, S7 `84bd51c`).
 > 🔷 **P2 security-хвосты сделаны** (S4 `f0d78f1` headers+CSRF, S8 `498be3d` pattern-hardening; pod-hardening seccomp/RO-root в S7 baked).
-> 🔷 **Logs v2 — backend groundwork сделан** (`0d968d4`: инъекция закрыта, status-class гистограмма, cursor, дата в timestamp). Осталось: **фронт Logs Explorer v2** (омнибар, фасеты, стек-гистограмма UI, infinite-scroll, live-tail) + **Loki-source registry** для мульти-источника — большой визуальный фронт, лучше делать с live-preview.
+> ✅ **Logs Explorer v2 сделан** — backend (`0d968d4` инъекция/гистограмма/cursor, `05d0dbd` Loki-source registry + fan-out + facets + omnibar) + frontend (`5752393` омнибар, фасеты, стек-гистограмма, load-older, live-tail, мульти-источник). Проверено live: omnibar→LogQL, per-source статус, пустые состояния.
+>
+> 🎉 **Весь роадмап P0→P2 закрыт.** (Осталось только то, что вне репо: собрать/запушить/пиннить digest-образ для S7; и реальный Loki для полной проверки Logs v2.)
 
 | P | Тема | Пункты |
 |---|------|--------|
