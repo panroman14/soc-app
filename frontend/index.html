@@ -636,10 +636,8 @@
           </select></div>
         <div class="flex-1 min-w-[200px]"><label id="p403-raw-lbl" class="text-[11px] text-slate-500 block mb-1">Путь</label>
           <input id="p403-raw" oninput="p403Preview()" placeholder="/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono w-full"/></div>
-        <div><label class="text-[11px] text-slate-500 block mb-1" title="Куда применять: к какой группе таргетов (нод/ingress). Пусто = все.">🎯 Группа таргетов</label>
-          <select id="p403-group" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 max-w-[160px]"></select></div>
         <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="добавить, даже если апка считает паттерн слишком широким"><input type="checkbox" id="p403-force"/> force</label>
-        <button onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600">Добавить</button>
+        <button id="p403-add-btn" onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed">Добавить</button>
         <span id="p403-msg" class="text-xs"></span>
       </div>
       <!-- продвинутое: вместо нового правила дописать паттерн в существующее (группировка путей) -->
@@ -3892,6 +3890,7 @@ function p403Preview(){
   if(!t||!rx){res.textContent="—";res.className="shrink-0 text-slate-500";}
   else if(rx.test(t)){res.textContent="🚫 забанит";res.className="shrink-0 text-rose-300 font-medium";}
   else{res.textContent="✓ пропустит";res.className="shrink-0 text-emerald-300 font-medium";}
+  const ab=document.getElementById("p403-add-btn"); if(ab){ab.disabled=!gen;ab.style.opacity=gen?"":"0.4";ab.style.cursor=gen?"":"not-allowed";}   // no path → button off (no ugly warning)
 }
 function p403FillTarget(){
   const sel=document.getElementById("p403-target");if(!sel)return;
@@ -3932,7 +3931,7 @@ async function p403Save(){
   const force=document.getElementById("p403-force").checked;
   const msg=document.getElementById("p403-msg");
   const target=document.getElementById("p403-target").value;
-  if(!pattern){msg.textContent="введи путь";msg.className="text-xs text-amber-300";return;}
+  if(!pattern){return;}   // button is disabled when empty — no jarring warning
   msg.textContent="…";msg.className="text-xs text-slate-400";
   const _clear=()=>{document.getElementById("p403-raw").value="";document.getElementById("p403-force").checked=false;p403Preview();};
   if(target&&target!=="__new__"){               // дописать в существующее (по умолчанию — основное ★)
@@ -3947,12 +3946,9 @@ async function p403Save(){
     else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
     return;
   }
-  // новое правило
+  // новое правило — применяется ко всем таргетам
   const name=document.getElementById("p403-name").value.trim();
-  // initial attachment from the form group picker: empty = all targets, else that group
-  const group=(document.getElementById("p403-group")||{}).value||"";
-  const attach=group?{groups:[group]}:{all:true};
-  const res=await _post("/api/path_rule",{name,pattern,force,...attach});
+  const res=await _post("/api/path_rule",{name,pattern,force,all:true});
   if(res.ok&&res.duplicate){msg.textContent="• такое правило уже есть — не дублирую";msg.className="text-xs text-amber-300";loadP403();return;}
   if(res.ok){msg.textContent="✓ создано";msg.className="text-xs text-emerald-300";
     document.getElementById("p403-name").value="";_clear();loadP403();}
