@@ -231,6 +231,7 @@
     </div>
     <span id="updated" class="hidden"></span>
     <select id="scope-sel" onchange="setBackendScope(this.value)" class="btn btn-ghost btn-xs hidden" title="backend scope" style="max-width:150px"></select>
+    <span id="be-health" class="hidden mono cursor-default" title="backend health"></span>
     <button id="lang-btn" onclick="toggleLang()" class="iconbtn-x btn btn-ghost btn-xs" title="language">EN</button>
     <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
     <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
@@ -1150,16 +1151,38 @@ async function loadScope(){
     sel.innerHTML=`<option value="__all__">${_trText("все бэкенды")} (${_backends.length})</option>`
       +_backends.map(b=>`<option value="${esc(b.id)}">${esc(b.id)}</option>`).join("");
     sel.value=_scope;
+    loadBackendHealth();
   }catch(e){}
 }
 async function setBackendScope(sc){
   try{ await fetch("/api/backend_scope",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc})}); location.reload(); }
   catch(e){ uiAlert("не удалось: "+(e.message||e)); }
 }
-// small per-row badge naming the backend a row came from (only when fleet>1)
+// small per-row badge naming the backend(s) a row came from (only when fleet>1).
+// accepts a string or an array (a CIDR deduped across several backends).
 function _beBadge(b){
   if(!b||_backends.length<2)return "";
-  return `<span class="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-400 mono ml-1" title="backend">${esc(b)}</span>`;
+  const arr=(Array.isArray(b)?b:[b]).filter(Boolean);
+  return arr.map(x=>`<span class="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-400 mono ml-1" title="backend">${esc(x)}</span>`).join("");
+}
+// fleet health indicator + "data may be incomplete" warning when a backend is down
+async function loadBackendHealth(){
+  const el=document.getElementById("be-health"); if(!el)return;
+  if(_backends.length<2){ el.classList.add("hidden"); return; }
+  try{
+    const d=await fetch("/api/backends/health").then(r=>r.json());
+    const bes=d.backends||[]; const bad=bes.filter(b=>!b.reachable||b.token_ok===false);
+    if(!bad.length){
+      el.className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-400";
+      el.textContent="● "+bes.length; el.title=bes.map(b=>`${b.id}: ${b.latency_ms}ms`).join("\n");
+    }else{
+      el.className="text-[11px] px-1.5 py-0.5 rounded bg-rose-900/50 text-rose-300";
+      el.textContent="⚠ "+bad.length+"/"+bes.length;
+      el.title=bad.map(b=>`${b.id}: ${b.error||(b.token_ok===false?"токен не принят":"недоступен")}`).join("\n")
+        +"\n— данные ниже могут быть неполными";
+    }
+    el.classList.remove("hidden");
+  }catch(e){ el.classList.add("hidden"); }
 }
 
 // ── live RU→EN translation (en default; ru shows source). Covers dynamically
@@ -1435,7 +1458,7 @@ const RU2EN={
   "# promtail → Loki дашборда":"# promtail → dashboard's Loki","# blocklist-api/values.yaml — таргет ingress = ns + CM контроллера":"# blocklist-api/values.yaml — ingress target = ns + controller CM",
   "# (собирает поды":"# (collects pods","; в Loki прилетят как job=ingress-nginx)":"; they arrive in Loki as job=ingress-nginx)",
   "режется сам путь, на всех привязанных таргетах.":"the path itself is cut, on all attached targets.","режется сам путь, на всех доменах окружения.":"the path itself is cut, on all domains of the environment.",
-  "все бэкенды":"all backends",
+  "все бэкенды":"all backends","данные ниже могут быть неполными":"data below may be incomplete","недоступен":"unreachable",
 };
 let _ruKeys=null, _trMO=null, _trBusy=false;
 function _ruSorted(){ if(!_ruKeys)_ruKeys=Object.keys(RU2EN).sort((a,b)=>b.length-a.length); return _ruKeys; }
@@ -2144,7 +2167,7 @@ function _renderBlPage(){
                   :`<span class="text-[11px] shrink-0" style="color:var(--faint)">∞ ${_trText('навсегда')}</span>`;
    return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
       <span class="mono text-slate-200 w-40 shrink-0 truncate cursor-pointer hover:text-indigo-300" onclick="openProfile('${esc((e.cidr||'').split('/')[0])}')">${esc(e.cidr)}</span>
-      ${cfBadge((e.cidr||'').split('/')[0])}${abChip}${_beBadge(e.backend)}
+      ${cfBadge((e.cidr||'').split('/')[0])}${abChip}${_beBadge(e.backends||e.backend)}
       <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="${esc(e.reason||"")}">${esc(e.reason||"")}</span>
       <span class="text-[11px] text-slate-500 shrink-0">${esc(e.added_by||"")} · ${dt(e.ts)}</span>
       ${ttl}

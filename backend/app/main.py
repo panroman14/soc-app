@@ -855,7 +855,26 @@ def api_nodes_install():
 def api_blocklist():
     if not _backends("__all__"):
         return JSONResponse({"enabled": False, "blocks": []})
-    blocks, errors = _fanout_list("/list", "blocks")
+    raw, errors = _fanout_list("/list", "blocks")
+    # dedup identical CIDRs banned on several backends → one row with backends[].
+    merged = {}
+    for b in raw:
+        k = b.get("cidr") if isinstance(b, dict) else None
+        if k is None:
+            continue
+        if k in merged:
+            m = merged[k]
+            m["backends"].append(b.get("backend"))
+            # keep the longest-lived / most-informative view of the row
+            if (b.get("ttl") or 0) == 0:
+                m["ttl"] = 0                       # any permanent ban wins
+            elif m.get("ttl") and b.get("ttl"):
+                m["ttl"] = max(m["ttl"], b["ttl"])
+        else:
+            row = dict(b)
+            row["backends"] = [b.get("backend")]
+            merged[k] = row
+    blocks = list(merged.values())
     return JSONResponse({"enabled": True, "blocks": blocks, "backend_errors": errors})
 
 
@@ -1744,6 +1763,37 @@ async def api_backend_scope_set(request: Request):
     d["scope"] = sc
     _ing_apis_save(d)
     return {"ok": True, "scope": sc}
+
+
+@app.get("/api/backends/health")
+def api_backends_health():
+    """Probe every backend in parallel: reachable (/healthz, no auth) + token valid
+    (/targets, Bearer) + round-trip latency. Powers the fleet health indicator and
+    the 'data may be incomplete' warning when a backend is down."""
+    from concurrent.futures import ThreadPoolExecutor
+    bes = _backends("__all__")
+    if not bes:
+        return {"backends": []}
+
+    def probe(b):
+        bid, url, tok = b
+        t0 = time.perf_counter()
+        st, _ = _bcall_to(url, tok, "GET", "/healthz", timeout=5)
+        lat = int((time.perf_counter() - t0) * 1000)
+        reachable = st is not None and st < 500
+        token_ok, err = None, None
+        if not reachable:
+            err = "нет связи"
+        else:
+            ts, _b = _bcall_to(url, tok, "GET", "/targets", timeout=5)
+            token_ok = ts is not None and ts < 400
+            if not token_ok:
+                err = "токен не принят (HTTP %s)" % ts if ts else "нет ответа /targets"
+        return {"id": bid, "url": url, "reachable": bool(reachable),
+                "token_ok": token_ok, "latency_ms": lat, "error": err}
+
+    with ThreadPoolExecutor(max_workers=min(8, len(bes))) as ex:
+        return {"backends": list(ex.map(probe, bes))}
 
 
 @app.post("/api/ingress_apis/test")
