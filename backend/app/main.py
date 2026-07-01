@@ -767,7 +767,11 @@ def _backends(scope=None):
     home_url = (os.environ.get("BLOCKLIST_API_URL", "") or "").rstrip("/")
     if home_url and home_url not in urls:   # skip if the user also added it explicitly
         lst = [(HOME_BID, home_url, os.environ.get("BLOCKLIST_API_TOKEN", "") or "")] + lst
-    sc = scope or d.get("scope") or "__all__"
+    # There is NO backend picker in the GUI anymore: reads always span the whole fleet.
+    # Only an EXPLICIT scope arg (e.g. _one_backend targeting one id) narrows it — the
+    # stored ingress_apis.scope is ignored so a stale value can't silently hide a
+    # backend's nginx/CF targets.
+    sc = scope or "__all__"
     if sc and sc != "__all__":
         return [b for b in lst if b[0] == sc] or lst
     return lst
@@ -1091,14 +1095,9 @@ def _one_backend(bid):
 
 
 def _scoped_backend():
-    """(url, token) for config reads/writes (settings / notify): per-backend data,
-    so it follows the picker — the chosen backend when scope is specific, else the
-    active/env default. Not merged (backends can hold different config)."""
-    sc = (_ing_apis().get("scope") or "__all__")
-    if sc != "__all__":
-        for b in _backends("__all__"):
-            if b[0] == sc:
-                return b[1], b[2]
+    """(url, token) for config reads/writes (settings / notify): per-backend data
+    that isn't merged. With no GUI picker anymore this is just the dashboard's own
+    (env/config) backend."""
     return config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN
 
 

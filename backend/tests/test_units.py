@@ -126,6 +126,19 @@ def test_home_backend_always_in_fleet_but_hidden():
     assert fleet["k8s"] == "http://k8s:8080"              # registry cluster present too
 
 
+def test_backends_ignores_stored_scope():
+    # no GUI picker: reads must span the whole fleet regardless of a stale stored
+    # scope — else nginx/CF (home backend) silently vanish. Regression guard.
+    os.environ["BLOCKLIST_API_URL"] = "http://blocklist:8080"
+    os.environ["BLOCKLIST_API_TOKEN"] = "tok"
+    m._ing_apis = lambda: {"items": {"k8s": {"url": "http://k8s:8080", "token": "t"}},
+                           "active": "k8s", "scope": "k8s"}   # stale stored scope
+    ids = {b[0] for b in m._backends()}          # no explicit scope arg
+    assert ids == {m.HOME_BID, "k8s"}            # both, stored scope ignored
+    # an EXPLICIT scope still narrows (used by _one_backend etc.)
+    assert {b[0] for b in m._backends("k8s")} == {"k8s"}
+
+
 def test_home_backend_deduped_when_user_added_it():
     # if the user also registered the home URL explicitly, don't double it — the
     # registry row wins, no __home__ ghost with the same URL.
