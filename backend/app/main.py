@@ -515,13 +515,95 @@ def _fanout_list(path, key, scope=None):
     return items, errors
 
 
+# ── Phase 2: route writes to the backend(s) that own the relevant target/group ──
+def _targets_index(scope=None):
+    """Fan out /targets and build {target_id: [backends]} and {group: [backends]}
+    from the fleet — the map that tells a write which backend(s) to hit."""
+    tb, gb = {}, {}
+    for bid, _st, body, err in _fanout("GET", "/targets", scope=scope):
+        if err:
+            continue
+        for t in (body or {}).get("targets", []) or []:
+            tid = t.get("id") if isinstance(t, dict) else None
+            if tid:
+                tb.setdefault(tid, []).append(bid)
+        for gname in ((body or {}).get("groups", {}) or {}).keys():
+            gb.setdefault(gname, []).append(bid)
+    return tb, gb
+
+
+def _route_for(attachment, scope=None):
+    """Which backend ids a write with this attachment ({groups,targets,all} or a
+    legacy single `group`) should go to. Unresolved / 'all' / empty → whole fleet
+    (so a manual Ban IP with no target broadcasts)."""
+    all_ids = [b[0] for b in _backends(scope)]
+    if not attachment:
+        return all_ids
+    if attachment.get("all"):
+        return all_ids
+    groups = attachment.get("groups") or ([attachment["group"]] if attachment.get("group") else [])
+    targets = attachment.get("targets") or []
+    if not groups and not targets:
+        return all_ids
+    tb, gb = _targets_index(scope)
+    picked = set()
+    for g in groups:
+        picked.update(gb.get(g, []))
+    for t in targets:
+        picked.update(tb.get(t, []))
+    picked &= set(all_ids)
+    return sorted(picked) if picked else all_ids
+
+
+def _write_fanout(method, path, payload, backend_ids):
+    """Send a write to the given backend ids. One backend → return its body
+    verbatim (back-compat with the single-backend response shape). Many → return
+    an aggregate {ok, multi:true, results:[{backend,ok,status,resp}]}."""
+    bmap = {bid: (url, tok) for bid, url, tok in _backends("__all__")}
+    ids = [b for b in backend_ids if b in bmap]
+    if not ids:
+        return None, {"ok": False, "error": "нет бэкендов для записи"}
+    if len(ids) == 1:
+        url, tok = bmap[ids[0]]
+        return _bcall_to(url, tok, method, path, payload)
+    results, ok_any = [], False
+    for bid in ids:
+        url, tok = bmap[bid]
+        st, body = _bcall_to(url, tok, method, path, payload)
+        ok = st is not None and st < 400
+        ok_any = ok_any or ok
+        results.append({"backend": bid, "ok": ok, "status": st, "resp": body})
+    return (200 if ok_any else 502), {"ok": ok_any, "multi": True, "results": results}
+
+
 @app.get("/api/ban_targets")
 def api_ban_targets():
-    """Configured enforcement targets + groups (Cloudflare / nginx / ingress)."""
-    if not config.BLOCKLIST_API_URL:
+    """Configured enforcement targets + groups across the fleet. Targets are tagged
+    with their backend; groups are merged (a name present on several backends routes
+    to all of them). Drives the attach UI + write routing."""
+    if not _backends("__all__"):
         return JSONResponse({"targets": [], "groups": {}, "enabled": False})
-    _, body = _blocklist_call("GET", "/targets")
-    return JSONResponse({"enabled": True, **(body or {})})
+    targets, groups, default_group, cf_edge, errors = [], {}, "", False, {}
+    for bid, _st, body, err in _fanout("GET", "/targets"):
+        if err:
+            errors[bid] = err
+            continue
+        body = body or {}
+        for t in body.get("targets", []) or []:
+            if isinstance(t, dict):
+                t = dict(t); t.setdefault("backend", bid)
+            targets.append(t)
+        for gname, members in (body.get("groups", {}) or {}).items():
+            # merge members across backends that share a group name
+            cur = groups.setdefault(gname, [])
+            for m in members or []:
+                if m not in cur:
+                    cur.append(m)
+        default_group = default_group or body.get("default_group", "")
+        cf_edge = cf_edge or bool(body.get("cf_edge_paths"))
+    return JSONResponse({"enabled": True, "targets": targets, "groups": groups,
+                         "default_group": default_group, "cf_edge_paths": cf_edge,
+                         "backend_errors": errors})
 
 
 @app.get("/api/ban_targets/check")
@@ -642,17 +724,27 @@ def api_cf_targets():
     return JSONResponse({"enabled": True, "targets": targets, "backend_errors": errors})
 
 
+def _one_backend(bid):
+    """(url, token) for a backend id, or the active default when unknown/blank."""
+    for b in _backends("__all__"):
+        if b[0] == bid:
+            return b[1], b[2]
+    return config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN
+
+
 @app.post("/api/cf_targets")
 async def api_cf_targets_save(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/cf_targets", body)
+    url, tok = _one_backend(body.pop("backend", None))   # save to the chosen backend
+    status, resp = _bcall_to(url, tok, "POST", "/cf_targets", body)
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
 @app.post("/api/cf_targets/delete")
 async def api_cf_targets_delete(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/cf_targets/delete", {"id": body.get("id", "")})
+    url, tok = _one_backend(body.get("backend"))   # delete on the owning backend
+    status, resp = _bcall_to(url, tok, "POST", "/cf_targets/delete", {"id": body.get("id", "")})
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
@@ -731,7 +823,8 @@ def api_nodes():
 @app.post("/api/nodes/delete")
 async def api_nodes_delete(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/node_delete", {"id": body.get("id", "")})
+    url, tok = _one_backend(body.get("backend"))   # revoke on the node's own backend
+    status, resp = _bcall_to(url, tok, "POST", "/node_delete", {"id": body.get("id", "")})
     return JSONResponse(resp or {"ok": False}, status_code=status or 502)
 
 
@@ -1450,14 +1543,18 @@ async def api_block(request: Request):
                "added_by": "dashboard"}
     if body.get("group"):
         payload["group"] = body["group"]
-    status, resp = _blocklist_call("POST", "/block", payload)
+    ids = _route_for(body)   # by group/targets/all owner, else whole fleet
+    status, resp = _write_fanout("POST", "/block", payload, ids)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 @app.post("/api/unblock")
 async def api_unblock(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/unblock", {"cidr": body.get("cidr", "")})
+    # an IP may be banned on several backends — unblock everywhere in scope
+    # (a backend that doesn't have it just no-ops).
+    status, resp = _write_fanout("POST", "/unblock", {"cidr": body.get("cidr", "")},
+                                 [b[0] for b in _backends()])
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
@@ -1472,27 +1569,30 @@ async def api_block_bulk(request: Request):
         payload["items"] = body["items"]
     else:
         payload["cidrs"] = body.get("cidrs") or []
-    status, resp = _blocklist_call("POST", "/block_bulk", payload)
+    ids = _route_for(body)
+    status, resp = _write_fanout("POST", "/block_bulk", payload, ids)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 @app.post("/api/unblock_all")
 async def api_unblock_all(request: Request):
-    status, resp = _blocklist_call("POST", "/unblock_all", {})
+    status, resp = _write_fanout("POST", "/unblock_all", {}, [b[0] for b in _backends()])
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 @app.post("/api/resync")
 async def api_resync(request: Request):
-    status, resp = _blocklist_call("POST", "/resync", {})
+    status, resp = _write_fanout("POST", "/resync", {}, [b[0] for b in _backends()])
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 # ── path-403 rules (proxied to blocklist-api) ─────────────────────────────────
 @app.get("/api/path_rules")
 def api_path_rules():
-    status, resp = _blocklist_call("GET", "/path_rules")
-    return JSONResponse(resp or {"enabled": True, "rules": []}, status_code=status or 502)
+    if not _backends("__all__"):
+        return JSONResponse({"enabled": True, "rules": []})
+    rules, errors = _fanout_list("/path_rules", "rules")
+    return JSONResponse({"enabled": True, "rules": rules, "backend_errors": errors})
 
 
 @app.get("/api/path_status")
@@ -1515,12 +1615,27 @@ async def api_path_rule(request: Request):
     # (иначе ранее добавленный путь под /api/ блокировал бы любую правку).
     new_parts = _re_top_split(_re_unwrap(body.get("pattern", "")))
     rid = body.get("id")
+    # where does this write go: an existing rule → its owning backend(s) (from the
+    # explicit `backend`, or discovered by id); a new rule → the attachment owners.
     if rid:
-        _, d = _blocklist_call("GET", "/path_rules")
-        ex = next((x for x in (d or {}).get("rules", []) if str(x.get("id")) == str(rid)), None)
-        if ex:
-            old = set(_re_top_split(_re_unwrap(ex.get("pattern") or "")))
-            new_parts = [p for p in new_parts if p not in old]
+        if body.get("backend"):
+            ids = [body["backend"]]
+        else:
+            ids = [bid for bid, _st, d, err in _fanout("GET", "/path_rules")
+                   if not err and any(str(x.get("id")) == str(rid) for x in (d or {}).get("rules", []))]
+            ids = ids or [b[0] for b in _backends()]
+        # subtract already-present parts (per the first owning backend) so an edit
+        # doesn't re-trip the protected-path guard on paths added earlier.
+        bmap = {b[0]: (b[1], b[2]) for b in _backends("__all__")}
+        if ids and ids[0] in bmap:
+            u, tk = bmap[ids[0]]
+            _, d = _bcall_to(u, tk, "GET", "/path_rules")
+            ex = next((x for x in (d or {}).get("rules", []) if str(x.get("id")) == str(rid)), None)
+            if ex:
+                old = set(_re_top_split(_re_unwrap(ex.get("pattern") or "")))
+                new_parts = [p for p in new_parts if p not in old]
+    else:
+        ids = _route_for(body)
     for part in new_parts:
         hit = _pattern_hits_protected(part)
         if hit:
@@ -1533,7 +1648,7 @@ async def api_path_rule(request: Request):
                "force": bool(body.get("force", False)),
                "groups": body.get("groups"), "targets": body.get("targets"),
                "all": bool(body.get("all", False)), "group": body.get("group", "")}
-    status, resp = _blocklist_call("POST", "/path_rule", payload)
+    status, resp = _write_fanout("POST", "/path_rule", payload, ids)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
@@ -1748,33 +1863,49 @@ async def api_branding_set(request: Request):
     return {"ok": True, **cur}
 
 
+def _rule_owners(rid, backend=None):
+    """Backend(s) owning a path rule id — the explicit `backend`, else discovered by
+    id across the fleet, else the whole scope (broadcast fallback). Rule ids collide
+    across backends, so routing by owner (not blind broadcast) avoids toggling the
+    wrong rule on a sibling cluster."""
+    if backend:
+        return [backend]
+    owners = [bid for bid, _st, d, err in _fanout("GET", "/path_rules")
+              if not err and any(str(x.get("id")) == str(rid) for x in (d or {}).get("rules", []))]
+    return owners or [b[0] for b in _backends()]
+
+
 @app.post("/api/path_rule/delete")
 async def api_path_rule_delete(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/path_rule_delete", {"id": body.get("id", "")})
+    ids = _rule_owners(body.get("id", ""), body.get("backend"))
+    status, resp = _write_fanout("POST", "/path_rule_delete", {"id": body.get("id", "")}, ids)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 @app.post("/api/path_rule/toggle")
 async def api_path_rule_toggle(request: Request):
     body = await request.json()
-    status, resp = _blocklist_call("POST", "/path_rule_toggle",
-                                   {"id": body.get("id", ""), "enabled": bool(body.get("enabled", True))})
+    ids = _rule_owners(body.get("id", ""), body.get("backend"))
+    status, resp = _write_fanout("POST", "/path_rule_toggle",
+                                 {"id": body.get("id", ""), "enabled": bool(body.get("enabled", True))}, ids)
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 @app.post("/api/path_master")
 async def api_path_master(request: Request):
-    body = await request.json()
-    status, resp = _blocklist_call("POST", "/path_master", {"enabled": bool(body.get("enabled", True))})
+    body = await request.json()   # global kill-switch → every backend in scope
+    status, resp = _write_fanout("POST", "/path_master", {"enabled": bool(body.get("enabled", True))},
+                                 [b[0] for b in _backends()])
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 
 @app.post("/api/path_type")
 async def api_path_type(request: Request):
-    body = await request.json()
-    status, resp = _blocklist_call("POST", "/path_type",
-                                   {"type": body.get("type"), "enabled": bool(body.get("enabled", True))})
+    body = await request.json()   # per-type 403 toggle → every backend in scope
+    status, resp = _write_fanout("POST", "/path_type",
+                                 {"type": body.get("type"), "enabled": bool(body.get("enabled", True))},
+                                 [b[0] for b in _backends()])
     return JSONResponse(resp or {"ok": False, "error": "нет ответа"}, status_code=status or 502)
 
 

@@ -3061,7 +3061,7 @@ function cfCard(t){
       <div class="flex items-center gap-2 min-w-0 flex-wrap">
         <span id="cfchev-${id}" style="color:var(--faint)">${open?'▾':'▸'}</span>
         <span class="text-sm font-medium">☁️ ${esc(t.name||t.id)}</span>
-        <span class="mono text-[11px]" style="color:var(--faint)">${id}</span>
+        <span class="mono text-[11px]" style="color:var(--faint)">${id}</span>${_beBadge(t.backend)}
         <span class="flex gap-1">${chips}</span>
       </div>
       <button onclick="event.stopPropagation();cfToggle('${id}')" class="btn btn-ghost btn-xs shrink-0"><span data-i18n="edit">Edit</span></button>
@@ -3102,8 +3102,9 @@ async function cfNew(){
   _cfTargets.push({id:newId,name:id.trim(),mode:"ip-list",token_set:false}); _cfOpen.add(newId); renderCfTargets();
 }
 function _cfField(id,f){ const c=document.querySelector(`[data-cf="${id}"]`),el=c&&c.querySelector(`[data-f="${f}"]`); return el?el.value:undefined; }
+function _cfBackend(id){ return ((_cfTargets||[]).find(t=>t.id===id)||{}).backend; }
 async function cfSave(id){
-  const body={id,name:_cfField(id,"name"),mode:_cfField(id,"mode"),token:_cfField(id,"token"),
+  const body={id,backend:_cfBackend(id),name:_cfField(id,"name"),mode:_cfField(id,"mode"),token:_cfField(id,"token"),
     zone_id:_cfField(id,"zone_id"),zone_name:_cfField(id,"zone_name"),account_id:_cfField(id,"account_id"),
     list_name:_cfField(id,"list_name"),rule_desc:_cfField(id,"rule_desc")};
   const d=await (await fetch("/api/cf_targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
@@ -3112,7 +3113,7 @@ async function cfSave(id){
 }
 async function cfDelete(id){
   if(!await uiConfirm("Удалить CF-таргет «"+id+"»? Он отвяжется от групп/правил. Список/правило в самом Cloudflare не удаляются автоматически."))return;
-  await fetch("/api/cf_targets/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+  await fetch("/api/cf_targets/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,backend:_cfBackend(id)})});
   _cfOpen.delete(id); loadCfTargets();
 }
 async function cfCheck(id){
@@ -3335,7 +3336,7 @@ function _nodeCard(n){
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?_trText("онлайн"):"offline"} · ${_ago(n.last_seen)}</span>
-          ${isDash?"":`<button onclick="deleteNode('${esc(n.id)}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">${_trText("отозвать")}</button>`}
+          ${isDash?"":`<button onclick="deleteNode('${esc(n.id)}','${esc(n.backend||'')}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">${_trText("отозвать")}</button>`}
         </div>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-[11px]">
@@ -3363,9 +3364,9 @@ function copyInstallCmd(){
   const t=document.getElementById("nodes-install-cmd").textContent;
   _copyText(t, typeof event!=="undefined"&&event&&event.currentTarget);
 }
-async function deleteNode(id){
+async function deleteNode(id,backend){
   if(!await uiConfirm("Отозвать токен ноды «"+id+"»? Агент перестанет получать баны, пока не перерегистрируется."))return;
-  await fetch("/api/nodes/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+  await fetch("/api/nodes/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,backend})});
   loadNodes();
 }
 
@@ -3627,11 +3628,11 @@ function _p403RenderList(){
     const meta=[r.added_by?esc(r.added_by):"",r.ts?_p403fmtDate(r.ts):"",plen+" симв."].filter(Boolean).join(" · ");
     return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded-lg px-3.5 py-3 ${en?'':'opacity-60'}">
       <div class="flex items-start gap-2.5">
-        <button onclick="p403Toggle('${esc(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
+        <button onclick="p403Toggle('${esc(r.id)}',${!en},'${esc(r.backend||'')}')" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap">
             <button onclick="setMainRule('path','${esc(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
-            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>
+            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>${_beBadge(r.backend)}
             ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">основное</span>':''}
           </div>
           <div class="text-[10px] text-slate-500 mt-0.5">${meta}</div>
@@ -3639,7 +3640,7 @@ function _p403RenderList(){
         <div class="flex items-center gap-1 shrink-0">
           <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">паттерн&nbsp;▾</button>
           <button onclick="p403EditOpen('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
-          <button onclick="p403Delete('${esc(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
+          <button onclick="p403Delete('${esc(r.id)}','${esc(r.backend||'')}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
         </div>
       </div>
       <div class="mt-2 pt-2 border-t border-slate-800/60">
@@ -3729,8 +3730,8 @@ async function p403EditSave(id){
   if(!parts.length){uiAlert("в правиле не осталось ни одного пути — тогда удали правило целиком.");return;}
   const pattern="("+parts.join("|")+")";
   const r=(_p403.rules||[]).find(x=>String(x.id)===String(id))||{};
-  const res=await _post("/api/path_rule",{id,name:st.name,pattern,enabled:st.enabled,
-    groups:r.groups||[],targets:r.targets||[],all:!!r.all});  // сохранить привязку
+  const res=await _post("/api/path_rule",{id,backend:r.backend,name:st.name,pattern,enabled:st.enabled,
+    groups:r.groups||[],targets:r.targets||[],all:!!r.all});  // сохранить привязку (на своём бэкенде)
   if(res.ok)loadP403(); else uiAlert("не удалось: "+(res.error||"?"));
 }
 // ── генератор паттернов: человек пишет путь/wildcard → regex для nginx ~* ──────
@@ -3833,8 +3834,9 @@ async function p403Save(){
     document.getElementById("p403-name").value="";_clear();loadP403();}
   else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
 }
-async function p403Toggle(id,enabled){const res=await _post("/api/path_rule/toggle",{id,enabled});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
-async function p403Delete(id){if(!await uiConfirm("Удалить правило 403?"))return;const res=await _post("/api/path_rule/delete",{id});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
+async function p403Toggle(id,enabled,backend){const res=await _post("/api/path_rule/toggle",{id,enabled,backend});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
+async function p403Delete(id,backend){if(!await uiConfirm("Удалить правило 403?"))return;const res=await _post("/api/path_rule/delete",{id,backend});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
+function _p403Backend(id){ return ((_p403.rules||[]).find(r=>String(r.id)===String(id))||{}).backend; }
 async function p403Master(){
   const on=_p403&&_p403.enabled!==false;
   if(on&&!await uiConfirm("Выключить ВСЮ секцию 403?\nВсе правила по путям перестанут блокировать — сканеры снова будут проходить."))return;
