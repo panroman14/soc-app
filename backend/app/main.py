@@ -680,6 +680,21 @@ def _egress_check(url, allow_internal=True):
     return True, None
 
 
+def _safe_opener(allow_internal):
+    """urllib opener that re-runs _egress_check on every redirect hop (X2) — a
+    validated URL must not 302 to metadata/loopback."""
+    import urllib.request as _ur
+    import urllib.error as _ue
+
+    class _Redir(_ur.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            ok, err = _egress_check(newurl, allow_internal=allow_internal)
+            if not ok:
+                raise _ue.HTTPError(newurl, code, "redirect egress запрещён: %s" % err, headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+    return _ur.build_opener(_Redir())
+
+
 # --- blocklist (proxy to in-cluster blocklist-api) ---
 def _bcall_to(base_url, token, method, path, payload=None, timeout=15):
     """Call ONE blocklist-api backend. Returns (status, body)."""
@@ -1718,7 +1733,7 @@ def _fetch_feed(url, timeout=20, max_bytes=8 * 1024 * 1024):
     if not ok_egress:
         raise ValueError("egress запрещён: %s" % egress_err)
     req = urllib.request.Request(url, headers={"User-Agent": "soc-threat-feed/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _safe_opener(allow_internal=False).open(req, timeout=timeout) as r:  # re-check redirects
         return r.read(max_bytes).decode("utf-8", "replace")
 
 def threat_feed_run_once(manual=False):

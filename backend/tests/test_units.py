@@ -71,6 +71,17 @@ def test_raw_is_gated_passthrough():
     assert '|= "he\\"llo"' in q
 
 
+def test_raw_requires_stream_selector():
+    # X1: raw with no / empty selector is rejected (can't read every stream)
+    for bad in ["", "  ", "| json", "{} |= \"x\"", "{ } | json"]:
+        try:
+            L.build_logql(raw=bad)
+            if bad.strip():                 # empty raw is fine (falls through to structured)
+                assert False, "expected reject for %r" % bad
+        except ValueError:
+            pass
+
+
 # ── _egress_check (SSRF guard) ────────────────────────────────────────────────
 def test_egress_blocks_metadata_and_scheme():
     assert m._egress_check("http://169.254.169.254/latest")[0] is False   # link-local

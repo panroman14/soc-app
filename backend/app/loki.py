@@ -232,7 +232,14 @@ def build_logql(sources=None, chips=None, search="", regex=False, attacks_only=F
     hatch) wins outright. Returns the query string (env scoping is applied later by
     `_get`)."""
     if raw and raw.strip():
-        return raw.strip()
+        r = raw.strip()
+        # X1: raw is a power-user escape hatch, but it bypasses field escaping AND the
+        # INGRESS_SELECTOR scope. Require a non-empty stream selector so it can't read
+        # every stream in the Loki (e.g. other tenants') via an empty/absent {}.
+        sel = re.search(r"\{([^}]*)\}", r)
+        if not sel or not sel.group(1).strip():
+            raise ValueError("raw LogQL требует непустой селектор потока, напр. {app=\"ingress-nginx\"}")
+        return r
     q = _sel_with_sources(sources)
     # cheap line pre-filters BEFORE json (keeps Loki fast)
     q += ' |= "remote_addr"'
