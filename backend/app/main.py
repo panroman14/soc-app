@@ -442,6 +442,44 @@ def api_trusted():
     return JSONResponse({"trusted": config.TRUSTED_IPS})
 
 
+# --- SSRF egress guard (S2) ---
+# Cloud metadata + link-local are NEVER a legitimate destination — block always.
+# Loopback/private ARE legitimate for blocklist-api backends (cluster/LAN), so only
+# block them for *external* fetches (threat feeds). Validate URLs at the point they
+# enter config (save/test/activate) rather than per-call.
+def _egress_check(url, allow_internal=True):
+    """(ok, error) for an outbound URL. Always rejects non-http(s), cloud-metadata
+    and link-local. With allow_internal=False also rejects loopback/private/reserved
+    (for public threat feeds). Resolves + validates every A/AAAA record."""
+    import socket
+    from urllib.parse import urlparse
+    try:
+        u = urlparse(url)
+    except Exception:
+        return False, "плохой URL"
+    if u.scheme not in ("http", "https"):
+        return False, "только http/https"
+    host = u.hostname
+    if not host:
+        return False, "нет хоста в URL"
+    try:
+        ips = {sa[0] for _f, _t, _p, _c, sa in socket.getaddrinfo(host, u.port or 0)}
+    except Exception as e:
+        return False, "DNS не резолвится: %s" % e
+    if not ips:
+        return False, "DNS не вернул адресов"
+    for s in ips:
+        try:
+            ip = ipaddress.ip_address(s)
+        except ValueError:
+            continue
+        if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+            return False, "адрес метаданных/link-local запрещён"
+        if not allow_internal and (ip.is_loopback or ip.is_private or ip.is_reserved):
+            return False, "внутренний адрес запрещён для внешних источников"
+    return True, None
+
+
 # --- blocklist (proxy to in-cluster blocklist-api) ---
 def _bcall_to(base_url, token, method, path, payload=None, timeout=15):
     """Call ONE blocklist-api backend. Returns (status, body)."""
@@ -1430,6 +1468,10 @@ def _parse_feed_lines(text, cap=200000):
 
 def _fetch_feed(url, timeout=20, max_bytes=8 * 1024 * 1024):
     import urllib.request
+    # threat feeds are public sources → block internal/loopback/metadata (SSRF).
+    ok_egress, egress_err = _egress_check(url, allow_internal=False)
+    if not ok_egress:
+        raise ValueError("egress запрещён: %s" % egress_err)
     req = urllib.request.Request(url, headers={"User-Agent": "soc-threat-feed/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read(max_bytes).decode("utf-8", "replace")
@@ -1727,8 +1769,10 @@ def api_blocklist_config_get():
 async def api_blocklist_config_set(request: Request):
     body = await request.json()
     url = (body.get("url") or "").strip()
-    if url and not (url.startswith("http://") or url.startswith("https://")):
-        return JSONResponse({"ok": False, "error": "URL должен начинаться с http:// или https://"}, status_code=400)
+    if url:
+        ok_egress, egress_err = _egress_check(url)
+        if not ok_egress:
+            return JSONResponse({"ok": False, "error": egress_err}, status_code=400)
     o = db.setting_get("blocklist_api_override", {}) or {}
     o["url"] = url  # empty clears the override → falls back to env var on next restart
     if body.get("token"):  # blank = leave the existing token as-is
@@ -1852,6 +1896,9 @@ async def api_ingress_apis_test(request: Request):
         token = (_ing_apis()["items"].get(body["id"]) or {}).get("token", "")
     if not url:
         return {"ok": False, "error": "пустой URL"}
+    ok_egress, egress_err = _egress_check(url)
+    if not ok_egress:
+        return {"ok": False, "error": egress_err}
     out = {"ok": False, "reachable": False, "token_valid": False, "error": None}
     try:
         with urllib.request.urlopen(url + "/healthz", timeout=6) as r:
@@ -1876,8 +1923,9 @@ async def api_ingress_apis_save(request: Request):
     """Register a blocklist-api backend (doesn't activate it — see /activate)."""
     body = await request.json()
     url = (body.get("url") or "").strip().rstrip("/")
-    if not (url.startswith("http://") or url.startswith("https://")):
-        return JSONResponse({"ok": False, "error": "URL должен начинаться с http:// или https://"}, status_code=400)
+    ok_egress, egress_err = _egress_check(url)
+    if not ok_egress:
+        return JSONResponse({"ok": False, "error": egress_err}, status_code=400)
     tid = _ing_slug(body.get("id") or url.split("://", 1)[-1])
     if not tid:
         return JSONResponse({"ok": False, "error": "не удалось определить id из URL"}, status_code=400)
