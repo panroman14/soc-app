@@ -113,18 +113,34 @@ def test_route_for_fail_closed_on_fleet():
 
 
 # ── _write_fanout (aggregation, dedup, max, partial, type-mix) ────────────────
-def test_backends_keeps_default_when_registry_nonempty():
-    # registering a new ingress backend must NOT drop the deploy-time default cluster
-    # (where existing nodes/bans live) — the reported multi-ingress regression.
+def test_backends_registry_only_ignores_env():
+    # the registry is the single source of truth — env BLOCKLIST_API_URL must NOT be
+    # injected into the fleet at call time (it is seeded once at startup instead).
     os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
     os.environ["BLOCKLIST_API_TOKEN"] = "tok"
-    m.config.BLOCKLIST_API_URL = "http://c2:8080"      # activated the new backend
+    m.config.BLOCKLIST_API_URL = "http://c2:8080"
     m._ing_apis = lambda: {"items": {"c2": {"url": "http://c2:8080", "token": "t"}}, "scope": "__all__"}
     urls = {b[1] for b in m._backends("__all__")}
-    assert "http://orig:8080" in urls and "http://c2:8080" in urls   # both present
-    # dedup: env URL that is also a registry URL isn't added twice
-    m._ing_apis = lambda: {"items": {"c": {"url": "http://orig:8080", "token": "t"}}, "scope": "__all__"}
-    assert sum(1 for b in m._backends("__all__") if b[1] == "http://orig:8080") == 1
+    assert urls == {"http://c2:8080"}                  # only the registry, no env ghost
+
+
+def test_seed_registry_from_env():
+    # first boot with an empty registry + env URL → migrate it in as 'default' once.
+    store = {}
+    m.db.setting_get = lambda k, d=None: store.get(k, d)
+    m.db.setting_set = lambda k, v: store.__setitem__(k, v)
+    m._ing_apis = lambda: store.get("ingress_apis", {"items": {}, "active": ""})
+    m._ing_apis_save = lambda v: store.__setitem__("ingress_apis", v)
+    os.environ["BLOCKLIST_API_URL"] = "http://seed:8080"
+    os.environ["BLOCKLIST_API_TOKEN"] = "stok"
+    m._seed_registry_from_env()
+    d = store["ingress_apis"]
+    assert d["items"]["default"] == {"url": "http://seed:8080", "token": "stok"}
+    assert d["active"] == "default" and d["seeded"] is True
+    # idempotent: a second call (e.g. after the user deleted 'default') re-seeds nothing
+    store["ingress_apis"] = {"items": {}, "active": "", "seeded": True}
+    m._seed_registry_from_env()
+    assert store["ingress_apis"]["items"] == {}        # stays deleted, not resurrected
 
 
 def _bcall_seq(pairs):

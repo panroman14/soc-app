@@ -229,6 +229,7 @@ def insight_loop():
 
 @app.on_event("startup")
 def _startup():
+    _seed_registry_from_env()
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=analytics_loop, daemon=True).start()
     threading.Thread(target=insight_loop, daemon=True).start()
@@ -742,26 +743,16 @@ def _blocklist_call(method, path, payload=None):
 
 
 def _backends(scope=None):
-    """The blocklist-api fleet as [(id, url, token)]. Sources: the registered
-    ingress_apis items, or — if none registered — the env/override default as a
-    single implicit backend id 'default'. `scope` (or the stored scope) narrows to
-    one backend; '__all__' (default) returns the whole fleet."""
+    """The blocklist-api fleet as [(id, url, token)]. The registry (ingress_apis
+    items) is the SINGLE source of truth — the deploy-time env BLOCKLIST_API_URL is
+    NOT consulted here; it is seeded into the registry once at startup (see
+    _seed_registry_from_env) so it becomes an ordinary 'default' entry the GUI can
+    rename/delete. `scope` (or the stored scope) narrows to one backend; '__all__'
+    (default) returns the whole fleet."""
     d = _ing_apis()
     items = d.get("items") or {}
     lst = [(tid, (e.get("url") or "").rstrip("/"), e.get("token") or "")
            for tid, e in items.items() if e.get("url")]
-    # The dashboard's own default backend (deploy-time BLOCKLIST_API_URL, and any live
-    # override) is ALWAYS a fleet member — registering a new ingress must not drop the
-    # original cluster (where the existing nodes/bans live). Deduped by URL so a backend
-    # already in the registry isn't added twice.
-    urls = {u for _, u, _ in lst}
-    for cand_id, cand_url, cand_tok in (
-            ("default", os.environ.get("BLOCKLIST_API_URL", ""), os.environ.get("BLOCKLIST_API_TOKEN", "")),
-            ("override", config.BLOCKLIST_API_URL, config.BLOCKLIST_API_TOKEN)):
-        cand_url = (cand_url or "").rstrip("/")
-        if cand_url and cand_url not in urls:
-            lst = [(cand_id, cand_url, cand_tok)] + lst
-            urls.add(cand_url)
     sc = scope or d.get("scope") or "__all__"
     if sc and sc != "__all__":
         return [b for b in lst if b[0] == sc] or lst
@@ -2107,6 +2098,27 @@ def _ing_slug(s):
     return _re.sub(r"[^a-z0-9_.:-]+", "-", (s or "").strip().lower()).strip("-")[:48]
 
 
+def _seed_registry_from_env():
+    """Deploy-time convenience: if the registry is empty and a BLOCKLIST_API_URL was
+    provided via env (compose/helm), migrate it into the registry ONCE as a normal
+    'default' entry. This is the ONLY place env feeds the fleet — afterwards the
+    registry is authoritative and the GUI can rename/delete the entry without it
+    being resurrected from env. Runs once (guarded by the seeded flag), so deleting
+    'default' via the GUI stays deleted across restarts."""
+    d = _ing_apis()
+    if d.get("items") or d.get("seeded"):
+        return
+    url = (os.environ.get("BLOCKLIST_API_URL", "") or "").strip().rstrip("/")
+    d["seeded"] = True
+    if url:
+        tok = os.environ.get("BLOCKLIST_API_TOKEN", "") or ""
+        d.setdefault("items", {})["default"] = {"url": url, "token": tok}
+        if not d.get("active"):
+            d["active"] = "default"
+        log.info("[registry] seeded 'default' backend from env BLOCKLIST_API_URL=%s" % url)
+    _ing_apis_save(d)
+
+
 def _set_active_backend(url, token=None):
     """Point the dashboard at this blocklist-api, live, no restart (mirrors into
     the same override _apply_blocklist_override reads on the next process start)."""
@@ -2272,14 +2284,18 @@ async def api_ingress_apis_delete(request: Request):
     if existed:
         d["items"].pop(tid)
         if d.get("active") == tid:
-            d["active"] = ""
             # the dashboard was pointed at this backend (via _set_active_backend);
-            # deleting it must not strand the dashboard on a now-dead URL. Drop the
-            # override so every call site falls back to the env-default backend —
-            # the one that holds the original nginx nodes / CF targets.
-            db.setting_set("blocklist_api_override", {})
-            config.BLOCKLIST_API_URL = os.environ.get("BLOCKLIST_API_URL", "")
-            config.BLOCKLIST_API_TOKEN = os.environ.get("BLOCKLIST_API_TOKEN", "")
+            # deleting it must not strand the dashboard on a now-dead URL. Move to
+            # another registered backend if one remains, else clear the pointer.
+            nxt = next(iter(d["items"].items()), None)
+            if nxt:
+                d["active"] = nxt[0]
+                _set_active_backend((nxt[1] or {}).get("url", ""), (nxt[1] or {}).get("token"))
+            else:
+                d["active"] = ""
+                db.setting_set("blocklist_api_override", {})
+                config.BLOCKLIST_API_URL = ""
+                config.BLOCKLIST_API_TOKEN = ""
             reset = True
         _ing_apis_save(d)
     return {"ok": True, "deleted": existed, "reset_to_default": reset}
