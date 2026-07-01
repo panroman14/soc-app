@@ -1621,12 +1621,21 @@ async def api_ingress_apis_delete(request: Request):
     tid = body.get("id") or ""
     d = _ing_apis()
     existed = tid in d["items"]
+    reset = False
     if existed:
         d["items"].pop(tid)
         if d.get("active") == tid:
             d["active"] = ""
+            # the dashboard was pointed at this backend (via _set_active_backend);
+            # deleting it must not strand the dashboard on a now-dead URL. Drop the
+            # override so every call site falls back to the env-default backend —
+            # the one that holds the original nginx nodes / CF targets.
+            db.setting_set("blocklist_api_override", {})
+            config.BLOCKLIST_API_URL = os.environ.get("BLOCKLIST_API_URL", "")
+            config.BLOCKLIST_API_TOKEN = os.environ.get("BLOCKLIST_API_TOKEN", "")
+            reset = True
         _ing_apis_save(d)
-    return {"ok": True, "deleted": existed}
+    return {"ok": True, "deleted": existed, "reset_to_default": reset}
 
 
 @app.get("/api/branding")
