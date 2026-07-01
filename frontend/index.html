@@ -3946,9 +3946,10 @@ async function p403Save(){
     else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
     return;
   }
-  // новое правило — применяется ко всем таргетам
+  // новое правило создаётся НЕ приатаченным (просто запись) — привязку выбираешь
+  // потом через attach в строке правила
   const name=document.getElementById("p403-name").value.trim();
-  const res=await _post("/api/path_rule",{name,pattern,force,all:true});
+  const res=await _post("/api/path_rule",{name,pattern,force,all:false,targets:[]});
   if(res.ok&&res.duplicate){msg.textContent="• такое правило уже есть — не дублирую";msg.className="text-xs text-amber-300";loadP403();return;}
   if(res.ok){msg.textContent="✓ создано";msg.className="text-xs text-emerald-300";
     document.getElementById("p403-name").value="";_clear();loadP403();}
