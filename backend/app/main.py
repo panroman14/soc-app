@@ -2099,20 +2099,26 @@ def _ing_slug(s):
 
 
 def _seed_registry_from_env():
-    """Deploy-time convenience: if the registry is empty and a BLOCKLIST_API_URL was
-    provided via env (compose/helm), migrate it into the registry ONCE as a normal
-    'default' entry. This is the ONLY place env feeds the fleet — afterwards the
-    registry is authoritative and the GUI can rename/delete the entry without it
-    being resurrected from env. Runs once (guarded by the seeded flag), so deleting
-    'default' via the GUI stays deleted across restarts."""
+    """Deploy-time / upgrade migration: ONCE (guarded by the `seeded` flag), if a
+    BLOCKLIST_API_URL was provided via env (compose/helm), migrate it into the
+    registry as a normal 'default' entry — UNLESS a backend with that URL is already
+    registered. This runs even when the registry is non-empty: on upgrade from the
+    old env-in-fleet model, the original cluster lived only in env (never in the
+    registry) while a newly-connected ingress already occupied items — seeding must
+    add the original alongside it, not skip because items exist. This is the ONLY
+    place env feeds the fleet; afterwards the registry is authoritative and the GUI
+    can rename/delete the entry without it being resurrected from env (the flag makes
+    a GUI-deleted 'default' stay deleted across restarts)."""
     d = _ing_apis()
-    if d.get("items") or d.get("seeded"):
+    if d.get("seeded"):
         return
     url = (os.environ.get("BLOCKLIST_API_URL", "") or "").strip().rstrip("/")
     d["seeded"] = True
-    if url:
+    items = d.setdefault("items", {})
+    already = any((e.get("url") or "").rstrip("/") == url for e in items.values())
+    if url and not already:
         tok = os.environ.get("BLOCKLIST_API_TOKEN", "") or ""
-        d.setdefault("items", {})["default"] = {"url": url, "token": tok}
+        items["default"] = {"url": url, "token": tok}
         if not d.get("active"):
             d["active"] = "default"
         log.info("[registry] seeded 'default' backend from env BLOCKLIST_API_URL=%s" % url)

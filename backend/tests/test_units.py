@@ -124,13 +124,17 @@ def test_backends_registry_only_ignores_env():
     assert urls == {"http://c2:8080"}                  # only the registry, no env ghost
 
 
-def test_seed_registry_from_env():
-    # first boot with an empty registry + env URL → migrate it in as 'default' once.
-    store = {}
+def _seed_env(store):
     m.db.setting_get = lambda k, d=None: store.get(k, d)
     m.db.setting_set = lambda k, v: store.__setitem__(k, v)
     m._ing_apis = lambda: store.get("ingress_apis", {"items": {}, "active": ""})
     m._ing_apis_save = lambda v: store.__setitem__("ingress_apis", v)
+
+
+def test_seed_registry_from_env():
+    # first boot with an empty registry + env URL → migrate it in as 'default' once.
+    store = {}
+    _seed_env(store)
     os.environ["BLOCKLIST_API_URL"] = "http://seed:8080"
     os.environ["BLOCKLIST_API_TOKEN"] = "stok"
     m._seed_registry_from_env()
@@ -141,6 +145,31 @@ def test_seed_registry_from_env():
     store["ingress_apis"] = {"items": {}, "active": "", "seeded": True}
     m._seed_registry_from_env()
     assert store["ingress_apis"]["items"] == {}        # stays deleted, not resurrected
+
+
+def test_seed_adds_original_alongside_existing_backend():
+    # THE upgrade case: a new ingress was already registered, but the original
+    # cluster lived only in env. Seeding must add it ALONGSIDE, not skip.
+    store = {"ingress_apis": {"items": {"newing": {"url": "http://newing:8080", "token": "n"}},
+                              "active": "newing"}}
+    _seed_env(store)
+    os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
+    os.environ["BLOCKLIST_API_TOKEN"] = "otok"
+    m._seed_registry_from_env()
+    it = store["ingress_apis"]["items"]
+    assert it["default"] == {"url": "http://orig:8080", "token": "otok"}  # original preserved
+    assert it["newing"]["url"] == "http://newing:8080"                    # new one kept
+    assert store["ingress_apis"]["active"] == "newing"                    # active untouched
+
+
+def test_seed_dedupes_when_env_already_registered():
+    # env URL already in the registry (under any id) → don't add a duplicate 'default'.
+    store = {"ingress_apis": {"items": {"c": {"url": "http://orig:8080", "token": "t"}}, "active": "c"}}
+    _seed_env(store)
+    os.environ["BLOCKLIST_API_URL"] = "http://orig:8080"
+    m._seed_registry_from_env()
+    assert "default" not in store["ingress_apis"]["items"]
+    assert store["ingress_apis"]["seeded"] is True
 
 
 def _bcall_seq(pairs):
