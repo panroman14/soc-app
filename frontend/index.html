@@ -3719,16 +3719,27 @@ function renderP403(d){
   p403FillTarget();
 }
 function _p403fmtDate(ts){if(!ts)return"";const d=new Date(ts*1000);return d.toLocaleDateString("ru",{day:"2-digit",month:"2-digit",year:"2-digit"});}
+let _p403Grp={};   // rep-id → [{id,backend}] — the same rule replicated across backends
 function _p403RenderList(){
   const rules=_p403.rules||[];
+  // collapse the same logical rule (name+pattern) replicated across backends into one
+  // row — a rule on "all targets" is written to every 403-capable backend and fans
+  // back as one row per backend; show it once with both backend badges.
+  _p403Grp={}; const order=[], byKey={};
+  rules.forEach(r=>{const k=(r.name||"")+" "+(r.pattern||"");
+    if(byKey[k]==null){byKey[k]={rep:r,backends:[],pairs:[]};order.push(k);}
+    byKey[k].backends.push(r.backend||""); byKey[k].pairs.push({id:r.id,backend:r.backend||""});});
+  const groups=order.map(k=>byKey[k]);
+  groups.forEach(g=>{_p403Grp[g.rep.id]=g.pairs;});
   const q=(document.getElementById("p403-search").value||"").toLowerCase().trim();
-  const filt=q?rules.filter(r=>((r.name||"")+" "+(r.pattern||"")).toLowerCase().includes(q)):rules;
-  const enN=rules.filter(r=>r.enabled!==false).length;
-  document.getElementById("p403-count").textContent="· "+rules.length+" ("+enN+" вкл)"+(q?(" · найдено "+filt.length):"");
+  const filt=q?groups.filter(g=>((g.rep.name||"")+" "+(g.rep.pattern||"")).toLowerCase().includes(q)):groups;
+  const enN=groups.filter(g=>g.rep.enabled!==false).length;
+  document.getElementById("p403-count").textContent="· "+groups.length+" ("+enN+" вкл)"+(q?(" · найдено "+filt.length):"");
   const list=document.getElementById("p403-list");
-  if(!rules.length){list.innerHTML='<div class="text-slate-600 text-xs">пусто — добавь правило, засей из автобана или базовый набор.</div>';return;}
+  if(!groups.length){list.innerHTML='<div class="text-slate-600 text-xs">пусто — добавь правило, засей из автобана или базовый набор.</div>';return;}
   if(!filt.length){list.innerHTML='<div class="text-slate-600 text-xs">ничего не найдено по «'+esc(q)+'».</div>';return;}
-  list.innerHTML=filt.map(r=>{const en=r.enabled!==false;
+  list.innerHTML=filt.map(g=>{const r=g.rep; const en=r.enabled!==false;
+    const _backends=[...new Set(g.backends.filter(Boolean))];
     const by=r.added_by?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">${esc(r.added_by)}</span>`:"";
     const dt=r.ts?`<span class="text-[10px] text-slate-600 shrink-0">${_p403fmtDate(r.ts)}</span>`:"";
     const plen=(r.pattern||"").length;
@@ -3736,11 +3747,11 @@ function _p403RenderList(){
     const meta=[r.added_by?esc(r.added_by):"",r.ts?_p403fmtDate(r.ts):"",plen+" симв."].filter(Boolean).join(" · ");
     return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded-lg px-3.5 py-3 ${en?'':'opacity-60'}">
       <div class="flex items-start gap-2.5">
-        <button onclick="p403Toggle('${escJs(r.id)}',${!en},'${escJs(r.backend||'')}')" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
+        <button onclick="p403Toggle('${escJs(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap">
             <button onclick="setMainRule('path','${escJs(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
-            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>${_beBadge(r.backend)}
+            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>${_beBadge(_backends)}
             ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">основное</span>':''}
           </div>
           <div class="text-[10px] text-slate-500 mt-0.5">${meta}</div>
@@ -3748,7 +3759,7 @@ function _p403RenderList(){
         <div class="flex items-center gap-1 shrink-0">
           <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">паттерн&nbsp;▾</button>
           <button onclick="p403EditOpen('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
-          <button onclick="p403Delete('${escJs(r.id)}','${escJs(r.backend||'')}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
+          <button onclick="p403Delete('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
         </div>
       </div>
       <div class="mt-2 pt-2 border-t border-slate-800/60">
@@ -3838,9 +3849,14 @@ async function p403EditSave(id){
   if(!parts.length){uiAlert("в правиле не осталось ни одного пути — тогда удали правило целиком.");return;}
   const pattern="("+parts.join("|")+")";
   const r=(_p403.rules||[]).find(x=>String(x.id)===String(id))||{};
-  const res=await _post("/api/path_rule",{id,backend:r.backend,name:st.name,pattern,enabled:st.enabled,
-    groups:r.groups||[],targets:r.targets||[],all:!!r.all});  // сохранить привязку (на своём бэкенде)
-  if(res.ok)loadP403(); else uiAlert("не удалось: "+(res.error||"?"));
+  // apply the edit to every backend this rule lives on, so they don't diverge
+  let ok=true;
+  for(const p of _p403Pairs(id)){
+    const res=await _post("/api/path_rule",{id:p.id,backend:p.backend,name:st.name,pattern,enabled:st.enabled,
+      groups:r.groups||[],targets:r.targets||[],all:!!r.all});
+    ok=ok&&res.ok;
+  }
+  if(ok)loadP403(); else uiAlert("не удалось сохранить на всех бэкендах");
 }
 // ── генератор паттернов: человек пишет путь/wildcard → regex для nginx ~* ──────
 const P403_BENIGN=["/","/index.html","/index.php","/home","/login","/account/login","/api/users","/api/v1/orders","/dashboard","/static/app.js","/assets/main.css","/favicon.ico","/robots.txt","/images/logo.png"];
@@ -3942,8 +3958,9 @@ async function p403Save(){
     document.getElementById("p403-name").value="";_clear();loadP403();}
   else{msg.textContent="✗ "+(res.error||"ошибка");msg.className="text-xs text-rose-300";}
 }
-async function p403Toggle(id,enabled,backend){const res=await _post("/api/path_rule/toggle",{id,enabled,backend});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
-async function p403Delete(id,backend){if(!await uiConfirm("Удалить правило 403?"))return;const res=await _post("/api/path_rule/delete",{id,backend});if(res.ok)loadP403();else uiAlert("не удалось: "+(res.error||"?"));}
+function _p403Pairs(id){return _p403Grp[id]||[{id,backend:_p403Backend(id)}];}
+async function p403Toggle(id,enabled){let ok=true;for(const p of _p403Pairs(id)){const res=await _post("/api/path_rule/toggle",{id:p.id,enabled,backend:p.backend});ok=ok&&res.ok;}if(ok)loadP403();else uiAlert("не удалось переключить на всех бэкендах");}
+async function p403Delete(id){if(!await uiConfirm("Удалить правило 403?"))return;let ok=true;for(const p of _p403Pairs(id)){const res=await _post("/api/path_rule/delete",{id:p.id,backend:p.backend});ok=ok&&res.ok;}if(ok)loadP403();else uiAlert("не удалось удалить на всех бэкендах");}
 function _p403Backend(id){ return ((_p403.rules||[]).find(r=>String(r.id)===String(id))||{}).backend; }
 async function p403Master(){
   const on=_p403&&_p403.enabled!==false;
