@@ -1,4 +1,7 @@
 # App source shipped as a ConfigMap (no image build). Mounted at /srv/app.
+# Skipped entirely for a baked, digest-pinned image (bakedImage=true) — the code
+# lives in the image then, not in a tamperable ConfigMap.
+{{- if not .Values.bakedImage }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,4 +13,5 @@ data:
 {{- range $path, $bytes := .Files.Glob "app/*.py" }}
   {{ base $path }}: |-
 {{ $.Files.Get $path | indent 4 }}
+{{- end }}
 {{- end }}

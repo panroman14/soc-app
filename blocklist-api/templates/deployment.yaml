@@ -22,24 +22,32 @@ spec:
       labels:
 {{ include "blocklist-api.labels" . | indent 8 }}
       annotations:
+        {{- if not .Values.bakedImage }}
         # re-roll the pod whenever the code ConfigMap changes
         checksum/code: {{ .Files.Glob "app/*.py" | toString | sha256sum }}
+        {{- end }}
     spec:
       serviceAccountName: blocklist-api
+      {{- if not .Values.bakedImage }}
       initContainers:
         - name: deps
           image: {{ .Values.image }}
           command: ["sh", "-c", "pip install --no-cache-dir --target=/deps {{ .Values.pipPackages }}"]
           volumeMounts:
             - { name: deps, mountPath: /deps }
+      {{- end }}
       containers:
         - name: api
           image: {{ .Values.image }}
+          {{- if not .Values.bakedImage }}
           workingDir: /srv
           command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+          {{- end }}
           env:
+            {{- if not .Values.bakedImage }}
             - name: PYTHONPATH
               value: /deps:/srv
+            {{- end }}
             {{- if or .Values.token .Values.existingSecret }}
             - name: BLOCKLIST_TOKEN
               valueFrom:
@@ -70,13 +78,21 @@ spec:
             runAsNonRoot: true
             runAsUser: 10001
             allowPrivilegeEscalation: false
+            seccompProfile: { type: RuntimeDefault }
+            {{- if .Values.bakedImage }}
+            readOnlyRootFilesystem: true          # baked image needs no writable FS
+            {{- end }}
             capabilities: { drop: ["ALL"] }
+          {{- if not .Values.bakedImage }}
           volumeMounts:
             - { name: code, mountPath: /srv/app, readOnly: true }
             - { name: deps, mountPath: /deps, readOnly: true }
+          {{- end }}
+      {{- if not .Values.bakedImage }}
       volumes:
         - name: code
           configMap:
             name: blocklist-api-code
         - name: deps
           emptyDir: {}
+      {{- end }}
