@@ -3749,7 +3749,7 @@ function _p403RenderList(){
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap">
             <button onclick="setMainRule('path','${escJs(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
-            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>${_beBadge(_backends)}
+            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>
             ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">основное</span>':''}
           </div>
           <div class="text-[10px] text-slate-500 mt-0.5">${meta}</div>
