@@ -3602,7 +3602,7 @@ function _attachMenu(r, kind){
   if(gs.length) m+=`<div class="attach-sec">🗂 ${_trText('группы')}</div>`+gs.map(g=>row(`<span>${esc(g)}</span><span class="attach-res">→ ${esc(_grpResolve(g))}</span>`,"g:"+esc(g))).join("");
   types.forEach(ty=>{const mt=_typeMeta(ty);
     m+=`<div class="attach-sec" style="color:${secColor[ty]||'var(--faint)'};font-weight:500;letter-spacing:.02em">${mt.svg} ${esc(mt.lbl)}</div>`+ts.filter(t=>t.type===ty).map(t=>row(`${mt.svg}<span>${esc(t.id)}</span>`,"t:"+esc(t.id))).join("");});
-  return `<details class="attach-dd"><summary class="attach-add">＋ ${_trText('привязать')}</summary><div class="attach-menu">${m}</div></details>`;
+  return `<details name="attach-dd" class="attach-dd"><summary class="attach-add">＋ ${_trText('привязать')}</summary><div class="attach-menu">${m}</div></details>`;
 }
 function _attachUI(r, kind){
   const all=!!r.all;
