@@ -7,6 +7,7 @@ feeds alerting/anomaly logic excludes the already-denied ranges so we surface
 only NOT-yet-handled threats.
 """
 import json
+import logging
 import re
 import threading
 import urllib.error
@@ -14,6 +15,8 @@ import urllib.parse
 import urllib.request
 
 from . import config
+
+log = logging.getLogger("soc.loki")
 
 W = config.WINDOW
 SEL = config.INGRESS_SELECTOR
@@ -1114,7 +1117,7 @@ def _tor_fetch():
             with _tor_lock:
                 _tor["set"] = ips; _tor["ts"] = int(_t.time())
     except Exception as e:
-        print("[tor] refresh failed: %s" % e, flush=True)
+        log.warning("[tor] refresh failed: %s" % e)
     finally:
         _tor_refreshing = False
 
@@ -1354,7 +1357,7 @@ def ip_profile(ip, w="1h"):
                     if _eff_real(o.get("remote_addr"), o.get("real_ip_cloudflare")) == ip:
                         rows.append(o)
         except Exception as e:
-            print("[ip_profile] fetch failed for %s: %s" % (ip, e), flush=True)
+            log.warning("[ip_profile] fetch failed for %s: %s" % (ip, e))
         _timings["fetch"] = round((_t.perf_counter() - s) * 1000)
         return rows
 
@@ -1382,8 +1385,8 @@ def ip_profile(ip, w="1h"):
     err_5xx = sum(v for k, v in c_status.items() if str(k).startswith("5"))
 
     _wall = round((_t.perf_counter() - _t0) * 1000)
-    print("[ip_profile] %s w=%s wall=%dms rows=%d fetch=%dms" % (
-        ip, w, _wall, total, _timings.get("fetch", 0)), flush=True)
+    log.info("[ip_profile] %s w=%s wall=%dms rows=%d fetch=%dms" % (
+        ip, w, _wall, total, _timings.get("fetch", 0)))
     return {
         "ip": ip, "window": w,
         "total": total,
@@ -1407,7 +1410,7 @@ def _safe(fn, default):
     try:
         return fn()
     except Exception as e:
-        print("[analytics] %s failed: %s" % (getattr(fn, "__name__", "?"), e), flush=True)
+        log.warning("[analytics] %s failed: %s" % (getattr(fn, "__name__", "?"), e))
         return default
 
 

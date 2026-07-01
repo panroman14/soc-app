@@ -17,12 +17,15 @@ import secrets
 import urllib.parse
 import threading
 import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import analyze, config, db, llm, loki, metrics
+from . import analyze, config, db, llm, loki, logging_conf, metrics
+
+log = logging_conf.setup()
 
 app = FastAPI(title="soc", version="0.4.0")
 
@@ -67,7 +70,10 @@ async def security(request: Request, call_next):
     S4: the dashboard has no CSRF token and (with Basic auth) browsers replay creds,
     so a malicious page could POST bans. Reject mutating requests whose browser
     Origin doesn't match the site. Non-browser clients (curl) send no Origin → allowed.
+    Also stamps a request id (O4) into logs + the X-Request-Id response header.
     """
+    rid = (request.headers.get("x-request-id") or uuid.uuid4().hex[:12])
+    logging_conf.set_rid(rid)
     if request.method in ("POST", "PUT", "PATCH", "DELETE"):
         origin = request.headers.get("origin")
         if origin:
@@ -81,6 +87,7 @@ async def security(request: Request, call_next):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "no-referrer")
     resp.headers.setdefault("Content-Security-Policy", _CSP)
+    resp.headers.setdefault("X-Request-Id", rid)
     return resp
 
 
@@ -144,7 +151,7 @@ def poll_loop():
         except Exception as e:
             with _state_lock:
                 _state.update(loki_up=False, loki_error=str(e))
-            print("[poll] error:", e, flush=True)
+            log.warning("[poll] error:", e)
         time.sleep(config.POLL_INTERVAL)
 
 
@@ -160,7 +167,7 @@ def _refresh_path403():
                 _state["path403"] = ps
                 _state["path403_ts"] = int(time.time())
     except Exception as e:
-        print("[path403] status error:", e, flush=True)
+        log.warning("[path403] status error:", e)
 
 
 def analytics_loop():
@@ -171,7 +178,7 @@ def analytics_loop():
                 _state["analytics"] = data
                 _state["analytics_updated"] = int(time.time())
         except Exception as e:
-            print("[analytics] error:", e, flush=True)
+            log.warning("[analytics] error:", e)
         time.sleep(config.ANALYTICS_INTERVAL)
 
 
@@ -210,13 +217,13 @@ def insight_loop():
                          "text": insight.get("summary", ""),
                          "fields": {"вредный_трафик": latest.get("malicious_ratio"),
                                     "атакующих_подсетей": latest.get("distinct_attacker_ips")}})
-            print("[insight] %s: %s (llm_ok=%s)" % (
-                insight["severity"], insight.get("headline"), insight.get("llm_ok")), flush=True)
+            log.info("[insight] %s: %s (llm_ok=%s)" % (
+                insight["severity"], insight.get("headline"), insight.get("llm_ok")))
         except Exception as e:
             with _state_lock:
                 _state["llm_up"] = False
                 _state["llm_error"] = str(e)
-            print("[insight] error:", e, flush=True)
+            log.warning("[insight] error:", e)
         time.sleep(config.LLM_INTERVAL)
 
 
@@ -237,7 +244,7 @@ def tor_loop():
         try:
             loki._tor_set(block=True)   # blocking refresh — off the request path
         except Exception as e:
-            print("[tor] loop error:", e, flush=True)
+            log.warning("[tor] loop error:", e)
         time.sleep(6 * 3600)
 
 
@@ -1607,7 +1614,7 @@ def autoban_run_once():
         try:
             data = _autoban_eval(r, with_paths=False)   # executor needs only IP+count
         except Exception as e:
-            print("[autoban] rule #%s eval error: %s" % (r.get("id"), e), flush=True)
+            log.warning("[autoban] rule #%s eval error: %s" % (r.get("id"), e))
             continue
         for m in data.get("matches", []):
             ip = m.get("ip")
@@ -1673,9 +1680,9 @@ def autoban_run_once():
             if resp and resp.get("ok"):
                 banned_cidrs.extend(resp.get("blocked") or [])
             else:
-                print("[autoban] block_bulk failed (ttl=%s attach=%s): %s" % (ttl, akey, resp), flush=True)
+                log.warning("[autoban] block_bulk failed (ttl=%s attach=%s): %s" % (ttl, akey, resp))
         except Exception as e:
-            print("[autoban] block_bulk error (ttl=%s attach=%s): %s" % (ttl, akey, e), flush=True)
+            log.warning("[autoban] block_bulk error (ttl=%s attach=%s): %s" % (ttl, akey, e))
     banned = len(banned_cidrs)
     # capture matched paths for the IPs we actually banned (cheap Loki queries — NOT
     # ingress reloads, so they don't add churn) for the "why banned" view
@@ -1695,10 +1702,10 @@ def autoban_run_once():
             ban_paths = dict(list(ban_paths.items())[-500:])
         db.setting_set("autoban_ban_paths", ban_paths)
     if deferred:
-        print("[autoban] cap hit: banned %d, deferred %d (cap=%d)" % (banned, deferred, cap), flush=True)
+        log.warning("[autoban] cap hit: banned %d, deferred %d (cap=%d)" % (banned, deferred, cap))
     if banned:
-        print("[autoban] banned %d IP across %d rules (bulk, %d reload(s))" % (
-            banned, len(rules), len(by_key)), flush=True)
+        log.info("[autoban] banned %d IP across %d rules (bulk, %d reload(s))" % (
+            banned, len(rules), len(by_key)))
     db.setting_set("autoban_last_run", {"ts": int(time.time()), "checked_rules": len(rules),
                                         "candidates": len(items), "banned": banned,
                                         "deferred": deferred, "already": len(already)})
@@ -1787,7 +1794,7 @@ def threat_feed_run_once(manual=False):
         except Exception as e:
             status[name] = {"ts": int(time.time()), "ok": False, "count": 0,
                             "banned": 0, "error": str(e)}
-            print("[feed] %s failed: %s" % (name, e), flush=True)
+            log.warning("[feed] %s failed: %s" % (name, e))
     db.setting_set("threat_feed_status", status)
     db.setting_set("threat_feed_last_run", int(time.time()))
     return {"ok": True, "feeds": len(feeds), "banned": total, "status": status, "group": group}
@@ -1803,7 +1810,7 @@ def _threat_feed_tick():
     try:
         threat_feed_run_once()
     except Exception as e:
-        print("[feed] tick error:", e, flush=True)
+        log.warning("[feed] tick error:", e)
 
 
 @app.get("/api/threat_feeds")
@@ -1854,12 +1861,12 @@ def autoban_loop():
             if db.setting_get("autoban_armed", False):
                 autoban_run_once()
         except Exception as e:
-            print("[autoban] loop error:", e, flush=True)
+            log.warning("[autoban] loop error:", e)
         _refresh_path403()   # render-health for the 403-path section (runs every tick)
         try:
             _threat_feed_tick()
         except Exception as e:
-            print("[feed] loop error:", e, flush=True)
+            log.warning("[feed] loop error:", e)
         time.sleep(config.AUTOBAN_INTERVAL)
 
 
