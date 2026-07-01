@@ -243,8 +243,13 @@ def tor_loop():
 
 @app.get("/metrics", response_class=PlainTextResponse)
 def prometheus_metrics():
+    # fleet health from the cache only (never probe on a scrape); labels are backend
+    # ids (slugs), not URLs — no secret/host leak on this unauthenticated endpoint.
+    hc = _health_cache.get("d")
+    backends = (hc or {}).get("backends") if hc else None
     with _state_lock:
-        return metrics.render(_state["summary"], _state["loki_up"], _state.get("path403"))
+        return metrics.render(_state["summary"], _state["loki_up"],
+                              _state.get("path403"), backends=backends)
 
 
 @app.get("/api/summary")

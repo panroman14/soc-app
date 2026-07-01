@@ -18,7 +18,7 @@ _SCALARS = [
 ]
 
 
-def render(summary, loki_up, path403=None):
+def render(summary, loki_up, path403=None, backends=None):
     lines = []
     if summary:
         for metric, key in _SCALARS:
@@ -42,4 +42,21 @@ def render(summary, loki_up, path403=None):
         lines.append("loki_ingress_path403_controller_reachable %d" % (1 if path403.get("controller_reachable") else 0))
     lines.append("# TYPE loki_ingress_exporter_loki_up gauge")
     lines.append("loki_ingress_exporter_loki_up %d" % (1 if loki_up else 0))
+    # Per-backend fleet health (from the cached probe) — scrapeable/alertable.
+    if backends:
+        def _q(s):
+            return str(s).replace("\\", "").replace('"', "")
+        lines.append("# TYPE soc_backend_up gauge")
+        for b in backends:
+            lines.append('soc_backend_up{backend="%s"} %d' % (_q(b.get("id")), 1 if b.get("reachable") else 0))
+        lines.append("# TYPE soc_backend_token_ok gauge")
+        for b in backends:
+            lines.append('soc_backend_token_ok{backend="%s"} %d' % (_q(b.get("id")), 1 if b.get("token_ok") else 0))
+        lines.append("# TYPE soc_backend_latency_ms gauge")
+        for b in backends:
+            if b.get("latency_ms") is not None:
+                lines.append('soc_backend_latency_ms{backend="%s"} %d' % (_q(b.get("id")), int(b["latency_ms"])))
+        down = sum(1 for b in backends if not b.get("reachable"))
+        lines.append("# TYPE soc_backends_down gauge")
+        lines.append("soc_backends_down %d" % down)
     return "\n".join(lines) + "\n"

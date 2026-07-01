@@ -43,6 +43,18 @@ jobs:
           python -m pip install --quiet -r backend/requirements.txt
           python backend/tests/test_units.py
 
+      - uses: azure/setup-helm@v4
+
+      - name: Helm chart lint + render (incl. fail-closed guard)
+        run: |
+          helm lint blocklist-api --set token=ci
+          helm template blocklist-api --set token=ci >/dev/null
+          helm template blocklist-api --set bakedImage=true --set image=reg/x@sha256:0 >/dev/null
+          # the chart MUST refuse to render with no token / existingSecret / devNoAuth
+          if helm template blocklist-api >/dev/null 2>&1; then
+            echo "FAIL: chart rendered without auth (fail-closed guard broken)"; exit 1
+          fi
+
       - name: End-to-end smoke test (blocklist-api)
         run: ./tests/smoke.sh
 
