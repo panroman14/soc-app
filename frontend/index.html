@@ -987,17 +987,21 @@
       </div>
     </div>
 
-    <!-- 4. tops -->
-    <div class="grid md:grid-cols-2 gap-2 mb-2">
-      <div class="card p-3">
+    <!-- 4. tops: paths (wide) | IPs | status -->
+    <div class="grid md:grid-cols-4 gap-2 mb-2">
+      <div class="card p-3 md:col-span-2">
         <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5"><span data-i18n="logs.toppaths">top paths</span> <span style="color:#3d4654" data-i18n="logs.clickf">· click = filter</span></div>
         <div id="lg-top-path"><div class="text-slate-600 text-xs">…</div></div>
         <div class="text-center mt-1"><button id="lg-more-path" onclick="lgTopMore('path')" class="btn btn-ghost btn-xs">25 ▾</button></div>
       </div>
       <div class="card p-3">
-        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5"><span data-i18n="logs.topips">top IPs</span> <span style="color:#3d4654" data-i18n="logs.clickf">· click = filter</span></div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5"><span data-i18n="logs.topips">top IPs</span></div>
         <div id="lg-top-ip"><div class="text-slate-600 text-xs">…</div></div>
         <div class="text-center mt-1"><button id="lg-more-ip" onclick="lgTopMore('ip')" class="btn btn-ghost btn-xs">25 ▾</button></div>
+      </div>
+      <div class="card p-3">
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">status</div>
+        <div id="lg-top-status"><div class="text-slate-600 text-xs">…</div></div>
       </div>
     </div>
 
@@ -1875,7 +1879,7 @@ function _lgTopRows(items,field){
       <span class="bct">${on?"✕":_dbNum(it.count)}</span>${ban}</div>`;
   }).join("");
 }
-const _LG_RAIL_FIELDS=["status","country","host","method"];
+const _LG_RAIL_FIELDS=["country","host","method"];
 function _lgRailRows(items,field){
   if(!items||!items.length)return "";
   const act=new Set(_lg.chips.filter(c=>c.field===field).map(c=>c.value));
@@ -1894,7 +1898,7 @@ async function lgLoadTops(gen){
   const rail=document.getElementById("lg-facets");
   if(!els.path)return;
   try{
-    const flds=["path","ip"].concat(_LG_RAIL_FIELDS);
+    const flds=["path","ip","status"].concat(_LG_RAIL_FIELDS);
     const res=await Promise.all(flds.map(f=>
       _post("/api/logs/facets",Object.assign(_lgBody({fields:[f],topn:f==="path"||f==="ip"?_lgTopN[f]:7}),{chips:_lgChipsWithout(f)})).catch(()=>null)));
     if(gen!==undefined&&gen!==_lgGen)return;
@@ -1905,10 +1909,13 @@ async function lgLoadTops(gen){
       const btn=document.getElementById("lg-more-"+f);
       if(btn)btn.textContent=_lgTopN[f]<=10?"25 ▾":"10 ▴";
     });
+    const stEl=document.getElementById("lg-top-status");
+    if(stEl)stEl.innerHTML=_lgRailRows((res[2]&&res[2].facets&&res[2].facets.status)||[],"status")
+      ||`<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
     if(rail){
       const sec=(f,i)=>{ const html=_lgRailRows((res[i]&&res[i].facets&&res[i].facets[f])||[],f);
         return html?`<div><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">${f}</div>${html}</div>`:""; };
-      rail.innerHTML=_LG_RAIL_FIELDS.map((f,j)=>sec(f,j+2)).filter(Boolean).join("")
+      rail.innerHTML=_LG_RAIL_FIELDS.map((f,j)=>sec(f,j+3)).filter(Boolean).join("")
         ||`<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
     }
   }catch(e){}
