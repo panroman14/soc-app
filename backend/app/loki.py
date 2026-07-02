@@ -196,7 +196,9 @@ def _sel_with_sources(sources):
         if not vals and not has_empty:
             continue
         if vals:
-            esc = "|".join(re.escape(v) for v in vals) + ("|" if has_empty else "")
+            # _re2_esc, NOT re.escape: Python escapes '-' as \- which Loki's RE2
+            # rejects with HTTP 400
+            esc = "|".join(_re2_esc(v) for v in vals) + ("|" if has_empty else "")
             parts.append('%s=~"%s"' % (label, esc))
         else:
             parts.append('%s=""' % label)
