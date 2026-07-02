@@ -1580,7 +1580,7 @@ let _lgTimer=null,_lgSrcAll=[],_lgSrcCounts=[],_lgWin=+(localStorage.getItem("so
 const _LG_CLS=["2xx","3xx","4xx","5xx"];
 const _LG_COL={"2xx":"#6fcf97","3xx":"#6fcf97","4xx":"#d9a441","5xx":"#e07070"};
 const _LG_WINS=[[15,"15m"],[60,"1h"],[360,"6h"],[1440,"24h"],[10080,"7d"]];
-function loadLogs(){ lgRenderWinTabs(); lgStyleApply(); lgClsApply(); lgRenderChips(); lgLoadSources(); lgRun(); }
+function loadLogs(){ lgRenderWinTabs(); lgStyleApply(); lgClsApply(); lgRenderChips(); lgLoadPrefs(); lgLoadSources(); lgRun(); }
 function _lgMins(){ return _lg.winMin||_lgWin; }
 // filters are plain chips — no query language. cls pill + path substring + click chips.
 function _lgChips(){
@@ -1619,8 +1619,24 @@ function lgRenderWinTabs(){
   el.innerHTML=_LG_WINS.map(([m,l])=>`<span class="lg-pill${_lgWin===m&&!_lg.winMin?" on":""}" onclick="lgWinSet(${m})">${l}</span>`).join("");
 }
 function lgWinSet(m){ _lgWin=m; localStorage.setItem("soc_lg_win",m); lgRun(); }
-function lgStyleSet(s){ _lg.style=s; localStorage.setItem("soc_lg_style",s); lgStyleApply(); if(_lgHistData)lgRenderHist(_lgHistData); }
+// chart style: the picked style becomes the DEFAULT — stored server-side
+// (ui_prefs) so it survives other browsers/devices; localStorage is a fast cache
+function lgStyleSet(s){
+  _lg.style=s; localStorage.setItem("soc_lg_style",s); lgStyleApply();
+  if(_lgHistData)lgRenderHist(_lgHistData);
+  _post("/api/ui_prefs",{logs_chart_style:s}).catch(()=>{});
+}
 function lgStyleApply(){ document.querySelectorAll("#lg-style-seg span[data-s]").forEach(x=>x.classList.toggle("on",x.dataset.s===_lg.style)); }
+async function lgLoadPrefs(){
+  try{
+    const d=await fetch("/api/ui_prefs").then(r=>r.json());
+    const s=(d.prefs||{}).logs_chart_style;
+    if(s&&["bars","lines","area"].includes(s)&&s!==_lg.style){
+      _lg.style=s; localStorage.setItem("soc_lg_style",s); lgStyleApply();
+      if(_lgHistData)lgRenderHist(_lgHistData);
+    }
+  }catch(e){}
+}
 // ── query + render ──
 async function lgRun(){ _lg.endNs=null; _lg.winMin=null; lgRenderWinTabs(); return _lgFetch(); }
 let _lgGen=0, _lgFacetDeb=null, _lgHistData=null;

@@ -701,6 +701,24 @@ async def api_logs_overview(request: Request):
     return {"enabled": True, "hours": hours, "series": series, "events": events[-40:]}
 
 
+@app.get("/api/ui_prefs")
+def api_ui_prefs_get():
+    """Small server-side UI preference store (chart style defaults etc.) so
+    choices survive across browsers/devices."""
+    return {"prefs": db.setting_get("ui_prefs", {}) or {}}
+
+
+@app.post("/api/ui_prefs")
+async def api_ui_prefs_set(request: Request):
+    body = await request.json()
+    d = db.setting_get("ui_prefs", {}) or {}
+    for k, v in (body or {}).items():
+        if isinstance(k, str) and len(k) <= 40 and isinstance(v, (str, int, float, bool)):
+            d[k] = v if not isinstance(v, str) else v[:80]
+    db.setting_set("ui_prefs", d)
+    return {"ok": True, "prefs": d}
+
+
 @app.get("/api/log_views")
 def api_log_views_get():
     """Saved Live-Logs views (sources + chips + range)."""
