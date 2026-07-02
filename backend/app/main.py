@@ -523,8 +523,9 @@ async def api_logs_facets(request: Request):
     mins = min(max(int(body.get("minutes") or 15), 1), 10080)
     fields = [f for f in (body.get("fields") or _FACET_FIELDS) if f in loki._LOG_FIELDS]
     end_ns = body.get("end_ns")                   # C2: honor zoom anchor
+    topn = min(max(int(body.get("topn") or 10), 1), 50)
     merged = {}
-    for _sid, res, err in _loki_fanout(lambda: loki.log_facets(q, fields, mins, end_ns=end_ns),
+    for _sid, res, err in _loki_fanout(lambda: loki.log_facets(q, fields, mins, topn=topn, end_ns=end_ns),
                                        body.get("log_sources")):
         if err or not res:
             continue
@@ -533,7 +534,7 @@ async def api_logs_facets(request: Request):
             for it in vals:
                 acc[it["value"]] = acc.get(it["value"], 0) + it["count"]
     facets = {f: sorted(({"value": k, "count": n} for k, n in d.items()),
-                        key=lambda x: -x["count"])[:10] for f, d in merged.items()}
+                        key=lambda x: -x["count"])[:topn] for f, d in merged.items()}
     return {"enabled": True, "facets": facets}
 
 
