@@ -396,7 +396,9 @@ def _loki_fanout(fn, selected=None):
     def one(t):
         sid, url = t
         try:
-            with loki.scope(sid, url):
+            # env="" — the source id is NOT an env label; passing it as one would
+            # inject env="<sid>" into the stream selector and match nothing.
+            with loki.scope("", url):
                 return (sid, fn(), None)
         except Exception as e:
             return (sid, None, str(e))
