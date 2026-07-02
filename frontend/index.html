@@ -169,6 +169,13 @@
   .lg-pill{font-size:10.5px;padding:3px 10px;border-radius:99px;border:1px solid #2a3340;background:#12171f;color:#8c98ab;cursor:pointer;white-space:nowrap;transition:.12s}
   .lg-pill:hover{border-color:#3b475e;color:#c4cdda}
   .lg-pill.on{background:#4d8dff1a;border-color:#4d8dff3b;color:#9cc0ff}
+  .lg-dd{position:relative;display:inline-block}
+  .lg-dd summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .lg-dd summary::-webkit-details-marker{display:none}
+  .lg-dd-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:4px;min-width:160px;box-shadow:0 10px 26px -8px #000c}
+  .lg-dd-it{padding:5px 10px;border-radius:6px;font-size:11px;font-family:ui-monospace,monospace;color:#c4cdda;cursor:pointer;white-space:nowrap}
+  .lg-dd-it:hover{background:#ffffff0a}
+  .lg-dd-it.on{background:#4d8dff1a;color:#9cc0ff}
   .lg-seg{display:inline-flex;border:1px solid #2a3340;border-radius:8px;overflow:hidden}
   .lg-seg span{font-size:10.5px;padding:3px 10px;color:#8c98ab;cursor:pointer;border-right:1px solid #2a3340;white-space:nowrap}
   .lg-seg span:last-child{border-right:0}
@@ -1304,7 +1311,7 @@ const RU2EN={
   "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
   "осталось до авто-разбана":"time left until auto-unban","истекает…":"expiring…",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
-  "волна":"wave","показать строки":"show rows","забанить все":"ban all","в основном":"mostly","Итог окна":"Window summary","всплеск(ов) 5xx":"5xx spike(s)","последний":"last","без всплесков":"no spikes","уник. IP":"uniq IP","не удалось":"failed","трафик":"traffic","Запись":"Record","этот IP за 24ч":"this IP over 24h","ошибок":"errors","запросов":"requests","запр/мин":"req/min","используется LOKI_URL по умолчанию — можно добавить ещё Loki":"using default LOKI_URL — you can add more Loki sources","путь":"path","страна":"country",
+  "волна":"wave","показать строки":"show rows","забанить все":"ban all","в основном":"mostly","Итог окна":"Window summary","всплеск(ов) 5xx":"5xx spike(s)","последний":"last","без всплесков":"no spikes","уник. IP":"uniq IP","не удалось":"failed","трафик":"traffic","Запись":"Record","этот IP за 24ч":"this IP over 24h","ошибок":"errors","все ноды":"all nodes","все кластеры":"all clusters","запросов":"requests","запр/мин":"req/min","используется LOKI_URL по умолчанию — можно добавить ещё Loki":"using default LOKI_URL — you can add more Loki sources","путь":"path","страна":"country",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
   "Исполнитель не подключён — реального бана нет.":"Executor not wired — no real ban.","Заполни условие и нажми «Превью».":"Fill the condition and hit “Preview”.",
@@ -1938,21 +1945,30 @@ async function lgLoadSources(){
   try{ const d=await fetch("/api/log_label_values?name=vm").then(r=>r.json()); _lgVms=(d.values||[]).filter(Boolean); }catch(e){ _lgVms=[]; }
   lgRenderSrcTabs();
 }
+const _LG_IC_NGINX='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6fcf97" stroke-width="2" style="display:inline-block;vertical-align:-2px"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6" y2="6.51"/><line x1="6" y1="17.5" x2="6" y2="17.51"/></svg>';
+const _LG_IC_ING='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" style="display:inline-block;vertical-align:-2px"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><path d="M12 11v9M12 11l8-4.5M12 11L4 6.5"/></svg>';
 function lgRenderSrcTabs(){
   const el=document.getElementById("lg-src-tabs"); if(!el)return;
   const cur=_lg.tab||"__all__";
-  const tab=(id,label)=>`<span class="lg-pill${cur===id?" on":""}" onclick="lgSrcPick('${escJs(id)}')">${label}</span>`;
-  let html=tab("__all__",_trText("Все"));
-  _lgVms.forEach(v=>{ html+=tab("vm:"+v,"nginx · "+esc(v)); });
-  if(_lgVms.length)html+=tab("ingress","Ingress");
-  _lgSrcAll.forEach(s=>{ html+=tab("loki:"+s.id,esc(s.label||s.id)); });
-  el.innerHTML=html;
+  const it=(id,label)=>`<div class="lg-dd-it${cur===id?" on":""}" onclick="lgSrcPick('${escJs(id)}')">${label}</div>`;
+  const dd=(icon,title,selLabel,items)=>`<details class="lg-dd" name="lg-src-dd">
+      <summary class="lg-pill${selLabel!==null?" on":""}">${icon} ${title}${selLabel!==null?`: <span class="mono">${esc(selLabel)}</span>`:""} ▾</summary>
+      <div class="lg-dd-menu">${items}</div></details>`;
+  const nginxSel=cur==="nginx-all"?_trText("все ноды"):(cur.startsWith("vm:")?cur.slice(3):null);
+  const ingSel=cur==="ingress"?_trText("все кластеры"):(cur.startsWith("loki:")?((_lgSrcAll.find(s=>"loki:"+s.id===cur)||{}).label||cur.slice(5)):null);
+  const nginxItems=(_lgVms.length>1?it("nginx-all",_trText("все ноды")):"")+_lgVms.map(v=>it("vm:"+v,esc(v))).join("");
+  const ingItems=it("ingress",_trText("все кластеры"))+_lgSrcAll.map(s=>it("loki:"+s.id,esc(s.label||s.id))).join("");
+  el.innerHTML=`<span class="lg-pill${cur==="__all__"?" on":""}" onclick="lgSrcPick('__all__')">${_trText("Все")}</span>`
+    +(_lgVms.length?dd(_LG_IC_NGINX,"nginx",nginxSel,nginxItems):"")
+    +dd(_LG_IC_ING,"Ingress",ingSel,ingItems);
 }
 function lgSrcPick(id){
   _lg.tab=id; _lg.sel=null; _lg.sources=[];
   if(id.startsWith("vm:"))_lg.sel={vm:[id.slice(3)]};
+  else if(id==="nginx-all")_lg.sel={vm:_lgVms.slice()};
   else if(id==="ingress")_lg.sel={vm:[""]};        // streams without a vm label = k8s ingress
   else if(id.startsWith("loki:"))_lg.sources=[id.slice(5)];
+  document.querySelectorAll(".lg-dd[open]").forEach(d=>d.removeAttribute("open"));
   lgRenderSrcTabs(); lgRun();
 }
 function lgSourcesOpen(){
