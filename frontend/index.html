@@ -176,6 +176,8 @@
   .lg-brow .btrk{flex:1;height:5px;background:#0a0e14;border-radius:3px;overflow:hidden;min-width:24px}
   .lg-brow .bnm{max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lg-brow .bct{color:#5b6675;margin-left:auto}
+  .lg-brow.lg-on{background:#4d8dff14;outline:1px solid #4d8dff40}
+  .lg-brow.lg-on .bct{color:#9cc0ff}
   .lg-wrap{display:flex;gap:8px;align-items:flex-start}
   .lg-rail{width:176px;flex:0 0 176px}
   .lg-mid{flex:1;min-width:0}
@@ -1798,30 +1800,62 @@ function lgRenderHist(h){
      `<rect x="${L+104}" y="${T+2}" width="8" height="6" fill="#f87171"/><text x="${L+115}" y="${T+8}">5xx</text></g>`;
   el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${g}</svg>`;
 }
-// ── facet rail: status / country / source / host / path with mini-bars, click = filter ──
+// ── facet rail: mini-bars, click = filter. Facet counts are computed WITHOUT the
+//    filter on their own field (Datadog-style), so picking status:404 keeps the
+//    other statuses listed; the active value is highlighted and click toggles off. ──
+const _LG_ALIAS={code:"status",url:"path",uri:"path"};
+function _lgFieldOfTok(tok){
+  const t=tok.startsWith("-")?tok.slice(1):tok;
+  const i=t.indexOf(":"); if(i<1)return null;
+  const f=t.slice(0,i); return _LG_ALIAS[f]||f;
+}
+function _lgOmniWithout(field){ return _lgToks(_lg.omni).filter(t=>_lgFieldOfTok(t)!==field).join(" "); }
+function _lgActiveVals(field){
+  const s=new Set();
+  _lgToks(_lg.omni).forEach(t=>{
+    if(t.startsWith("-"))return;
+    if(_lgFieldOfTok(t)!==field)return;
+    s.add(t.slice(t.indexOf(":")+1).replace(/^"|"$/g,""));
+  });
+  return s;
+}
 function _lgBkRows(items,field){
   if(!items||!items.length)return `<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
+  const act=_lgActiveVals(field);
   const max=Math.max(...items.map(i=>i.count),1);
-  return items.slice(0,7).map(it=>{
-    const v=String(it.value), col=field==="status"?_lgStatusColor(v):"#4d8dff";
-    return `<div class="lg-brow" onclick="lgFacetPick('${escJs(field)}','${escJs(v)}')" title="filter">
+  const sorted=items.slice(0,9).sort((a,b)=>(act.has(String(b.value))?1:0)-(act.has(String(a.value))?1:0));
+  return sorted.map(it=>{
+    const v=String(it.value), on=act.has(v), col=field==="status"?_lgStatusColor(v):"#4d8dff";
+    return `<div class="lg-brow${on?" lg-on":""}" onclick="lgFacetPick('${escJs(field)}','${escJs(v)}')" title="${on?"remove filter":"filter"}">
       <span class="bnm" style="color:${field==="status"?col:"#c4cdda"}">${field==='country'?flag(v)+' ':''}${esc(v)}</span>
       <span class="btrk"><span style="display:block;width:${Math.round(it.count/max*100)}%;height:100%;background:${col}99"></span></span>
-      <span class="bct">${_dbNum(it.count)}</span></div>`;
+      <span class="bct">${on?"✕":_dbNum(it.count)}</span></div>`;
   }).join("");
 }
 let _lgSrcCounts=[];
+const _LG_FACET_FIELDS=["status","method","country","host","path","ip","ua"];
 async function lgLoadFacets(gen){
   const el=document.getElementById("lg-facets"); if(!el)return;
   try{
-    const d=await _post("/api/logs/facets", _lgBody({fields:["status","country","host","path"]}));
-    if(gen!==undefined&&gen!==_lgGen)return;
-    if(d.enabled===false){ el.innerHTML='<div class="text-slate-600 text-xs">Loki '+_trText("не настроен")+'.</div>'; return; }
-    const f=d.facets||{}; _lgBk={facets:f};
+    let f={};
+    if(_lg.raw){                                  // raw LogQL: no per-field exclusion possible
+      const d=await _post("/api/logs/facets", _lgBody({fields:_LG_FACET_FIELDS}));
+      if(gen!==undefined&&gen!==_lgGen)return;
+      if(d.enabled===false){ el.innerHTML='<div class="text-slate-600 text-xs">Loki '+_trText("не настроен")+'.</div>'; return; }
+      f=d.facets||{};
+    } else {                                      // one call per field, own-field filter excluded
+      const res=await Promise.all(_LG_FACET_FIELDS.map(fd=>
+        _post("/api/logs/facets", Object.assign(_lgBody({fields:[fd]}),{omnibar:_lgOmniWithout(fd)})).catch(()=>null)));
+      if(gen!==undefined&&gen!==_lgGen)return;
+      if(res[0]&&res[0].enabled===false){ el.innerHTML='<div class="text-slate-600 text-xs">Loki '+_trText("не настроен")+'.</div>'; return; }
+      res.forEach((d,i)=>{ if(d&&d.facets)f[_LG_FACET_FIELDS[i]]=d.facets[_LG_FACET_FIELDS[i]]||[]; });
+    }
+    _lgBk={facets:f};
     const sec=(lbl,html)=>html?`<div><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">${lbl}</div>${html}</div>`:"";
     const srcHtml=_lgSrcCounts.length>1?_lgSrcCounts.map(s=>`<div class="lg-brow" style="cursor:default"><span class="bnm">${esc(s.id)}</span><span class="bct">${_dbNum(s.count)}</span></div>`).join(""):"";
-    el.innerHTML=[sec("status",_lgBkRows(f.status,"status")),sec("country",_lgBkRows(f.country,"country")),
-      sec("source",srcHtml),sec("host",_lgBkRows(f.host,"host")),sec("path",_lgBkRows(f.path,"path"))].filter(Boolean).join("")
+    el.innerHTML=[sec("status",_lgBkRows(f.status,"status")),sec("method",_lgBkRows(f.method,"method")),
+      sec("country",_lgBkRows(f.country,"country")),sec("source",srcHtml),sec("host",_lgBkRows(f.host,"host")),
+      sec("path",_lgBkRows(f.path,"path")),sec("ip",_lgBkRows(f.ip,"ip")),sec("ua",_lgBkRows(f.ua,"ua"))].filter(Boolean).join("")
       ||`<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
     lgVerdict();
   }catch(e){ el.innerHTML='<div class="text-red-400 text-xs">'+_trText("ошибка")+'</div>'; }
