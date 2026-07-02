@@ -183,15 +183,23 @@ def log_label_values(name):
 
 def _sel_with_sources(sources):
     """Base INGRESS_SELECTOR + chosen source labels merged into one stream selector.
-    sources: {label: [value, ...]} → label=~"v1|v2" (regex-or)."""
+    sources: {label: [value, ...]} → label=~"v1|v2" (regex-or). An empty-string
+    value means "label absent" (Loki: label="" matches missing labels) — used by
+    the Ingress tab to select streams that carry no vm label."""
     inner = SEL.strip()[1:-1].strip() if SEL.strip().startswith("{") else ""
     parts = [inner] if inner else []
     for label, vals in (sources or {}).items():
-        vals = [v for v in vals if v]
-        if not vals or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", label or ""):
+        if not isinstance(vals, list) or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", label or ""):
             continue
-        esc = "|".join(re.escape(v) for v in vals)
-        parts.append('%s=~"%s"' % (label, esc))
+        has_empty = "" in vals
+        vals = [v for v in vals if v]
+        if not vals and not has_empty:
+            continue
+        if vals:
+            esc = "|".join(re.escape(v) for v in vals) + ("|" if has_empty else "")
+            parts.append('%s=~"%s"' % (label, esc))
+        else:
+            parts.append('%s=""' % label)
     return "{" + ",".join(parts) + "}"
 
 

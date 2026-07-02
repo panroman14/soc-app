@@ -1593,6 +1593,7 @@ function _lgChips(){
 function _lgBody(extra){
   const b={chips:_lgChips(), minutes:_lgMins()};
   if(_lg.sources.length)b.log_sources=_lg.sources;
+  if(_lg.sel)b.sources=_lg.sel;                    // stream-label selector (target tabs)
   if(_lg.endNs)b.end_ns=_lg.endNs;
   return Object.assign(b, extra||{});
 }
@@ -1774,12 +1775,18 @@ function lgRenderHist(h){
   document.getElementById("lg-num-4xx").textContent=sum4?_dbNum(sum4)+" 4xx":"";
   document.getElementById("lg-num-5xx").textContent=sum5?_dbNum(sum5)+" 5xx":"";
   if(!seen.length){ el.innerHTML='<div class="text-slate-600 text-xs">'+_trText("нет строк под фильтр")+'</div>'; return; }
-  // fill missing buckets (Loki returns only non-empty ones)
+  // fill missing buckets across the WHOLE window (not just the seen range) —
+  // otherwise a single non-empty bucket renders as one page-wide bar
   let ts=[];
-  if(step>0&&(seen[seen.length-1]-seen[0])/step<=400){
-    for(let t=seen[0];t<=seen[seen.length-1];t+=step){ ts.push(t); buckets[t]=buckets[t]||{}; }
+  const endS=Math.floor((_lg.endNs?_lg.endNs/1e9:Date.now()/1000)/step)*step;
+  const startS=endS-_lgMins()*60;
+  if(step>0&&(endS-startS)/step<=400){
+    // anchor the grid to a REAL bucket so filled slots align with Loki's timestamps
+    const first=seen[0]-Math.ceil(Math.max(0,seen[0]-startS)/step)*step;
+    for(let t=first;t<=Math.max(endS,seen[seen.length-1]);t+=step){ ts.push(t); buckets[t]=buckets[t]||{}; }
+    if(!ts.length)ts=seen;
   } else ts=seen;
-  const W=800,H=130,L=48,B=16,T=8,plotW=W-L-8,plotH=H-B-T;
+  const W=800,H=138,L=48,B=16,T=16,plotW=W-L-8,plotH=H-B-T;
   const winMin=_lgMins(), rpm=(t,cs)=>cs.reduce((a,c)=>a+(buckets[t][c]||0),0)*k;
   let rawMax=1; ts.forEach(t=>{ const v=rpm(t,_LG_CLS); if(v>rawMax)rawMax=v; });
   const max=_lgNiceMax(rawMax);
@@ -1795,7 +1802,7 @@ function lgRenderHist(h){
         `<text x="${L-5}" y="${T+plotH+3}" text-anchor="end" font-size="9" fill="#5b6675">0</text>`+
         `<text x="${L-5}" y="${T+plotH/2+3}" text-anchor="end" font-size="9" fill="#5b6675">${fmt(max/2)}</text>`+
         `<text x="${L-5}" y="${T+3}" text-anchor="end" font-size="9" fill="#5b6675">${fmt(max)}</text>`+
-        `<text x="${L-5}" y="${T-1}" text-anchor="end" font-size="8" fill="#5b6675">${_trText("запр/мин")}</text>`;
+        `<text x="${L-5}" y="${T-8}" text-anchor="end" font-size="8" fill="#5b6675">${_trText("запр/мин")}</text>`;
   const tip=t=>`${_lgFmtT(t,winMin)} · ${fmt(rpm(t,_LG_CLS))} ${_trText("запр/мин")}`+(rpm(t,["4xx"])?` · 4xx ${fmt(rpm(t,["4xx"]))}`:"")+(rpm(t,["5xx"])?` · 5xx ${fmt(rpm(t,["5xx"]))}`:"");
   if(_lg.style==="bars"){
     g+=ts.map(t=>{
@@ -1900,22 +1907,31 @@ function lgWinLabel(){
     lgRenderWinTabs();
   } else el.classList.add("hidden");
 }
-// ── log sources: tabs (Все / per registered Loki), ⚙ panel manages the registry ──
+// ── source tabs by TARGET (nginx VMs via the `vm` stream label, Ingress = no vm),
+//    plus extra registered Loki backends. ⚙ panel manages the Loki registry. ──
+let _lgVms=[];
 async function lgLoadSources(){
   try{ const d=await fetch("/api/log_sources").then(r=>r.json()); _lgSrcAll=d.items||[]; }catch(e){ _lgSrcAll=[]; }
+  try{ const d=await fetch("/api/log_label_values?name=vm").then(r=>r.json()); _lgVms=(d.values||[]).filter(Boolean); }catch(e){ _lgVms=[]; }
   lgRenderSrcTabs();
 }
 function lgRenderSrcTabs(){
   const el=document.getElementById("lg-src-tabs"); if(!el)return;
-  if(_lgSrcAll.length<2){                          // one implicit source — no choice to make
-    el.innerHTML=`<span class="lg-pill on" style="cursor:default">${esc(_lgSrcAll.length?(_lgSrcAll[0].label||_lgSrcAll[0].id):"Loki")}</span>`;
-    return;
-  }
-  const cur=_lg.sources.length===1?_lg.sources[0]:"";
-  el.innerHTML=`<span class="lg-pill${cur===""?" on":""}" onclick="lgSrcPick('')">${_trText("Все")}</span>`+
-    _lgSrcAll.map(s=>`<span class="lg-pill${cur===s.id?" on":""}" onclick="lgSrcPick('${escJs(s.id)}')">${esc(s.label||s.id)}</span>`).join("");
+  const cur=_lg.tab||"__all__";
+  const tab=(id,label)=>`<span class="lg-pill${cur===id?" on":""}" onclick="lgSrcPick('${escJs(id)}')">${label}</span>`;
+  let html=tab("__all__",_trText("Все"));
+  _lgVms.forEach(v=>{ html+=tab("vm:"+v,"nginx · "+esc(v)); });
+  if(_lgVms.length)html+=tab("ingress","Ingress");
+  _lgSrcAll.forEach(s=>{ html+=tab("loki:"+s.id,esc(s.label||s.id)); });
+  el.innerHTML=html;
 }
-function lgSrcPick(id){ _lg.sources=id?[id]:[]; lgRenderSrcTabs(); lgRun(); }
+function lgSrcPick(id){
+  _lg.tab=id; _lg.sel=null; _lg.sources=[];
+  if(id.startsWith("vm:"))_lg.sel={vm:[id.slice(3)]};
+  else if(id==="ingress")_lg.sel={vm:[""]};        // streams without a vm label = k8s ingress
+  else if(id.startsWith("loki:"))_lg.sources=[id.slice(5)];
+  lgRenderSrcTabs(); lgRun();
+}
 function lgSourcesOpen(){
   const p=document.getElementById("lg-src-panel"); const wasHidden=p.classList.contains("hidden");
   p.classList.toggle("hidden"); if(!wasHidden)return;
