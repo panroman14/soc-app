@@ -175,7 +175,9 @@
   .lg-dd-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:4px;min-width:160px;box-shadow:0 10px 26px -8px #000c}
   .lg-dd-it{padding:5px 10px;border-radius:6px;font-size:11px;font-family:ui-monospace,monospace;color:#c4cdda;cursor:pointer;white-space:nowrap}
   .lg-dd-it:hover{background:#ffffff0a}
-  .lg-dd-it.on{background:#4d8dff1a;color:#9cc0ff}
+  .lg-dd-it.on{background:#4d8dff12;color:#9cc0ff}
+  .lg-dd-chk{display:inline-block;width:11px;height:11px;border:1px solid #3b475e;border-radius:3px;margin-right:7px;vertical-align:-1px}
+  .lg-dd-chk.on{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2px #0b0e14}
   .lg-seg{display:inline-flex;border:1px solid #2a3340;border-radius:8px;overflow:hidden}
   .lg-seg span{font-size:10.5px;padding:3px 10px;color:#8c98ab;cursor:pointer;border-right:1px solid #2a3340;white-space:nowrap}
   .lg-seg span:last-child{border-right:0}
@@ -1947,29 +1949,41 @@ async function lgLoadSources(){
 }
 const _LG_IC_NGINX='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6fcf97" stroke-width="2" style="display:inline-block;vertical-align:-2px"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6" y2="6.51"/><line x1="6" y1="17.5" x2="6" y2="17.51"/></svg>';
 const _LG_IC_ING='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" style="display:inline-block;vertical-align:-2px"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><path d="M12 11v9M12 11l8-4.5M12 11L4 6.5"/></svg>';
+// multi-select: any mix of nginx nodes + ingress + clusters; menus stay open
+const _lgPick={vms:[],ing:false,lokis:[]};
+function _lgPickApply(){
+  const vmList=_lgPick.vms.slice();
+  if(_lgPick.ing)vmList.push("");                  // "" = streams without a vm label (k8s)
+  _lg.sel=vmList.length?{vm:vmList}:null;
+  _lg.sources=_lgPick.lokis.slice();
+}
 function lgRenderSrcTabs(){
   const el=document.getElementById("lg-src-tabs"); if(!el)return;
-  const cur=_lg.tab||"__all__";
-  const it=(id,label)=>`<div class="lg-dd-it${cur===id?" on":""}" onclick="lgSrcPick('${escJs(id)}')">${label}</div>`;
-  const dd=(icon,title,selLabel,items)=>`<details class="lg-dd" name="lg-src-dd">
+  const open=[...el.querySelectorAll(".lg-dd[open]")].map((d,i)=>d.dataset.dd);
+  const chk=on=>`<span class="lg-dd-chk${on?" on":""}"></span>`;
+  const it=(kind,val,on,label)=>`<div class="lg-dd-it${on?" on":""}" onclick="event.stopPropagation();lgSrcToggle('${kind}','${escJs(val)}')">${chk(on)}${label}</div>`;
+  const none=!_lgPick.vms.length&&!_lgPick.ing&&!_lgPick.lokis.length;
+  const nSel=_lgPick.vms.length, iSel=(_lgPick.ing?1:0)+_lgPick.lokis.length;
+  const nLbl=nSel===0?null:nSel===1?_lgPick.vms[0]:nSel+"/"+_lgVms.length;
+  const iLbl=iSel===0?null:(_lgPick.ing&&!_lgPick.lokis.length)?_trText("все кластеры"):(iSel===1?((_lgSrcAll.find(s=>s.id===_lgPick.lokis[0])||{}).label||_lgPick.lokis[0]):String(iSel));
+  const dd=(key,icon,title,selLabel,items)=>`<details class="lg-dd" name="lg-src-dd" data-dd="${key}"${open.includes(key)?" open":""}>
       <summary class="lg-pill${selLabel!==null?" on":""}">${icon} ${title}${selLabel!==null?`: <span class="mono">${esc(selLabel)}</span>`:""} ▾</summary>
       <div class="lg-dd-menu">${items}</div></details>`;
-  const nginxSel=cur==="nginx-all"?_trText("все ноды"):(cur.startsWith("vm:")?cur.slice(3):null);
-  const ingSel=cur==="ingress"?_trText("все кластеры"):(cur.startsWith("loki:")?((_lgSrcAll.find(s=>"loki:"+s.id===cur)||{}).label||cur.slice(5)):null);
-  const nginxItems=(_lgVms.length>1?it("nginx-all",_trText("все ноды")):"")+_lgVms.map(v=>it("vm:"+v,esc(v))).join("");
-  const ingItems=it("ingress",_trText("все кластеры"))+_lgSrcAll.map(s=>it("loki:"+s.id,esc(s.label||s.id))).join("");
-  el.innerHTML=`<span class="lg-pill${cur==="__all__"?" on":""}" onclick="lgSrcPick('__all__')">${_trText("Все")}</span>`
-    +(_lgVms.length?dd(_LG_IC_NGINX,"nginx",nginxSel,nginxItems):"")
-    +dd(_LG_IC_ING,"Ingress",ingSel,ingItems);
+  const allOn=_lgVms.length&&_lgPick.vms.length===_lgVms.length;
+  const nginxItems=(_lgVms.length>1?it("vm-all","",allOn,_trText("все ноды")):"")+_lgVms.map(v=>it("vm",v,_lgPick.vms.includes(v),esc(v))).join("");
+  const ingItems=it("ing","",_lgPick.ing,_trText("все кластеры"))+_lgSrcAll.map(s=>it("loki",s.id,_lgPick.lokis.includes(s.id),esc(s.label||s.id))).join("");
+  el.innerHTML=`<span class="lg-pill${none?" on":""}" onclick="lgSrcToggle('all','')">${_trText("Все")}</span>`
+    +(_lgVms.length?dd("n",_LG_IC_NGINX,"nginx",nLbl,nginxItems):"")
+    +dd("i",_LG_IC_ING,"Ingress",iLbl,ingItems);
 }
-function lgSrcPick(id){
-  _lg.tab=id; _lg.sel=null; _lg.sources=[];
-  if(id.startsWith("vm:"))_lg.sel={vm:[id.slice(3)]};
-  else if(id==="nginx-all")_lg.sel={vm:_lgVms.slice()};
-  else if(id==="ingress")_lg.sel={vm:[""]};        // streams without a vm label = k8s ingress
-  else if(id.startsWith("loki:"))_lg.sources=[id.slice(5)];
-  document.querySelectorAll(".lg-dd[open]").forEach(d=>d.removeAttribute("open"));
-  lgRenderSrcTabs(); lgRun();
+function lgSrcToggle(kind,val){
+  if(kind==="all"){ _lgPick.vms=[]; _lgPick.ing=false; _lgPick.lokis=[];
+    document.querySelectorAll(".lg-dd[open]").forEach(d=>d.removeAttribute("open")); }
+  else if(kind==="vm")_lgPick.vms=_lgPick.vms.includes(val)?_lgPick.vms.filter(x=>x!==val):_lgPick.vms.concat(val);
+  else if(kind==="vm-all")_lgPick.vms=_lgPick.vms.length===_lgVms.length?[]:_lgVms.slice();
+  else if(kind==="ing")_lgPick.ing=!_lgPick.ing;
+  else if(kind==="loki")_lgPick.lokis=_lgPick.lokis.includes(val)?_lgPick.lokis.filter(x=>x!==val):_lgPick.lokis.concat(val);
+  _lgPickApply(); lgRenderSrcTabs(); lgRun();
 }
 function lgSourcesOpen(){
   const p=document.getElementById("lg-src-panel"); const wasHidden=p.classList.contains("hidden");
