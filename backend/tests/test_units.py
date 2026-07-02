@@ -197,6 +197,45 @@ def test_write_fanout_empty_ids_errors():
     assert out["ok"] is False
 
 
+def _mkrow(ts, ip, path, status="403"):
+    return {"ts": ts, "ip": ip, "path": path, "status": status}
+
+
+def test_waves_swarm_detected():
+    # 14 IPs hammering wp-login/xmlrpc → one wave (same actors merge across paths)
+    rows = []
+    for i in range(14):
+        for k in range(3):
+            rows.append(_mkrow(1000 + k, "10.0.0.%d" % i, "/wp-login.php"))
+            rows.append(_mkrow(1000 + k, "10.0.0.%d" % i, "/xmlrpc.php"))
+    waves = m._detect_waves(rows)
+    assert len(waves) == 1
+    w = waves[0]
+    assert w["ip_count"] == 14 and w["hits"] == 84
+    assert set(w["paths"]) == {"/wp-login.php", "/xmlrpc.php"}
+
+
+def test_waves_hammer_single_ip():
+    # one IP, 50 hits on one path → wave even though ip_count < 3
+    rows = [_mkrow(1000 + i, "10.9.9.9", "/api/login", "401") for i in range(50)]
+    assert len(m._detect_waves(rows)) == 1
+
+
+def test_waves_quiet_traffic_no_wave():
+    # sparse 2xx/single 4xx noise → nothing
+    rows = ([_mkrow(1000 + i, "10.0.1.%d" % i, "/page%d" % i, "200") for i in range(30)]
+            + [_mkrow(2000, "10.0.2.1", "/.env", "404")])
+    assert m._detect_waves(rows) == []
+
+
+def test_waves_digit_paths_cluster():
+    # /item/123, /item/987 … normalize to one signature
+    rows = [_mkrow(1000 + i, "10.1.0.%d" % (i % 5), "/item/%d" % (i * 7), "404")
+            for i in range(30)]
+    waves = m._detect_waves(rows)
+    assert len(waves) == 1 and waves[0]["ip_count"] == 5
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

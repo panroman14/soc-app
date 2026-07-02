@@ -154,9 +154,6 @@
   .grp-card{background:#1a1710;border:1px solid #3a311e;border-radius:10px;padding:10px 12px}
   .grp-card .grp-name{font-weight:600;color:#f4e3c4}
   /* Live Logs explorer */
-  .lg-explorer{display:flex;gap:12px;align-items:flex-start}
-  .lg-aside{width:240px;flex-shrink:0;max-height:80vh;overflow:auto}
-  .lg-main{flex:1;min-width:0}
   .lg-sep{width:1px;height:18px;background:var(--border);display:inline-block}
   .lg-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:7px;font-size:11px;background:#1e293b;border:1px solid #334155;color:#cbd5e1}
   .lg-chip b{color:#93c5fd;font-weight:600}
@@ -167,9 +164,18 @@
   .lg-tree-val{display:flex;align-items:center;gap:6px;padding:2px 4px 2px 18px;border-radius:5px;cursor:pointer;color:#94a3b8;font-size:11px}
   .lg-tree-val:hover{background:#1e293b}
   .lg-tree-val input{accent-color:var(--accent)}
-  .lg-hist{height:56px;display:flex;align-items:flex-end;gap:1px;background:#0a0e14;border:1px solid var(--border);border-radius:8px;padding:3px}
-  .lg-hist .bar{flex:1;background:transparent;min-height:1px;cursor:pointer;overflow:hidden;border-radius:1px 1px 0 0}
-  .lg-hist .bar:hover{outline:1px solid #ffffff22}
+  #lg-hist svg .hbar{cursor:pointer}
+  #lg-hist svg .hbar:hover rect{opacity:.85}
+  #lg-ov svg{display:block}
+  .lg-kpi{background:linear-gradient(165deg,var(--surface),var(--surface2));border:1px solid var(--border);border-radius:10px;padding:7px 12px}
+  .lg-kpi .l{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
+  .lg-kpi .v{font-size:16px;font-weight:500}
+  .lg-kpi .d{font-size:10px;font-family:ui-monospace,monospace;margin-left:4px}
+  .lg-brow{display:flex;gap:6px;align-items:center;padding:2px 4px;border-radius:5px;cursor:pointer;color:#94a3b8;font-size:11px;font-family:ui-monospace,monospace}
+  .lg-brow:hover{background:#1e293b;color:#cbd5e1}
+  .lg-brow .btrk{flex:1;height:5px;background:#0a0e14;border-radius:3px;overflow:hidden;min-width:24px}
+  .lg-brow .bnm{max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lg-brow .bct{color:#5b6675;margin-left:auto}
   .lg-facet-v{display:flex;gap:6px;align-items:center;padding:2px 4px;border-radius:4px;cursor:pointer;color:#94a3b8}
   .lg-facet-v:hover{background:#1e293b;color:#cbd5e1}
   .lg-facet-v .truncate{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -180,7 +186,6 @@
   .lg-row.head{position:sticky;top:0;background:#0d131d;color:#64748b;text-transform:uppercase;font-size:9px;letter-spacing:.04em;cursor:default;z-index:1}
   .lg-detail{background:#070b11;border-bottom:1px solid #131a26;padding:8px 10px}
   .lg-raw-line{padding:3px 8px;border-bottom:1px solid #131a26;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;line-height:1.5}
-  @media(max-width:820px){.lg-explorer{flex-direction:column}.lg-aside{width:100%;max-height:none}}
   /* Custom dashboards grid */
   .db-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
   .db-panel{background:var(--card,#0f1623);border:1px solid var(--border);border-radius:12px;padding:12px;min-height:120px;display:flex;flex-direction:column;overflow:hidden}
@@ -921,21 +926,21 @@
   </div><!-- /view-settings -->
 
   <div id="view-logs" class="hidden">
-    <!-- omnibar + toolbar -->
+    <!-- toolbar: time first, then filter -->
     <div class="card p-3 mb-2">
       <div class="flex items-center gap-1.5 flex-wrap">
-        <input id="lg-omni" class="input mono flex-1" style="min-width:240px" spellcheck="false"
+        <select id="lg-mins" class="input" style="width:auto" onchange="lgRun()">
+          <option value="15" selected>15m</option><option value="60">1h</option><option value="180">3h</option>
+          <option value="360">6h</option><option value="720">12h</option><option value="1440">24h</option><option value="10080">7d</option>
+        </select>
+        <span id="lg-win-label" class="text-[11px] mono hidden" style="color:var(--accent2)"></span>
+        <button onclick="lgEvJump(-1)" class="btn btn-ghost btn-xs" title="prev 5xx spike">←⚡</button>
+        <button onclick="lgEvJump(1)" class="btn btn-ghost btn-xs" title="next 5xx spike">⚡→</button>
+        <input id="lg-omni" class="input mono flex-1" style="min-width:200px" spellcheck="false"
                placeholder="status:5xx  method:POST  -country:US  path:/wp-*  rt:>1  free text …  (Enter)"
                onkeydown="if(event.key==='Enter')lgApplyOmni()">
-        <select id="lg-mins" class="input" style="width:auto" onchange="lgRun()">
-          <option value="5">5m</option><option value="15" selected>15m</option><option value="60">1h</option>
-          <option value="360">6h</option><option value="1440">24h</option><option value="10080">7d</option>
-        </select>
         <button onclick="lgApplyOmni()" class="btn btn-primary btn-xs">▸ <span data-i18n="logs.filter">run</span></button>
         <button id="lg-tail-btn" onclick="lgTailToggle()" class="btn btn-ghost btn-xs">▶ <span data-i18n="logs.follow">tail</span></button>
-        <button onclick="lgRawToggle()" id="lg-rawmode-btn" class="btn btn-ghost btn-xs" title="structured / raw">⇄ <span data-i18n="logs.parsed">table</span></button>
-        <button onclick="lgViewSave()" class="btn btn-ghost btn-xs" title="save view">💾</button>
-        <button onclick="lgExport()" class="btn btn-ghost btn-xs">⬇ <span data-i18n="logs.export">export</span></button>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap mt-2">
         <span class="text-[10px] uppercase tracking-wide text-slate-500 mr-1">quick</span>
@@ -945,36 +950,54 @@
         <button onclick="lgQuick('attacks')" class="btn btn-ghost btn-xs">⚠ attacks</button>
         <button onclick="lgQuick('rt:>1')" class="btn btn-ghost btn-xs">slow</button>
         <span class="lg-sep"></span>
+        <button onclick="lgViewsOpen()" id="lg-views-btn" class="btn btn-ghost btn-xs" title="saved views">💾 <span data-i18n="logs.views2">views</span></button>
+        <button onclick="lgRawToggle()" id="lg-rawmode-btn" class="btn btn-ghost btn-xs" title="structured / raw">⇄ <span data-i18n="logs.parsed">table</span></button>
+        <button onclick="lgExport()" class="btn btn-ghost btn-xs">⬇ <span data-i18n="logs.export">export</span></button>
         <button onclick="lgSourcesOpen()" id="lg-src-btn" class="btn btn-ghost btn-xs" title="log sources">🗄 sources</button>
         <div id="lg-src-status" class="text-[11px]"></div>
       </div>
+      <div id="lg-views-panel" class="hidden mt-2 pt-2 border-t" style="border-color:var(--border)"><div id="lg-views" class="flex items-center gap-2 flex-wrap"></div></div>
       <div id="lg-src-panel" class="hidden mt-2 pt-2 border-t" style="border-color:var(--border)"></div>
     </div>
 
-    <div class="lg-explorer">
-      <!-- LEFT: facets -->
-      <aside class="card p-3 lg-aside">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-[12px] font-semibold text-slate-200">Facets</h3>
-          <button onclick="lgLoadFacets()" class="text-[11px] text-slate-500 hover:text-slate-300" title="refresh">↻</button>
-        </div>
-        <div id="lg-facets" class="space-y-2 text-[12px]"><div class="text-slate-600 text-xs">…</div></div>
-        <div class="mt-3 pt-2 border-t" style="border-color:var(--border)">
-          <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1" data-i18n="logs.views">Saved views</div>
-          <div id="lg-views" class="space-y-1"></div>
-        </div>
-      </aside>
+    <!-- 24h context strip -->
+    <div class="card p-3 mb-2">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[10px] uppercase tracking-wide text-slate-500" data-i18n="logs.ov">last 24h — click a spike or marker</span>
+        <span id="lg-ov-alert" class="text-[11px]"></span>
+      </div>
+      <div id="lg-ov"></div>
+    </div>
 
-      <!-- RIGHT: histogram + stream -->
-      <section class="card p-3 lg-main">
-        <div id="lg-hist" class="lg-hist mb-1" title="click a bar to zoom"></div>
-        <div id="lg-stats" class="text-[11px] text-slate-500 mb-1"></div>
-        <input id="lg-raw" class="input mono hidden mb-2" style="width:100%" placeholder='raw LogQL (power user)' onkeydown="if(event.key==='Enter')lgRun()">
-        <div id="lg-table" class="lg-table"><div class="text-slate-600 text-xs p-2">…</div></div>
-        <div class="text-center mt-2">
-          <button id="lg-more" onclick="lgLoadOlder()" class="btn btn-ghost btn-xs hidden">↓ load older</button>
-        </div>
-      </section>
+    <!-- KPI for selected window -->
+    <div id="lg-kpi" class="hidden grid grid-cols-2 md:grid-cols-5 gap-2 mb-2"></div>
+
+    <!-- window histogram -->
+    <div class="card p-3 mb-2">
+      <div id="lg-hist" title="click a bar to zoom"></div>
+      <div id="lg-stats" class="text-[11px] text-slate-500 mt-1"></div>
+    </div>
+
+    <!-- waves (attack clusters) — only rendered when detected -->
+    <div id="lg-waves" class="mb-2"></div>
+
+    <!-- breakdowns -->
+    <div class="grid md:grid-cols-3 gap-2 mb-2">
+      <div class="card p-3"><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5" data-i18n="logs.bk.st">what responded (errors)</div><div id="lg-bk-status" class="space-y-1"><div class="text-slate-600 text-xs">…</div></div></div>
+      <div class="card p-3"><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5" data-i18n="logs.bk.host">where (host)</div><div id="lg-bk-host" class="space-y-1"><div class="text-slate-600 text-xs">…</div></div></div>
+      <div class="card p-3"><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5" data-i18n="logs.bk.path">which paths</div><div id="lg-bk-path" class="space-y-1"><div class="text-slate-600 text-xs">…</div></div></div>
+    </div>
+
+    <!-- verdict -->
+    <div id="lg-verdict" class="hidden mb-2"></div>
+
+    <!-- raw stream -->
+    <div class="card p-3">
+      <input id="lg-raw" class="input mono hidden mb-2" style="width:100%" placeholder='raw LogQL (power user)' onkeydown="if(event.key==='Enter')lgRun()">
+      <div id="lg-table" class="lg-table"><div class="text-slate-600 text-xs p-2">…</div></div>
+      <div class="text-center mt-2">
+        <button id="lg-more" onclick="lgLoadOlder()" class="btn btn-ghost btn-xs hidden">↓ load older</button>
+      </div>
     </div>
   </div><!-- /view-logs -->
 
@@ -1095,6 +1118,7 @@ const I18N={en:{
   "env":"Environment","env.all":"all","connecting":"connecting…","refresh":"refresh",
   "logs.title":"Live logs","logs.sub":"Raw nginx lines from Loki, filtered by the current environment.","logs.access":"access","logs.error":"error","logs.follow":"tail","logs.empty":"no log lines for this filter","logs.off":"log viewer needs Loki (LOKI_URL) configured",
   "logs.sources":"Sources","logs.views":"Saved views","logs.parsed":"parsed","logs.export":"export","logs.filter":"filter","logs.attacks":"attacks",
+  "logs.views2":"views","logs.ov":"last 24h — click a spike or marker","logs.bk.st":"what responded (errors)","logs.bk.host":"where (host)","logs.bk.path":"which paths",
   "ai.title":"AI analyst","ai.feed":"AI insights feed","llm.on":"🤖 LLM: on","llm.off":"🤖 LLM: off","llm.label":"LLM analysis","llm.hint":"When off, all AI mentions disappear from the dashboard.",
   "nf.h":"Notifications — Slack / Telegram","nf.sub":"First define channels (where to send), then rules (what & when — event × env × severity → channel).","nf.channels":"Channels","nf.rules":"Rules","nf.addrule":"＋ Rule",
   "p403.where":"Available targets:","p403.addrule":"Add rule",
@@ -1121,6 +1145,7 @@ const I18N={en:{
   "env":"Окружение","env.all":"все","connecting":"подключение…","refresh":"обновить",
   "logs.title":"Логи в реальном времени","logs.sub":"Сырые строки nginx из Loki, фильтр по текущему окружению.","logs.access":"доступ","logs.error":"ошибки","logs.follow":"хвост","logs.empty":"нет строк под фильтр","logs.off":"для просмотра логов нужен настроенный Loki (LOKI_URL)",
   "logs.sources":"Источники","logs.views":"Сохранённые виды","logs.parsed":"таблица","logs.export":"экспорт","logs.filter":"фильтр","logs.attacks":"атаки",
+  "logs.views2":"виды","logs.ov":"последние 24ч — кликни всплеск или маркер","logs.bk.st":"что отвечало (ошибки)","logs.bk.host":"где (host)","logs.bk.path":"какие пути",
   "ai.title":"AI-аналитик","ai.feed":"Лента AI-инсайтов","llm.on":"🤖 LLM: вкл","llm.off":"🤖 LLM: выкл","llm.label":"AI-разбор (LLM)","llm.hint":"Когда выключен, все упоминания AI исчезают с дашборда.",
   "nf.h":"Уведомления — Slack / Telegram","nf.sub":"Сначала задай каналы (куда слать), затем правила (что и при каких условиях — событие × env × важность → канал).","nf.channels":"Каналы","nf.rules":"Правила","nf.addrule":"＋ Правило",
   "p403.where":"Доступные таргеты:","p403.addrule":"Добавить правило",
@@ -1259,6 +1284,7 @@ const RU2EN={
   "повторные нарушители":"repeat offenders","повторных нарушителей пока нет":"no repeat offenders yet",
   "осталось до авто-разбана":"time left until auto-unban","истекает…":"expiring…",
   "обновляю…":"refreshing…","забанено: ":"banned: ",
+  "волна":"wave","показать строки":"show rows","забанить все":"ban all","в основном":"mostly","Итог окна":"Window summary","всплеск(ов) 5xx":"5xx spike(s)","последний":"last","без всплесков":"no spikes","уник. IP":"uniq IP","не удалось":"failed","трафик":"traffic","к вчера":"vs yesterday","сохранить текущий":"save current",
   "Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.":"Bans an IP by request count over the window — no path needed (flood / brute-force / scraping). The status code below can stay empty or be narrowed, e.g. 404.",
   "Выключен — ни одно правило не банит (правила можно настраивать, превью работает).":"Off — no rule bans (rules are editable, preview works).",
   "Исполнитель не подключён — реального бана нет.":"Executor not wired — no real ban.","Заполни условие и нажми «Превью».":"Fill the condition and hit “Preview”.",
@@ -1531,12 +1557,12 @@ function renderTray(){
   }).join("");
 }
 
-// ── Live Logs explorer v2 (Datadog-style: omnibar + facets + stacked histogram) ──
+// ── Logs v3: incident investigation (24h context → window KPI → breakdowns → stream) ──
 const _lg={omni:"",raw:"",rawMode:false,tail:false,sources:[],rows:[],cursor:null,endNs:null,winMin:null};
-let _lgTimer=null,_lgViews=[],_lgSrcAll=[];
+let _lgTimer=null,_lgViews=[],_lgSrcAll=[],_lgSpikes=[],_lgStatsD=null,_lgWaves=[],_lgBk=null;
 const _LG_CLS=["2xx","3xx","4xx","5xx"];
 const _LG_COL={"2xx":"#34d399","3xx":"#60a5fa","4xx":"#fbbf24","5xx":"#f87171"};
-function loadLogs(){ lgLoadSources(); lgLoadViews(); lgRun(); }
+function loadLogs(){ lgLoadSources(); lgLoadViews(); lgOverview(); lgRun(); }
 function _lgMins(){ return _lg.winMin||(+document.getElementById("lg-mins").value||15); }
 function _lgBody(extra){
   const b={omnibar:_lg.omni, raw:_lg.raw, minutes:_lgMins()};
@@ -1563,14 +1589,14 @@ async function _lgFetch(){
   try{
     const [q,h]=await Promise.all([
       _post("/api/logs/query", _lgBody({limit:200})),
-      _post("/api/logs/histogram", _lgBody({by_class:true}))
+      _post("/api/logs/histogram", _lgBody({by_class:true,with_p95:true}))
     ]);
     if(gen!==_lgGen)return;                         // a newer run superseded this one
     if(q.enabled===false){ tbl.innerHTML='<div class="text-slate-600 text-xs p-2">Loki '+_trText("не настроен")+' (LOKI_URL).</div>'; document.getElementById("lg-hist").innerHTML=""; return; }
     _lg.rows=q.rows||[]; _lg.cursor=q.next_cursor||null;
-    lgRenderRows(); lgRenderHist(h); lgRenderSrcStatus(q.sources||[]); lgStats(q);
+    lgRenderRows(); lgRenderHist(h); lgRenderSrcStatus(q.sources||[]); lgStats(q); lgWinLabel();
     document.getElementById("lg-more").classList.toggle("hidden", !_lg.cursor);
-    clearTimeout(_lgFacetDeb); _lgFacetDeb=setTimeout(lgLoadFacets,400);   // Pf1: debounce facets (N×7 queries)
+    clearTimeout(_lgFacetDeb); _lgFacetDeb=setTimeout(()=>{lgLoadBreakdowns(gen);lgLoadWindowStats(gen);lgLoadWaves(gen);},400);   // Pf1: debounce heavy window queries
   }catch(e){ if(gen===_lgGen)tbl.innerHTML='<div class="text-red-400 text-xs p-2">error: '+esc(e.message)+'</div>'; }
   clearTimeout(_lgTimer);
   if(_lg.tail&&_view==="logs")_lgTimer=setTimeout(lgTail,5000);
@@ -1646,34 +1672,253 @@ async function lgBanIP(ip){
 }
 function lgPathTo403(path){ showView('p403'); uiAlert(_trText("открой 403 и добавь путь")+": "+path); }
 function lgFacetPick(field,value){ lgQuick(field+":"+(/\s/.test(value)?('"'+value+'"'):value)); }
-// ── stacked histogram (by status class), click a bar to zoom ──
+// ── window histogram: SVG with axes + legend + p95 overlay, click a bar to zoom ──
+function _lgFmtT(t,winMin){ const d=new Date(t*1000); const hm=("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+  return winMin>1440?(d.getMonth()+1)+"/"+d.getDate()+" "+hm:hm; }
+function _lgNiceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(Math.max(1,v)))); const n=v/p;
+  return (n<=1?1:n<=2?2:n<=5?5:10)*p; }
 function lgRenderHist(h){
   const el=document.getElementById("lg-hist"); if(!el)return;
   const series=(h&&h.series)||{}; const step=(h&&h.step)||60;
   const buckets={}; Object.keys(series).forEach(c=>(series[c]||[]).forEach(p=>{ (buckets[p.t]=buckets[p.t]||{})[c]=p.v; }));
   const ts=Object.keys(buckets).map(Number).sort((a,b)=>a-b);
-  if(!ts.length){ el.innerHTML=""; return; }
-  let max=1; ts.forEach(t=>{ let s=0; _LG_CLS.forEach(c=>s+=buckets[t][c]||0); if(s>max)max=s; });
-  el.innerHTML=ts.map(t=>{
-    const segs=_LG_CLS.map(c=>{ const v=buckets[t][c]||0; return v?`<div style="height:${(v/max*100).toFixed(2)}%;background:${_LG_COL[c]}"></div>`:""; }).join("");
-    const tot=_LG_CLS.reduce((a,c)=>a+(buckets[t][c]||0),0);
-    return `<div class="bar" style="display:flex;flex-direction:column-reverse;align-items:stretch" onclick="lgZoom(${t},${step})" title="${new Date(t*1000).toLocaleString()} · ${Math.round(tot)}">${segs}</div>`;
+  if(!ts.length){ el.innerHTML='<div class="text-slate-600 text-xs">'+_trText("нет строк под фильтр")+'</div>'; return; }
+  const W=800,H=120,L=42,B=16,T=6;
+  let rawMax=1; ts.forEach(t=>{ let s=0; _LG_CLS.forEach(c=>s+=buckets[t][c]||0); if(s>rawMax)rawMax=s; });
+  const max=_lgNiceMax(rawMax), plotW=W-L-6, plotH=H-B-T, bw=Math.max(1.5,plotW/ts.length-1.5);
+  const x=t=>L+( (t-ts[0])/Math.max(1,(ts[ts.length-1]-ts[0])) )*(plotW-bw);
+  // grid + Y labels (0 / half / max)
+  let g=`<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" stroke="var(--border)"/>`+
+        `<line x1="${L}" y1="${T+plotH}" x2="${W-4}" y2="${T+plotH}" stroke="var(--border)"/>`+
+        `<line x1="${L}" y1="${T+plotH/2}" x2="${W-4}" y2="${T+plotH/2}" stroke="#161d29"/>`+
+        `<line x1="${L}" y1="${T}" x2="${W-4}" y2="${T}" stroke="#161d29"/>`+
+        `<text x="${L-4}" y="${T+plotH+3}" text-anchor="end" font-size="9" fill="#5b6675">0</text>`+
+        `<text x="${L-4}" y="${T+plotH/2+3}" text-anchor="end" font-size="9" fill="#5b6675">${_dbNum(max/2)}</text>`+
+        `<text x="${L-4}" y="${T+3}" text-anchor="end" font-size="9" fill="#5b6675">${_dbNum(max)}</text>`;
+  // stacked bars
+  const winMin=_lgMins();
+  g+=ts.map(t=>{
+    let y=T+plotH, segs="", tot=0;
+    _LG_CLS.forEach(c=>{ const v=buckets[t][c]||0; if(!v)return; tot+=v;
+      const hh=v/max*plotH; y-=hh;
+      segs+=`<rect x="${x(t).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" fill="${_LG_COL[c]}" opacity="${c==="2xx"||c==="3xx"?".45":".9"}"/>`; });
+    return `<g class="hbar" onclick="lgZoom(${t},${step})"><title>${_lgFmtT(t,winMin)} · ${Math.round(tot)}</title><rect x="${x(t).toFixed(1)}" y="${T}" width="${bw.toFixed(1)}" height="${plotH}" fill="transparent"/>${segs}</g>`;
+  }).join("");
+  // X labels: 4 ticks
+  const nx=Math.min(4,ts.length);
+  for(let i=0;i<nx;i++){ const t=ts[Math.floor(i*(ts.length-1)/Math.max(1,nx-1))];
+    g+=`<text x="${(x(t)+bw/2).toFixed(1)}" y="${H-4}" text-anchor="middle" font-size="9" fill="#5b6675">${_lgFmtT(t,winMin)}</text>`; }
+  // p95 overlay (own scale, right-normalized)
+  const p95=(h&&h.p95)||[];
+  if(p95.length>1){
+    const pmax=_lgNiceMax(Math.max(...p95.map(p=>p.v),0.001));
+    const pts=p95.map(p=>`${(x(p.t)+bw/2).toFixed(1)},${(T+plotH-(p.v/pmax)*plotH).toFixed(1)}`).join(" ");
+    g+=`<polyline points="${pts}" fill="none" stroke="#fbbf24" stroke-width="1.3" opacity=".9"/>`+
+       `<text x="${W-6}" y="${T+9}" text-anchor="end" font-size="9" fill="#fbbf24">p95 ≤ ${pmax>=1?pmax.toFixed(1)+"s":Math.round(pmax*1000)+"ms"}</text>`;
+  }
+  // legend (top-left, inside plot)
+  g+=`<g font-size="9" fill="#8c98ab"><rect x="${L+6}" y="${T+2}" width="8" height="6" fill="#34d39973"/><text x="${L+17}" y="${T+8}">2xx/3xx</text>`+
+     `<rect x="${L+64}" y="${T+2}" width="8" height="6" fill="#fbbf24"/><text x="${L+75}" y="${T+8}">4xx</text>`+
+     `<rect x="${L+104}" y="${T+2}" width="8" height="6" fill="#f87171"/><text x="${L+115}" y="${T+8}">5xx</text></g>`;
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${g}</svg>`;
+}
+// ── breakdowns: what responded / where / which paths (errors first), click = filter ──
+function _lgBkRows(items,field){
+  if(!items||!items.length)return `<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
+  const max=Math.max(...items.map(i=>i.count),1);
+  return items.slice(0,7).map(it=>{
+    const v=String(it.value), col=field==="status"?_lgStatusColor(v):"#4d8dff";
+    return `<div class="lg-brow" onclick="lgFacetPick('${escJs(field)}','${escJs(v)}')" title="filter">
+      <span class="bnm" style="color:${field==="status"?col:"#c4cdda"}">${field==='country'?flag(v)+' ':''}${esc(v)}</span>
+      <span class="btrk"><span style="display:block;width:${Math.round(it.count/max*100)}%;height:100%;background:${col}99"></span></span>
+      <span class="bct">${_dbNum(it.count)}</span></div>`;
   }).join("");
 }
-// ── facets panel (top values per field, click to filter) ──
-async function lgLoadFacets(){
-  const el=document.getElementById("lg-facets"); if(!el)return;
+async function lgLoadBreakdowns(gen){
+  const els={status:document.getElementById("lg-bk-status"),host:document.getElementById("lg-bk-host"),path:document.getElementById("lg-bk-path")};
+  if(!els.status)return;
   try{
-    const d=await _post("/api/logs/facets", _lgBody({}));
+    // errors-first: breakdowns over 4xx/5xx rows; fall back to all traffic when the window has no errors
+    const errChip={field:"status",op:"class",value:"45"};
+    let d=await _post("/api/logs/facets", _lgBody({fields:["status","host","path"],chips:[errChip]}));
+    if(gen!==undefined&&gen!==_lgGen)return;
+    if(d.enabled===false){ Object.values(els).forEach(el=>el.innerHTML='<div class="text-slate-600 text-xs">Loki '+_trText("не настроен")+'.</div>'); return; }
+    let f=d.facets||{}, errMode=true;
+    if(!(f.status||[]).length){
+      d=await _post("/api/logs/facets", _lgBody({fields:["status","host","path"]}));
+      if(gen!==undefined&&gen!==_lgGen)return;
+      f=d.facets||{}; errMode=false;
+    }
+    _lgBk={facets:f,errMode};
+    els.status.innerHTML=_lgBkRows(f.status,"status");
+    els.host.innerHTML=_lgBkRows(f.host,"host");
+    els.path.innerHTML=_lgBkRows(f.path,"path");
+    lgVerdict();
+  }catch(e){ els.status.innerHTML='<div class="text-red-400 text-xs">'+_trText("ошибка")+'</div>'; }
+}
+// ── window KPIs with deltas vs the same window yesterday ──
+function _lgDelta(now,prev,goodDown){
+  if(!prev)return "";
+  const r=now/prev;
+  if(r>=0.9&&r<=1.1)return `<span class="d" style="color:#5b6675">≈</span>`;
+  const up=r>1, col=(up!==!!goodDown)?"#f87171":"#4ade80";
+  const txt=r>=2?("▲"+(r>=10?Math.round(r):r.toFixed(1))+"×"):r<=0.5?("▼"+(prev/Math.max(now,1)>=10?Math.round(prev/Math.max(now,1)):(prev/Math.max(now,1)).toFixed(1))+"×"):
+    ((up?"▲":"▼")+Math.abs(Math.round((r-1)*100))+"%");
+  return `<span class="d" style="color:${col}">${txt}</span>`;
+}
+async function lgLoadWindowStats(gen){
+  const el=document.getElementById("lg-kpi"); if(!el)return;
+  try{
+    const d=await _post("/api/logs/window_stats", _lgBody({}));
+    if(gen!==undefined&&gen!==_lgGen)return;
+    if(d.enabled===false){ el.classList.add("hidden"); return; }
+    _lgStatsD=d;
+    const n=d.now||{}, p=d.prev||{};
+    const pct=(e,t)=>t?Math.round(e/t*1000)/10:0;
+    const p95f=v=>!v?"—":v>=1?v.toFixed(1)+"s":Math.round(v*1000)+"ms";
+    el.classList.remove("hidden");
+    el.innerHTML=
+      `<div class="lg-kpi"><div class="l">req</div><div class="v">${_dbNum(n.req)}${_lgDelta(n.req,p.req,true)}</div></div>`+
+      `<div class="lg-kpi"><div class="l">4xx</div><div class="v" style="color:${pct(n.e4,n.req)>10?"#fbbf24":"var(--text)"}">${pct(n.e4,n.req)}%${_lgDelta(pct(n.e4,n.req),pct(p.e4,p.req))}</div></div>`+
+      `<div class="lg-kpi"><div class="l">5xx</div><div class="v" style="color:${pct(n.e5,n.req)>1?"#f87171":"var(--text)"}">${pct(n.e5,n.req)}%${_lgDelta(pct(n.e5,n.req),pct(p.e5,p.req))}</div></div>`+
+      `<div class="lg-kpi"><div class="l">${_trText("уник. IP")}</div><div class="v">${_dbNum(n.uniq_ip)}${_lgDelta(n.uniq_ip,p.uniq_ip)}</div></div>`+
+      `<div class="lg-kpi"><div class="l">p95</div><div class="v" style="color:${n.p95>3?"#fbbf24":"var(--text)"}">${p95f(n.p95)}${_lgDelta(n.p95,p.p95)}</div></div>`;
+    lgVerdict();
+  }catch(e){}
+}
+// ── waves: attack clusters in the window (cause, not ban queue) ──
+async function lgLoadWaves(gen){
+  const el=document.getElementById("lg-waves"); if(!el)return;
+  try{
+    const d=await _post("/api/logs/waves", _lgBody({}));
+    if(gen!==undefined&&gen!==_lgGen)return;
+    _lgWaves=(d&&d.waves)||[];
+    if(!_lgWaves.length){ el.innerHTML=""; lgVerdict(); return; }
+    el.innerHTML=_lgWaves.slice(0,3).map((w,i)=>{
+      const span=Math.max(1,Math.round((w.last_ts-w.first_ts)/60000));
+      const sts=Object.keys(w.statuses||{}).join(",");
+      return `<div class="card p-2.5 mb-1.5" style="border-color:#fbbf2440;background:#fbbf240a">
+        <div class="flex items-center gap-2 flex-wrap text-[11px]">
+          <span class="px-1.5 py-0.5 rounded" style="background:#fbbf2426;color:#fcd34d;font-size:10px">⚠ ${_trText("волна")}</span>
+          <span class="mono text-slate-200">${w.ip_count} IP · ${_dbNum(w.hits)} hits · ${span} min</span>
+          <span class="mono" style="color:var(--muted)">${(w.paths||[]).map(esc).join(", ")} · ${esc(sts)}</span>
+          <span class="ml-auto flex gap-1.5">
+            <button onclick="lgWaveShow(${i})" class="btn btn-ghost btn-xs">▸ ${_trText("показать строки")}</button>
+            <button onclick="lgWaveBan(${i})" class="btn btn-xs" style="background:#f8717126;color:#fda4af;border-color:#f8717140">⛔ ${_trText("забанить все")} ${w.ip_count}</button>
+          </span>
+        </div></div>`;
+    }).join("");
+    lgVerdict();
+  }catch(e){}
+}
+function lgWaveShow(i){
+  const w=_lgWaves[i]; if(!w)return;
+  const p=(w.paths||[])[0]||""; const el=document.getElementById("lg-omni");
+  el.value=("path:"+(/\s/.test(p)?'"'+p+'"':p)+" status:4xx").trim(); lgApplyOmni();
+}
+async function lgWaveBan(i){
+  const w=_lgWaves[i]; if(!w)return;
+  if(!await uiConfirm(_trText("забанить все")+" "+w.ips.length+" IP ("+_trText("волна")+": "+(w.paths||[]).slice(0,2).join(", ")+")?"))return;
+  const r=await _post("/api/block_bulk",{cidrs:w.ips,reason:"wave: "+(w.paths||[]).slice(0,2).join(","),ttl:2592000});
+  uiAlert(r&&(r.ok||r.multi)?("✓ "+_trText("забанено: ")+w.ips.length):(_trText("не удалось")+": "+((r&&r.error)||"?")));
+}
+// ── verdict line: plain-language summary of the window ──
+function lgVerdict(){
+  const el=document.getElementById("lg-verdict"); if(!el)return;
+  const d=_lgStatsD, n=d&&d.now;
+  if(!n||!n.req){ el.classList.add("hidden"); return; }
+  const pct=(e,t)=>t?Math.round(e/t*1000)/10:0, e5=pct(n.e5,n.req), e4=pct(n.e4,n.req);
+  const bits=[];
+  if(e5>=1){
+    let s=`5xx ${e5}%`;
+    const st=(_lgBk&&_lgBk.errMode&&_lgBk.facets.status||[]).filter(x=>String(x.value)[0]==="5");
+    if(st.length){ const tot=st.reduce((a,x)=>a+x.count,0); s+=` — ${_trText("в основном")} ${st[0].value} (${Math.round(st[0].count/Math.max(tot,1)*100)}%)`; }
+    const h=(_lgBk&&_lgBk.errMode&&_lgBk.facets.host||[])[0];
+    if(h)s+=` · ${esc(String(h.value))}`;
+    bits.push(s);
+  }else if(e4>=15){ bits.push(`4xx ${e4}%`); }
+  if(_lgWaves.length){ const w=_lgWaves[0]; bits.push(`${_trText("волна")}: ${w.ip_count} IP → ${esc((w.paths||[])[0]||"")} (${_dbNum(w.hits)} hits)`); }
+  if(d.prev&&d.prev.req&&n.req<d.prev.req*0.6)bits.push(`${_trText("трафик")} ▼${Math.round((1-n.req/d.prev.req)*100)}% ${_trText("к вчера")}`);
+  if(!bits.length){ el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  el.innerHTML=`<div class="card p-2.5 text-[11.5px]" style="border-color:#4d8dff33;background:#4d8dff0d;color:var(--muted)"><span style="color:var(--accent2);font-weight:500">${_trText("Итог окна")}:</span> ${bits.join(" · ")}</div>`;
+}
+// ── 24h context strip: coarse series + spike/ban markers, click to zoom in ──
+let _lgOvData=null;
+async function lgOverview(){
+  const el=document.getElementById("lg-ov"); if(!el)return;
+  try{
+    const body={hours:24}; if(_lg.sources.length)body.log_sources=_lg.sources;
+    const d=await _post("/api/logs/overview",body);
     if(d.enabled===false){ el.innerHTML='<div class="text-slate-600 text-xs">Loki '+_trText("не настроен")+'.</div>'; return; }
-    const f=d.facets||{}; const order=["status","method","country","path","ip","host","ua"];
-    const parts=order.filter(k=>f[k]&&f[k].length).map(k=>{
-      const rows=f[k].map(it=>`<div class="lg-facet-v" onclick="lgFacetPick('${escJs(k)}','${escJs(String(it.value))}')" title="filter"><span class="mono truncate">${k==='country'?flag(String(it.value))+' ':''}${esc(String(it.value))}</span><span class="text-slate-500 ml-auto">${_dbNum(it.count)}</span></div>`).join("");
-      return `<div><div class="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">${esc(k)}</div>${rows}</div>`;
-    });
-    el.innerHTML=parts.join("")||`<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
+    _lgOvData=d; lgRenderOverview();
   }catch(e){ el.innerHTML='<div class="text-red-400 text-xs">'+_trText("ошибка")+'</div>'; }
 }
+function lgRenderOverview(){
+  const el=document.getElementById("lg-ov"), d=_lgOvData; if(!el||!d)return;
+  const series=d.series||{};
+  const buckets={}; Object.keys(series).forEach(c=>(series[c]||[]).forEach(p=>{ const b=buckets[p.t]=buckets[p.t]||{tot:0,err:0}; b.tot+=p.v; if(c==="5xx")b.err+=p.v; }));
+  const ts=Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  if(!ts.length){ el.innerHTML='<div class="text-slate-600 text-xs">'+_trText("нет данных")+'</div>'; document.getElementById("lg-ov-alert").textContent=""; return; }
+  // spikes: 5xx buckets well above the median error level
+  const errs=ts.map(t=>buckets[t].err).sort((a,b)=>a-b);
+  const med=errs[Math.floor(errs.length/2)]||0, thr=Math.max(5,med*4);
+  _lgSpikes=[]; let inSpike=false;
+  ts.forEach(t=>{ const e=buckets[t].err;
+    if(e>=thr&&!inSpike){ _lgSpikes.push({t,peak:e}); inSpike=true; }
+    else if(e>=thr&&inSpike){ const s=_lgSpikes[_lgSpikes.length-1]; if(e>s.peak){s.peak=e;s.t=t;} }
+    else inSpike=false; });
+  const W=800,H=72,L=34,B=14,T=4,plotW=W-L-6,plotH=H-B-T;
+  const tmax=_lgNiceMax(Math.max(...ts.map(t=>buckets[t].tot),1));
+  const x=t=>L+((t-ts[0])/Math.max(1,ts[ts.length-1]-ts[0]))*plotW;
+  const y=v=>T+plotH-(v/tmax)*plotH;
+  let g=`<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" stroke="var(--border)"/><line x1="${L}" y1="${T+plotH}" x2="${W-4}" y2="${T+plotH}" stroke="var(--border)"/>`+
+    `<text x="${L-4}" y="${T+plotH+3}" text-anchor="end" font-size="9" fill="#5b6675">0</text><text x="${L-4}" y="${T+3}" text-anchor="end" font-size="9" fill="#5b6675">${_dbNum(tmax)}</text>`;
+  g+=`<polyline points="${ts.map(t=>x(t).toFixed(1)+","+y(buckets[t].tot).toFixed(1)).join(" ")}" fill="none" stroke="#4d8dff" stroke-width="1.4"/>`;
+  g+=`<polyline points="${ts.map(t=>x(t).toFixed(1)+","+y(buckets[t].err).toFixed(1)).join(" ")}" fill="none" stroke="#f87171" stroke-width="1.2"/>`;
+  // spike markers
+  _lgSpikes.slice(0,12).forEach(s=>{ g+=`<g style="cursor:pointer" onclick="lgOvClick(${s.t})"><line x1="${x(s.t).toFixed(1)}" y1="${T}" x2="${x(s.t).toFixed(1)}" y2="${T+plotH}" stroke="#f87171" stroke-dasharray="2 2" opacity=".7"/><text x="${x(s.t).toFixed(1)}" y="${T+8}" text-anchor="middle" font-size="9" fill="#fda4af">⚠</text><rect x="${(x(s.t)-8).toFixed(1)}" y="${T}" width="16" height="${plotH}" fill="transparent"/></g>`; });
+  // ban markers
+  (d.events||[]).forEach(ev=>{ if(ev.ts*1<ts[0]||ev.ts>ts[ts.length-1]+ (d.hours*3600/96))return;
+    g+=`<g style="cursor:pointer" onclick="lgOvClick(${Math.round(ev.ts)})"><text x="${x(ev.ts).toFixed(1)}" y="${T+plotH-2}" text-anchor="middle" font-size="9" fill="#8c98ab">⛔${ev.count>1?ev.count:""}</text></g>`; });
+  // X ticks
+  for(let i=0;i<4;i++){ const t=ts[Math.floor(i*(ts.length-1)/3)];
+    g+=`<text x="${x(t).toFixed(1)}" y="${H-3}" text-anchor="middle" font-size="9" fill="#5b6675">${_lgFmtT(t,1440)}</text>`; }
+  // invisible click layer for zooming anywhere
+  g+=`<rect x="${L}" y="${T}" width="${plotW}" height="${plotH}" fill="transparent" style="cursor:crosshair" onclick="lgOvClickEvt(event,${ts[0]},${ts[ts.length-1]})"/>`;
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%">${g}</svg>`;
+  const al=document.getElementById("lg-ov-alert");
+  if(_lgSpikes.length){ const s=_lgSpikes[_lgSpikes.length-1];
+    al.innerHTML=`<button onclick="lgOvClick(${s.t})" class="px-2 py-0.5 rounded text-[11px]" style="background:#f8717115;border:1px solid #f8717140;color:#fda4af">⚠ ${_lgSpikes.length} ${_trText("всплеск(ов) 5xx")} · ${_trText("последний")} ${_lgFmtT(s.t,1440)}</button>`; }
+  else al.innerHTML=`<span style="color:#4ade8099">✓ ${_trText("без всплесков")}</span>`;
+}
+function lgOvClickEvt(evt,t0,t1){
+  const svg=evt.currentTarget.ownerSVGElement, r=svg.getBoundingClientRect();
+  const fx=(evt.clientX-r.left)/r.width*800;                 // viewBox coords
+  const t=t0+Math.max(0,Math.min(1,(fx-34)/(800-34-6)))*(t1-t0);
+  lgOvClick(Math.round(t));
+}
+function lgOvClick(t){                                        // zoom: 90-min window centred on t
+  _lg.winMin=90; _lg.endNs=(t+45*60)*1e9; _lgFetch();
+}
+function lgEvJump(dir){                                       // prev/next 5xx spike
+  if(!_lgSpikes.length)return;
+  const curEnd=_lg.endNs?_lg.endNs/1e9:Date.now()/1000;
+  const cur=curEnd-(_lgMins()*60)/2;                          // centre of current window
+  let cand=null;
+  if(dir<0){ for(const s of _lgSpikes)if(s.t<cur-60)cand=s; }
+  else{ for(const s of _lgSpikes)if(s.t>cur+60){cand=s;break;} }
+  if(cand)lgOvClick(cand.t);
+}
+function lgWinLabel(){
+  const el=document.getElementById("lg-win-label"); if(!el)return;
+  if(_lg.endNs&&_lg.winMin){
+    const end=_lg.endNs/1e9, start=end-_lg.winMin*60;
+    el.classList.remove("hidden");
+    el.innerHTML=`${_lgFmtT(start,1440)}–${_lgFmtT(end,1440)} <button onclick="lgRun()" title="reset" style="color:var(--faint)">✕</button>`;
+  } else el.classList.add("hidden");
+}
+function lgViewsOpen(){ document.getElementById("lg-views-panel").classList.toggle("hidden"); }
 // ── log sources (Loki backends) ──
 async function lgLoadSources(){
   try{ const d=await fetch("/api/log_sources").then(r=>r.json()); _lgSrcAll=d.items||[]; }catch(e){ _lgSrcAll=[]; }
@@ -1690,7 +1935,7 @@ function lgSourcesOpen(){
     <input id="lg-src-label" class="input" style="width:120px" placeholder="label (env/cluster)">
     <button onclick="lgSrcAdd()" class="btn btn-ghost btn-xs">+ add</button></div>`;
 }
-function lgSrcToggle(id,on){ _lg.sources=on?[...new Set([..._lg.sources,id])]:_lg.sources.filter(x=>x!==id); lgUpdateSrcBtn(); lgRun(); }
+function lgSrcToggle(id,on){ _lg.sources=on?[...new Set([..._lg.sources,id])]:_lg.sources.filter(x=>x!==id); lgUpdateSrcBtn(); lgOverview(); lgRun(); }
 async function lgSrcAdd(){
   const url=(document.getElementById("lg-src-url").value||"").trim(), label=(document.getElementById("lg-src-label").value||"").trim();
   if(!url)return; const r=await _post("/api/log_sources",{url,label});
@@ -1714,7 +1959,8 @@ function lgExport(){
 async function lgLoadViews(){
   const el=document.getElementById("lg-views");if(!el)return;
   try{ const d=await fetch("/api/log_views").then(r=>r.json()); _lgViews=d.views||[];
-    el.innerHTML=_lgViews.length?_lgViews.map((v,i)=>`<div class="flex items-center gap-1"><button onclick="lgViewApply(${i})" class="flex-1 text-left text-[11px] text-indigo-300 hover:text-indigo-200 truncate">${esc(v.name)}</button><button onclick="lgViewDel(${i})" class="text-[11px] text-rose-400/70 hover:text-rose-300">✕</button></div>`).join(""):`<div class="text-slate-600 text-[11px]">—</div>`;
+    el.innerHTML=_lgViews.map((v,i)=>`<span class="inline-flex items-center gap-1"><button onclick="lgViewApply(${i})" class="tray-chip" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(v.name)}</button><button onclick="lgViewDel(${i})" class="text-[11px] text-rose-400/70 hover:text-rose-300">✕</button></span>`).join("")
+      +`<button onclick="lgViewSave()" class="btn btn-ghost btn-xs">＋ ${_trText("сохранить текущий")}</button>`;
   }catch(e){}
 }
 async function lgViewSave(){
@@ -1727,7 +1973,7 @@ function lgViewApply(i){
   _lg.omni=v.omni||""; _lg.sources=(v.sources||[]).slice(); _lg.raw=v.raw||"";
   document.getElementById("lg-omni").value=_lg.omni; document.getElementById("lg-raw").value=_lg.raw;
   if(v.minutes)document.getElementById("lg-mins").value=v.minutes;
-  lgUpdateSrcBtn(); lgRun();
+  lgUpdateSrcBtn(); lgOverview(); lgRun();
 }
 async function lgViewDel(i){ _lgViews.splice(i,1); await fetch("/api/log_views",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({views:_lgViews})}); lgLoadViews(); }
 

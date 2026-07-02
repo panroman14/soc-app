@@ -344,6 +344,72 @@ def log_histogram_by_class(query, minutes=15, buckets=60, end_ns=None):
     return {"step": step, "series": series}
 
 
+def log_p95_series(query, minutes=15, buckets=60, end_ns=None):
+    """p95 latency-over-time for the window histogram overlay. avg() collapses
+    the per-stream quantiles into one series. Empty on raw queries without rt."""
+    import time as _t
+    end = int(end_ns / 1e9) if end_ns else int(_t.time())
+    start = end - int(minutes) * 60
+    step = max(1, (end - start) // max(1, buckets))
+    metric = ("avg(quantile_over_time(0.95, %s !~ `%s` | unwrap rt [%ds]))"
+              % (query, LATENCY_EXCLUDE, step))
+    try:
+        res = _get("/loki/api/v1/query_range", {"query": metric, "start": str(start),
+                   "end": str(end), "step": str(step)})
+    except Exception:
+        return {"step": step, "points": []}
+    pts = []
+    for s in res:
+        for ts, val in s.get("values", []):
+            if val in ("NaN", "+Inf", "-Inf"):
+                continue
+            pts.append({"t": int(ts), "v": round(float(val), 3)})
+    pts.sort(key=lambda p: p["t"])
+    return {"step": step, "points": pts}
+
+
+def window_stats(query, minutes=90, end_ns=None):
+    """KPIs for an arbitrary [end-minutes, end] window: req, 4xx/5xx counts,
+    distinct client IPs, p95 latency. Each metric isolated so one failing
+    query doesn't drop the rest."""
+    import time as _t
+    end = int(end_ns / 1e9) if end_ns else int(_t.time())
+    rng = "%dm" % max(1, int(minutes))
+
+    def inst(expr):
+        return _get("/loki/api/v1/query", {"query": expr, "time": str(end)})
+
+    out = {"req": 0, "e4": 0, "e5": 0, "uniq_ip": 0, "p95": 0.0}
+    try:                                          # one query → total + per-class
+        res = inst('sum by (cls) (count_over_time(%s | label_format '
+                   'cls=`{{ printf "%%.1sxx" .status }}` [%s]))' % (query, rng))
+        for s in res:
+            cls = (s.get("metric") or {}).get("cls") or ""
+            v = float(s["value"][1])
+            out["req"] += v
+            if cls.startswith("4"):
+                out["e4"] += v
+            elif cls.startswith("5"):
+                out["e5"] += v
+    except Exception:
+        pass
+    try:
+        res = inst("count(sum by (ip) (count_over_time(%s [%s])))" % (query, rng))
+        out["uniq_ip"] = int(float(res[0]["value"][1])) if res else 0
+    except Exception:
+        pass
+    try:
+        res = inst("avg(quantile_over_time(0.95, %s !~ `%s` | unwrap rt [%s]))"
+                   % (query, LATENCY_EXCLUDE, rng))
+        vals = [float(s["value"][1]) for s in res
+                if s["value"][1] not in ("NaN", "+Inf", "-Inf")]
+        out["p95"] = round(sum(vals) / len(vals), 3) if vals else 0.0
+    except Exception:
+        pass
+    out["req"], out["e4"], out["e5"] = int(out["req"]), int(out["e4"]), int(out["e5"])
+    return out
+
+
 def log_facets(query, fields, minutes=15, topn=10, end_ns=None):
     """Datadog-style facet counts: for each field, the top values by request count
     over the window. Returns {field: [{value, count}, …]}."""

@@ -491,12 +491,24 @@ async def api_logs_histogram(request: Request):
         else:
             for p in res.get("points") or []:
                 merged_pts[p["t"]] = merged_pts.get(p["t"], 0) + p["v"]
+    p95 = None
+    if body.get("with_p95"):                      # latency overlay (Logs v3)
+        acc = {}
+        for _sid, res, err in _loki_fanout(
+                lambda: loki.log_p95_series(q, mins, end_ns=end_ns),
+                body.get("log_sources")):
+            if err or not res:
+                continue
+            for p in res.get("points") or []:
+                acc.setdefault(p["t"], []).append(p["v"])
+        p95 = sorted(({"t": t, "v": round(sum(vs) / len(vs), 3)}
+                      for t, vs in acc.items()), key=lambda p: p["t"])
     if by_class:
         series = {c: sorted(({"t": t, "v": v} for t, v in d.items()), key=lambda p: p["t"])
                   for c, d in merged_series.items()}
-        return {"enabled": True, "step": step or 60, "series": series}
+        return {"enabled": True, "step": step or 60, "series": series, "p95": p95}
     pts = sorted(({"t": t, "v": v} for t, v in merged_pts.items()), key=lambda p: p["t"])
-    return {"enabled": True, "step": step or 60, "points": pts}
+    return {"enabled": True, "step": step or 60, "points": pts, "p95": p95}
 
 
 @app.post("/api/logs/facets")
@@ -521,6 +533,169 @@ async def api_logs_facets(request: Request):
     facets = {f: sorted(({"value": k, "count": n} for k, n in d.items()),
                         key=lambda x: -x["count"])[:10] for f, d in merged.items()}
     return {"enabled": True, "facets": facets}
+
+
+@app.post("/api/logs/window_stats")
+async def api_logs_window_stats(request: Request):
+    """KPIs for the selected window + the same window 24h earlier (deltas).
+    Body: like /api/logs/query (minutes, end_ns, filters, log_sources)."""
+    if not _loki_targets():
+        return {"enabled": False}
+    body = await request.json()
+    q = _logql_from_body(body)
+    mins = min(max(int(body.get("minutes") or 90), 1), 10080)
+    end_ns = int(body.get("end_ns") or time.time() * 1e9)
+
+    def merge(results):
+        acc = {"req": 0, "e4": 0, "e5": 0, "uniq_ip": 0, "p95": 0.0}
+        p95s = []
+        for _sid, res, err in results:
+            if err or not res:
+                continue
+            for k in ("req", "e4", "e5", "uniq_ip"):
+                acc[k] += res.get(k, 0)
+            if res.get("p95"):
+                p95s.append(res["p95"])
+        acc["p95"] = round(sum(p95s) / len(p95s), 3) if p95s else 0.0
+        return acc
+
+    now = merge(_loki_fanout(lambda: loki.window_stats(q, mins, end_ns),
+                             body.get("log_sources")))
+    prev = merge(_loki_fanout(
+        lambda: loki.window_stats(q, mins, end_ns - 24 * 3600 * 10**9),
+        body.get("log_sources")))
+    return {"enabled": True, "now": now, "prev": prev}
+
+
+def _wave_norm_path(p):
+    """Normalize a path into a wave signature: strip query, lowercase, collapse
+    digit runs so /item/123 and /item/987 cluster together."""
+    p = (p or "").split("?")[0].lower()
+    return re.sub(r"\d+", "N", p)[:80] or "/"
+
+
+def _detect_waves(rows, min_hits=20, min_ips=3):
+    """Cluster 4xx/5xx rows into 'waves' (same status class + path signature),
+    then merge clusters driven by the same actors (IP-set overlap >= 50%).
+    A wave = coordinated pattern: many hits, several IPs, or one hammering IP."""
+    from collections import Counter
+    cl = {}
+    for r in rows:
+        st = str(r.get("status") or "")
+        if not st or st[0] not in "45":
+            continue
+        key = (st[0], _wave_norm_path(r.get("path")))
+        c = cl.setdefault(key, {"hits": 0, "ips": Counter(), "paths": Counter(),
+                                "statuses": Counter(), "first": r["ts"], "last": r["ts"]})
+        c["hits"] += 1
+        c["ips"][r.get("ip") or "?"] += 1
+        c["paths"][(r.get("path") or "").split("?")[0][:120]] += 1
+        c["statuses"][st] += 1
+        c["first"] = min(c["first"], r["ts"])
+        c["last"] = max(c["last"], r["ts"])
+    # keep significant clusters: swarm (many IPs) or hammer (one loud IP)
+    sig = [c for c in cl.values()
+           if c["hits"] >= min_hits and (len(c["ips"]) >= min_ips
+                                         or max(c["ips"].values()) >= min_hits * 2)]
+    sig.sort(key=lambda c: -c["hits"])
+    merged = []
+    for c in sig:                                  # same actors → one wave
+        ips = set(c["ips"])
+        home = None
+        for m in merged:
+            inter = len(ips & set(m["ips"]))
+            if inter and inter >= 0.5 * min(len(ips), len(m["ips"])):
+                home = m
+                break
+        if home:
+            home["hits"] += c["hits"]
+            home["ips"].update(c["ips"])
+            home["paths"].update(c["paths"])
+            home["statuses"].update(c["statuses"])
+            home["first"] = min(home["first"], c["first"])
+            home["last"] = max(home["last"], c["last"])
+        else:
+            merged.append(c)
+    out = []
+    for i, c in enumerate(merged[:5]):
+        out.append({
+            "id": "w%d" % i, "hits": c["hits"], "ip_count": len(c["ips"]),
+            "ips": [ip for ip, _ in c["ips"].most_common(50)],
+            "top_ips": [{"ip": ip, "hits": n} for ip, n in c["ips"].most_common(5)],
+            "paths": [p for p, _ in c["paths"].most_common(3)],
+            "statuses": dict(c["statuses"].most_common(3)),
+            "first_ts": c["first"], "last_ts": c["last"]})
+    return out
+
+
+@app.post("/api/logs/waves")
+async def api_logs_waves(request: Request):
+    """Wave detection for the selected window: fetch up to 1000 error rows and
+    cluster them by actor/path signature. Body: like /api/logs/query."""
+    if not _loki_targets():
+        return {"enabled": False, "waves": []}
+    body = await request.json()
+    body = dict(body, chips=list(body.get("chips") or [])
+                + [{"field": "status", "op": "class", "value": "45"}])
+    q = _logql_from_body(body)
+    mins = min(max(int(body.get("minutes") or 90), 1), 10080)
+    rows, sampled = [], False
+    for _sid, res, err in _loki_fanout(
+            lambda: loki.query_logs(q, mins, end_ns=body.get("end_ns"), limit=1000),
+            body.get("log_sources")):
+        if err or not res:
+            continue
+        if len(res) >= 1000:
+            sampled = True
+        rows.extend(res)
+    return {"enabled": True, "waves": _detect_waves(rows), "sampled": sampled,
+            "scanned": len(rows)}
+
+
+@app.post("/api/logs/overview")
+async def api_logs_overview(request: Request):
+    """24h (configurable) context strip: coarse traffic+error series across the
+    fleet + event markers (bans from the blocklist audit, grouped into bursts)."""
+    if not _loki_targets():
+        return {"enabled": False}
+    body = await request.json()
+    hours = min(max(int(body.get("hours") or 24), 1), 168)
+    q = _logql_from_body({"log_sources": body.get("log_sources"),
+                          "sources": body.get("sources") or {}})
+    mins = hours * 60
+    merged = {}
+    for _sid, res, err in _loki_fanout(
+            lambda: loki.log_histogram_by_class(q, mins, buckets=96),
+            body.get("log_sources")):
+        if err or not res:
+            continue
+        for cls, pts in (res.get("series") or {}).items():
+            acc = merged.setdefault(cls, {})
+            for p in pts:
+                acc[p["t"]] = acc.get(p["t"], 0) + p["v"]
+    series = {c: sorted(({"t": t, "v": v} for t, v in d.items()), key=lambda p: p["t"])
+              for c, d in merged.items()}
+    # ban markers from own audit, grouped into bursts (gap <= 10 min)
+    cutoff = time.time() - hours * 3600
+    audit, _errs = _fanout_list("/audit?limit=500", "audit")
+    bans = sorted((e for e in audit if isinstance(e, dict)
+                   and (e.get("ts") or 0) >= cutoff
+                   and (e.get("action") or "block") != "unblock"),
+                  key=lambda e: e.get("ts", 0))
+    events, cur = [], None
+    for e in bans:
+        if cur and e["ts"] - cur["last_ts"] <= 600:
+            cur["count"] += 1
+            cur["last_ts"] = e["ts"]
+            if (e.get("by") or "").lower() == "autoban":
+                cur["autoban"] += 1
+        else:
+            cur = {"type": "ban", "ts": e["ts"], "last_ts": e["ts"], "count": 1,
+                   "autoban": 1 if (e.get("by") or "").lower() == "autoban" else 0}
+            events.append(cur)
+    for ev in events:
+        ev.pop("last_ts", None)
+    return {"enabled": True, "hours": hours, "series": series, "events": events[-40:]}
 
 
 @app.get("/api/log_views")
