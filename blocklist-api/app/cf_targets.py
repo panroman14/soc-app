@@ -18,7 +18,7 @@ import re
 import threading
 import time
 
-from . import storage
+from . import crypto, storage
 
 DOC = "cf_targets.json"
 _LOCK = threading.Lock()
@@ -61,14 +61,24 @@ def _save(d):
     _cache["d"] = None     # invalidate → next read reloads authoritative state
 
 
+def _decrypted(entry):
+    """Copy of an entry with its token decrypted for server-side use."""
+    if not entry:
+        return entry
+    e = dict(entry)
+    if e.get("token"):
+        e["token"] = crypto.open_(e["token"])
+    return e
+
+
 def all_full():
     """All registered CF targets WITH tokens (server-side only): {id: entry}."""
-    return dict(_load()["targets"])
+    return {tid: _decrypted(e) for tid, e in _load()["targets"].items()}
 
 
 def get(target_id):
-    """One CF target's full config (incl. token) or None."""
-    return _load()["targets"].get(target_id)
+    """One CF target's full config (incl. decrypted token) or None."""
+    return _decrypted(_load()["targets"].get(target_id))
 
 
 def public_view():
@@ -100,10 +110,10 @@ def upsert(target_id, fields):
     # A ConfigMap store is plaintext — refuse to persist a CF API token there (S6),
     # mirroring the settings.py guard. Non-blank token + configmap store → reject.
     from . import config
-    if str(fields.get("token") or "").strip() and config.STORE == "configmap":
+    if str(fields.get("token") or "").strip() and config.STORE == "configmap" and not crypto.enabled():
         raise ValueError(
-            "CF-токен нельзя хранить в configmap-сторе (ConfigMap — открытый текст). "
-            "Используйте STORE=sqlite или задайте токен через ENV.")
+            "CF-токен нельзя хранить в configmap-сторе открытым текстом. "
+            "Задайте SECRET_KEY (шифрование) или используйте STORE=sqlite / ENV.")
     now = int(time.time())
     with _LOCK:
         d = _load()
@@ -111,8 +121,11 @@ def upsert(target_id, fields):
         for k in _ALLOWED:
             if k in fields and fields[k] is not None:
                 v = fields[k]
-                if k == "token" and not str(v).strip():
-                    continue            # blank token → keep existing
+                if k == "token":
+                    if not str(v).strip():
+                        continue        # blank token → keep existing
+                    cur[k] = crypto.seal(v.strip())   # encrypt at rest
+                    continue
                 cur[k] = v.strip() if isinstance(v, str) else v
         if (cur.get("mode") or "") not in ("ip-list", "access-rules"):
             cur["mode"] = "ip-list"

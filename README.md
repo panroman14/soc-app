@@ -51,6 +51,6 @@ Full guide + all variables → **[`deploy/README.md`](deploy/README.md)**.
 
 - Set `BLOCKLIST_TOKEN` + `BASIC_AUTH_*` — no token = unauthenticated API.
 - Use `PUBLIC_URL=https://…` across untrusted networks (agent installer runs as root).
-- GUI secrets are stored plaintext in `STORE`; on k8s prefer the CF token via ENV + `CONFIG_LOCK=env`.
+- Set `SECRET_KEY` to encrypt GUI-entered secrets (Cloudflare token) at rest — the key stays in ENV, the store keeps only ciphertext. Without it they're plaintext (startup warns).
 
 [MIT](LICENSE) © 2026 panroman14

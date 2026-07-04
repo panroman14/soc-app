@@ -17,7 +17,7 @@ import json
 import threading
 import time
 
-from . import config, storage
+from . import config, crypto, storage
 
 DOC = "settings.json"
 _LOCK = threading.Lock()
@@ -72,11 +72,18 @@ def _overrides():
 
 
 def get(key):
-    """Resolved value for a SPEC key (override if unlocked + set, else ENV)."""
+    """Resolved value for a SPEC key (override if unlocked + set, else ENV).
+    Secret overrides are decrypted transparently (stored encrypted when SECRET_KEY
+    is set; plaintext values from before an upgrade / from ENV pass through)."""
     spec = SPEC.get(key)
     env_default = spec["env"] if spec else None
     ov = _overrides()
-    return ov[key] if key in ov else env_default
+    if key not in ov:
+        return env_default
+    v = ov[key]
+    if spec and spec.get("type") == "secret":
+        return crypto.open_(v)
+    return v
 
 
 def is_set(key):
@@ -117,14 +124,16 @@ def set_many(updates):
             continue
         if spec["type"] == "secret" and (val is None or val == ""):
             continue                              # blank secret = leave as-is
-        if spec["type"] == "secret" and config.STORE == "configmap":
+        if spec["type"] == "secret" and config.STORE == "configmap" and not crypto.enabled():
             # A ConfigMap is NOT a Secret — refuse to persist a credential there in
-            # plaintext. The operator must supply it via ENV (optionally + CONFIG_LOCK).
+            # plaintext. Either set SECRET_KEY (encrypts it) or supply it via ENV.
             raise ValueError(
-                "%s: секрет нельзя хранить в configmap-сторе (ConfigMap — это открытый "
-                "текст). Задайте его через переменную окружения." % key)
+                "%s: секрет нельзя хранить в configmap-сторе открытым текстом. "
+                "Задайте SECRET_KEY (шифрование) или передайте секрет через ENV." % key)
         if val is None or val == "":
             staged.append((key, "clear", None))   # revert to ENV default
+        elif spec["type"] == "secret":
+            staged.append((key, "set", crypto.seal(val)))          # encrypt at rest
         elif spec["type"] == "json":
             staged.append((key, "set", _validate_json(key, val)))  # may raise → 400, nothing saved
         else:

@@ -55,6 +55,14 @@ spec:
                   name: {{ include "blocklist-api.secretName" . }}
                   key: BLOCKLIST_TOKEN
             {{- end }}
+            {{- if or .Values.secretKey .Values.existingSecret }}
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "blocklist-api.secretName" . }}
+                  key: SECRET_KEY
+                  optional: true
+            {{- end }}
             {{- if .Values.devNoAuth }}
             - { name: DEV_NO_AUTH, value: "1" }   # trusted-host opt-in: API served WITHOUT auth
             {{- end }}

@@ -128,6 +128,10 @@ CF_EDGE_PATHS = _env("CF_EDGE_PATHS", "off")  # off | on
 #                              and receive its node token. Empty → enrollment disabled.
 TOKEN = _env("BLOCKLIST_TOKEN", "")  # required; empty → FAILS CLOSED unless DEV_NO_AUTH
 ENROLL_SECRET = _env("ENROLL_SECRET", "")        # one shared key agents use to enroll
+# Encrypts GUI-entered secrets (CF API token) at rest in the STORE (see crypto.py).
+# Lives only in the environment, never on disk. Empty → secrets stored as plaintext
+# (backward compatible; a startup warning is logged).
+SECRET_KEY = _env("SECRET_KEY", "")
 # Empty TOKEN fails closed (503 on everything but /healthz). Opt into an open API
 # on a trusted host ONLY with an explicit flag — never silently, it's a ban API.
 DEV_NO_AUTH = _env("DEV_NO_AUTH", "") not in ("0", "", "false", "False")

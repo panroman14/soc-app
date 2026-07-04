@@ -14,7 +14,10 @@ pipPackages: "fastapi==0.115.* uvicorn[standard]==0.32.* kubernetes==29.0.0"
 # Bearer token the dashboard must send. Set via:  --set token=$(openssl rand -hex 32)
 # Leave empty + set existingSecret to reuse a pre-made Secret instead.
 token: ""
-existingSecret: ""   # name of a Secret with key BLOCKLIST_TOKEN (overrides token)
+existingSecret: ""   # name of a Secret with keys BLOCKLIST_TOKEN (+ optional SECRET_KEY)
+# Encrypts GUI-entered secrets (Cloudflare token) at rest. Stored in the k8s Secret;
+# with it set you may keep the CF token even with STORE=configmap (it's ciphertext).
+secretKey: ""
 # Fail-closed guard: the chart refuses to render with no token AND no existingSecret.
 # To run the API WITHOUT auth on a trusted host, set this true (sets DEV_NO_AUTH=1).
 devNoAuth: false

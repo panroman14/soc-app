@@ -531,6 +531,10 @@ def _startup():
         print("[enroll] WARNING: PUBLIC_URL is not https:// — the agent install one-liner "
               "downloads + runs code over plaintext HTTP (MITM = root RCE on nginx VMs). "
               "Use HTTPS for any deployment crossing an untrusted network.", flush=True)
+    if not config.SECRET_KEY:
+        print("[secrets] NOTE: SECRET_KEY is not set — GUI-entered secrets (Cloudflare "
+              "token) are stored in plaintext in the STORE. Set SECRET_KEY to encrypt "
+              "them at rest.", flush=True)
     threading.Thread(target=_prune_loop, daemon=True).start()
     threading.Thread(target=_resync_loop, daemon=True).start()
     threading.Thread(target=_node_watch_loop, daemon=True).start()
