@@ -8,7 +8,7 @@ enforcement targets — Cloudflare, plain nginx, or Kubernetes ingress-nginx —
 by group.**
 
 Think *Datadog for nginx bans*: stand up one central collector, then drop a one-line
-agent onto each nginx VM — it self-enrolls, appears in the **Nodes** tab with live host
+agent onto each nginx VM — it self-enrolls, appears under **Resources** with live host
 load, and starts enforcing bans. Almost everything is configurable from the dashboard
 (**Settings**), with environment variables as the defaults underneath. The UI is
 English by default with a one-click **RU/EN** toggle.
@@ -16,7 +16,7 @@ English by default with a one-click **RU/EN** toggle.
 **Highlights**
 
 - 🎯 **Grouped, multi-target enforcement** — Cloudflare (IP list + WAF) · plain nginx · ingress-nginx, routed per ban by **target group** (built in a GUI).
-- 🌐 **Environments** — each environment is its own bundle: nodes, Cloudflare token, Loki, rules and alert channels; switch in the top bar.
+- 🌐 **Environments** — each environment is its own bundle: nodes, Cloudflare token, Loki, rules and alert channels.
 - ⛔ **Auto-ban engine** — rules by path / regex / signature-family / **request-rate** / **country (GeoIP)**, with dry-run preview before you arm it.
 - 📡 **Threat-intel feeds** — import Spamhaus / Tor / custom IP-CIDR lists into a ban group (self-syncing via TTL).
 - 🚫 **403 path rules** — block scanner paths at the nginx/ingress layer, scoped per target group.
@@ -24,6 +24,10 @@ English by default with a one-click **RU/EN** toggle.
 - 🔎 **IP intelligence** — GeoIP flag, ASN/org, datacenter/VPN/Tor reputation in the IP profile drawer.
 - 🔔 **Notifications** — Slack / Telegram, with per-event × env × severity routing rules.
 - 🤖 **LLM analyst** — insights + suspect triage; a global toggle hides every AI mention when off.
+
+![Logs explorer](docs/screenshots/logs.svg)
+
+<sub>*Logs explorer — pick sources, read traffic with 4xx/5xx overlaid, drill in by clicking any path/IP/status. Renders are representative sample data; see [`docs/screenshots`](docs/screenshots).*</sub>
 
 ```
  nginx VM(s)                              central VM
@@ -56,7 +60,7 @@ docker compose --profile loki --profile soc --profile blocklist up -d
 
 Open `http://CENTRAL:8077` (dashboard). Set `BASIC_AUTH_USER/PASS` for real use.
 
-**2. Each nginx VM** — open **🖥️ Ноды → + Добавить ноду** in the dashboard and run the
+**2. Each nginx VM** — open **Resources → add node** in the dashboard and run the
 one-liner it shows:
 
 ```bash
@@ -120,6 +124,27 @@ form, and the manual-ban panel all expose a group selector.
 
 ---
 
+## The dashboard
+
+Eight views in the left nav. English by default, one-click **RU/EN** toggle top-right.
+
+| View | What's there |
+|---|---|
+| **Overview** | The at-a-glance state: traffic/attack summary tiles, top talkers + countries with a GeoIP map, WAF/CRS offenders (one-click ban), anomaly flags, ban candidates, and the LLM insight feed. |
+| **Logs** | A click-driven log explorer (no query language). Pick **sources** by resource — `nginx ▾` (per VM) and `Ingress ▾` (k8s), multi-select with checkboxes; a **traffic chart** (bars / lines / area, `req/min` axis, 2xx·4xx·5xx with peak labels) — click a bar to zoom; **status pills** + a **path search** + a **country/host/method** rail as click-filters; **top paths** and **top IPs** (ban straight from the list); and the raw **stream** with a per-row inspector (fields, 24h IP context, ban / 403 / profile actions). |
+| **Dashboards** | Build your own Grafana-style panels over the same metrics/analytics (timeseries, top-lists, stat) with per-panel env + window variables. |
+| **Journal** | Chronological history of bans/unbans and rule changes across the fleet. |
+| **Auto-ban** | The auto-ban rule builder + dry-run preview and the kill-switch. |
+| **403 rules** | Scanner/exploit path rules returned as `403` at the nginx/ingress layer, attachable per target. |
+| **Resources** | The **System map** — every enforcement target (nginx nodes · Cloudflare · ingress) as a tile with live state (bans flowing, rules attached, or *no token — not enforcing*), plus node enrollment and target/cluster registration. |
+| **Settings** | Hybrid ENV+GUI config: LLM endpoint, notifications (Slack/Telegram routing), auto-ban tuning (escalation, protected paths, threat feeds), and global toggles. |
+
+![System map](docs/screenshots/system-map.svg)
+
+<sub>*Resources → System map. A Cloudflare target with no API token is shown as inert (`0 · no token — not enforcing`) rather than being credited with the backend's shared denylist.*</sub>
+
+---
+
 ## Detection & response
 
 | Capability | Where | What it does |
@@ -173,12 +198,12 @@ The backend parses one canonical field set. Two ways to feed it:
 - One **`ENROLL_SECRET`** lets agents self-register; each then authenticates with its
   own **per-node token** (least privilege — a node token can only pull *its* snippet
   and post *its* heartbeat, never block/unblock).
-- The **Nodes** tab shows every node: online/offline, CPU load, RAM, uptime, bans
+- The **Resources** view shows every node: online/offline, CPU load, RAM, uptime, bans
   applied, and an `nginx -t ✗` badge if its config is broken. **Revoke** kills a
   node's token instantly. The dashboard host itself appears as a `dashboard` node.
-- A node joins an **environment** at install time (`--env`). An environment bundles its
-  nodes with their own Cloudflare token, Loki source, rules, and alert channels —
-  switch between them from the top-bar selector.
+- A node can join an **environment** at install time (`--env`) — an environment bundles
+  its nodes with their own Cloudflare token, Loki source, rules, and alert channels
+  (configured via ENV / API).
 
 ---
 
@@ -220,7 +245,7 @@ straight from `backend/app/config.py` and `blocklist-api/app/config.py`.
 - [x] Pluggable, grouped ban enforcement (ingress-cm / nginx-file / cloudflare); Cloudflare auto-setup; GUI group builder.
 - [x] Node enrollment (per-node tokens), heartbeat/host-load, **Nodes** tab, one-liner + fleet installer.
 - [x] Hybrid ENV+GUI config (**Settings**), `CONFIG_LOCK`, auto-promotion of enrolled nodes to targets.
-- [x] Multi-environment model (per-env CF token / Loki / rules / channels), top-bar switcher.
+- [x] Multi-environment model (per-env CF token / Loki / rules / channels).
 - [x] Auto-ban rules: path / regex / family / **rate** / **country (GeoIP)**, per-rule group + TTL, dry-run preview.
 - [x] 403 path rules scoped per target group; threat-intel feed import; WAF/CRS offender panel with one-click ban.
 - [x] GeoIP/ASN/reputation IP profiles; Slack/Telegram notifications with routing rules.

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
+  <style>
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .lbl{fill:#5b6675;font-size:10px;letter-spacing:.5px}
+    .tile{fill:#0d1017;stroke:#232b38}
+    .num{fill:#e7ecf4;font-size:26px;font-weight:500}
+  </style>
+  <rect width="960" height="300" fill="#0b0e14"/>
+  <text x="20" y="34" fill="#e7ecf4" font-size="15" font-weight="500">System map</text>
+  <rect x="120" y="22" width="120" height="18" rx="9" fill="#0e2018" stroke="#1f5138"/><circle cx="134" cy="31" r="3" fill="#10b981"/><text x="144" y="35" font-size="11" fill="#6fcf97">3/5 активны</text>
+  <text x="940" y="35" text-anchor="end" font-size="11" fill="#8c98ab">в бане <tspan fill="#e7ecf4" font-weight="500">2</tspan> IP</text>
+
+  <!-- tile: nginx node active -->
+  <g>
+    <rect x="20" y="56" width="220" height="200" rx="12" class="tile"/>
+    <rect x="20" y="56" width="220" height="3" fill="#10b981"/>
+    <rect x="36" y="76" width="10" height="10" rx="2" fill="#6fcf97"/>
+    <text x="54" y="85" class="mono" fill="#e7ecf4" font-size="14" font-weight="500">edge-1</text>
+    <text x="224" y="84" text-anchor="end" class="lbl">nginx</text>
+    <text x="36" y="122" class="num">2</text><text x="70" y="122" class="lbl">IP в бане</text>
+    <circle cx="42" cy="146" r="4" fill="#10b981"/><text x="54" y="150" font-size="12" fill="#6fcf97">баны идут</text>
+    <rect x="36" y="166" width="70" height="18" rx="5" fill="#1e2547"/><text x="71" y="179" text-anchor="middle" font-size="11" fill="#a5b4fc">403 · 4</text>
+    <rect x="112" y="166" width="70" height="18" rx="5" fill="#0e2018"/><text x="147" y="179" text-anchor="middle" font-size="11" fill="#6ee7b7">автобан</text>
+  </g>
+
+  <!-- tile: cloudflare configured -->
+  <g>
+    <rect x="256" y="56" width="220" height="200" rx="12" class="tile"/>
+    <rect x="256" y="56" width="220" height="3" fill="#10b981"/>
+    <rect x="272" y="76" width="10" height="10" rx="2" fill="#fb923c"/>
+    <text x="290" y="85" class="mono" fill="#e7ecf4" font-size="14" font-weight="500">edge-cf</text>
+    <text x="460" y="84" text-anchor="end" class="lbl">Cloudflare</text>
+    <text x="272" y="122" class="num">2</text><text x="306" y="122" class="lbl">IP в бане</text>
+    <circle cx="278" cy="146" r="4" fill="#10b981"/><text x="290" y="150" font-size="12" fill="#6fcf97">баны идут</text>
+    <rect x="272" y="166" width="90" height="18" rx="5" fill="#0e2018"/><text x="317" y="179" text-anchor="middle" font-size="11" fill="#6ee7b7">автобан</text>
+  </g>
+
+  <!-- tile: cloudflare NO TOKEN (the fix) -->
+  <g>
+    <rect x="492" y="56" width="220" height="200" rx="12" fill="#0d1017" stroke="#3a4557" stroke-dasharray="4 3"/>
+    <rect x="492" y="56" width="220" height="3" fill="#64748b"/>
+    <rect x="508" y="76" width="10" height="10" rx="2" fill="#fb923c"/>
+    <text x="526" y="85" class="mono" fill="#e7ecf4" font-size="14" font-weight="500">4444</text>
+    <text x="696" y="84" text-anchor="end" class="lbl">Cloudflare</text>
+    <text x="508" y="122" font-size="26" font-weight="500" fill="#5b6675">0</text><text x="530" y="122" class="lbl">IP в бане</text>
+    <text x="508" y="150" font-size="12" fill="#8c98ab">⚙ нет токена — не банит</text>
+    <text x="508" y="176" font-size="11" fill="#4a5568">ничего не приатачено</text>
+  </g>
+
+  <!-- tile: ingress idle -->
+  <g>
+    <rect x="728" y="56" width="212" height="200" rx="12" class="tile" opacity=".7"/>
+    <rect x="744" y="76" width="10" height="10" rx="2" fill="#60a5fa"/>
+    <text x="762" y="85" class="mono" fill="#e7ecf4" font-size="14" font-weight="500">k8s-prod</text>
+    <text x="924" y="84" text-anchor="end" class="lbl">Ingress</text>
+    <text x="744" y="122" font-size="26" font-weight="500" fill="#5b6675">0</text><text x="766" y="122" class="lbl">IP в бане</text>
+    <text x="744" y="150" font-size="12" fill="#5b6675">⏸ простаивает</text>
+    <rect x="744" y="166" width="70" height="18" rx="5" fill="#1e2547"/><text x="779" y="179" text-anchor="middle" font-size="11" fill="#a5b4fc">403 · 4</text>
+  </g>
+</svg>

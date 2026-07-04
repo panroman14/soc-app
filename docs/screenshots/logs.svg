@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
+  <style>
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .lbl{fill:#5b6675;font-size:10px;letter-spacing:.5px}
+    .txt{fill:#c4cdda;font-size:12px}
+    .dim{fill:#8c98ab;font-size:11px}
+    .card{fill:#141a23;stroke:#232b38}
+    .pill{fill:#12171f;stroke:#2a3340}
+    .pillon{fill:#12244a;stroke:#3763b0}
+  </style>
+  <rect width="960" height="560" fill="#0b0e14"/>
+
+  <!-- toolbar row -->
+  <rect x="16" y="16" width="928" height="46" rx="12" class="card"/>
+  <rect x="30" y="30" width="52" height="18" rx="9" class="pillon"/><text x="56" y="43" text-anchor="middle" class="txt" fill="#9cc0ff" font-size="11">All</text>
+  <rect x="90" y="30" width="86" height="18" rx="9" class="pill"/><rect x="99" y="35" width="12" height="8" rx="2" fill="none" stroke="#6fcf97" stroke-width="1.4"/><text x="118" y="43" class="txt" font-size="11">nginx ▾</text>
+  <rect x="184" y="30" width="78" height="18" rx="9" class="pill"/><path d="M204 34l7 4v6l-7 4-7-4v-6z" fill="none" stroke="#60a5fa" stroke-width="1.3"/><text x="216" y="43" class="txt" font-size="11">Ingress ▾</text>
+  <line x1="278" y1="30" x2="278" y2="48" stroke="#232b38"/>
+  <rect x="288" y="30" width="34" height="18" rx="9" class="pillon"/><text x="305" y="43" text-anchor="middle" font-size="11" fill="#9cc0ff">all</text>
+  <rect x="326" y="30" width="34" height="18" rx="9" class="pill"/><text x="343" y="43" text-anchor="middle" font-size="11" fill="#6fcf97">2xx</text>
+  <rect x="364" y="30" width="34" height="18" rx="9" class="pill"/><text x="381" y="43" text-anchor="middle" font-size="11" fill="#d9a441">4xx</text>
+  <rect x="402" y="30" width="34" height="18" rx="9" class="pill"/><text x="419" y="43" text-anchor="middle" font-size="11" fill="#e07070">5xx</text>
+  <rect x="444" y="29" width="230" height="20" rx="8" fill="#0a0e14" stroke="#2a3340"/><text x="456" y="43" class="dim mono" fill="#5b6675">⌕  поиск по пути…</text>
+  <rect x="740" y="30" width="30" height="18" rx="9" class="pill"/><text x="755" y="43" text-anchor="middle" font-size="11" class="dim">1h</text>
+  <rect x="774" y="30" width="30" height="18" rx="9" class="pillon"/><text x="789" y="43" text-anchor="middle" font-size="11" fill="#9cc0ff">6h</text>
+  <rect x="808" y="30" width="34" height="18" rx="9" class="pill"/><text x="825" y="43" text-anchor="middle" font-size="11" class="dim">24h</text>
+  <rect x="860" y="30" width="44" height="18" rx="9" class="pill"/><text x="882" y="43" text-anchor="middle" font-size="11" class="dim">▶ tail</text>
+
+  <!-- chart -->
+  <rect x="16" y="72" width="928" height="176" rx="12" class="card"/>
+  <text x="34" y="96" class="mono" fill="#e7ecf4" font-size="14">18 402 <tspan class="lbl">запросов</tspan></text>
+  <text x="150" y="96" class="mono" fill="#d9a441" font-size="14">612 <tspan class="lbl">4xx</tspan></text>
+  <text x="228" y="96" class="mono" fill="#e07070" font-size="14">37 <tspan class="lbl">5xx</tspan></text>
+  <rect x="770" y="82" width="158" height="20" rx="8" fill="#0e1420" stroke="#2a3340"/>
+  <text x="792" y="96" font-size="10" fill="#9cc0ff">▮ bars</text><text x="840" y="96" font-size="10" class="dim">〜 lines</text><text x="895" y="96" font-size="10" class="dim">◢ area</text>
+  <!-- axes -->
+  <line x1="70" y1="116" x2="70" y2="222" stroke="#232b38"/><line x1="70" y1="222" x2="930" y2="222" stroke="#232b38"/>
+  <line x1="70" y1="169" x2="930" y2="169" stroke="#161d29"/>
+  <text x="64" y="120" text-anchor="end" font-size="9" fill="#5b6675">200</text>
+  <text x="64" y="172" text-anchor="end" font-size="9" fill="#5b6675">100</text>
+  <text x="64" y="224" text-anchor="end" font-size="9" fill="#5b6675">0</text>
+  <text x="52" y="110" text-anchor="end" font-size="8" fill="#5b6675">запр/мин</text>
+  <!-- bars -->
+  <g>
+    <rect x="80" y="196" width="28" height="26" fill="#6fcf97" opacity=".3"/>
+    <rect x="112" y="186" width="28" height="36" fill="#6fcf97" opacity=".3"/>
+    <rect x="144" y="180" width="28" height="42" fill="#6fcf97" opacity=".3"/><rect x="144" y="174" width="28" height="6" fill="#d9a441" opacity=".85"/>
+    <rect x="176" y="168" width="28" height="54" fill="#6fcf97" opacity=".3"/>
+    <rect x="208" y="150" width="28" height="72" fill="#6fcf97" opacity=".3"/><rect x="208" y="128" width="28" height="22" fill="#d9a441" opacity=".85"/><rect x="208" y="122" width="28" height="6" fill="#e07070" opacity=".85"/>
+    <rect x="240" y="176" width="28" height="46" fill="#6fcf97" opacity=".3"/>
+    <rect x="272" y="188" width="28" height="34" fill="#6fcf97" opacity=".3"/>
+    <rect x="304" y="182" width="28" height="40" fill="#6fcf97" opacity=".3"/>
+    <rect x="336" y="192" width="28" height="30" fill="#6fcf97" opacity=".3"/>
+    <rect x="368" y="170" width="28" height="52" fill="#6fcf97" opacity=".3"/>
+    <rect x="400" y="184" width="28" height="38" fill="#6fcf97" opacity=".3"/>
+    <rect x="432" y="176" width="28" height="46" fill="#6fcf97" opacity=".3"/><rect x="432" y="170" width="28" height="6" fill="#d9a441" opacity=".85"/>
+    <rect x="464" y="160" width="28" height="62" fill="#6fcf97" opacity=".3"/>
+    <rect x="496" y="188" width="28" height="34" fill="#6fcf97" opacity=".3"/>
+    <rect x="528" y="180" width="28" height="42" fill="#6fcf97" opacity=".3"/>
+    <rect x="560" y="192" width="28" height="30" fill="#6fcf97" opacity=".3"/>
+    <rect x="592" y="174" width="28" height="48" fill="#6fcf97" opacity=".3"/>
+    <rect x="624" y="186" width="28" height="36" fill="#6fcf97" opacity=".3"/>
+    <rect x="656" y="182" width="28" height="40" fill="#6fcf97" opacity=".3"/>
+    <rect x="688" y="196" width="28" height="26" fill="#6fcf97" opacity=".3"/>
+    <rect x="720" y="178" width="28" height="44" fill="#6fcf97" opacity=".3"/>
+    <rect x="752" y="188" width="28" height="34" fill="#6fcf97" opacity=".3"/>
+    <rect x="784" y="184" width="28" height="38" fill="#6fcf97" opacity=".3"/>
+    <rect x="816" y="176" width="28" height="46" fill="#6fcf97" opacity=".3"/>
+    <rect x="848" y="190" width="28" height="32" fill="#6fcf97" opacity=".3"/>
+    <rect x="880" y="186" width="28" height="36" fill="#6fcf97" opacity=".3"/>
+  </g>
+  <!-- spike label pill -->
+  <rect x="205" y="110" width="34" height="13" rx="3" fill="#0b0e14" stroke="#e07070" stroke-opacity=".4"/><text x="222" y="120" text-anchor="middle" font-size="9.5" font-weight="500" fill="#e07070">96</text>
+  <text x="94" y="240" font-size="9" fill="#5b6675">14:00</text><text x="450" y="240" font-size="9" fill="#5b6675">14:30</text><text x="880" y="240" font-size="9" fill="#5b6675">15:00</text>
+
+  <!-- tops row -->
+  <rect x="16" y="258" width="460" height="118" rx="12" class="card"/>
+  <text x="32" y="278" class="lbl">TOP PATHS · CLICK = FILTER</text>
+  <g class="mono" font-size="11">
+    <text x="32" y="298" class="txt">/wp-login.php</text><rect x="150" y="291" width="250" height="6" rx="3" fill="#0a0e14"/><rect x="150" y="291" width="230" height="6" rx="3" fill="#d9a441" opacity=".4"/><text x="452" y="298" text-anchor="end" fill="#5b6675">980</text>
+    <text x="32" y="316" class="txt">/api/checkout</text><rect x="150" y="309" width="250" height="6" rx="3" fill="#0a0e14"/><rect x="150" y="309" width="178" height="6" rx="3" fill="#4d8dff" opacity=".35"/><text x="452" y="316" text-anchor="end" fill="#5b6675">742</text>
+    <text x="32" y="334" class="txt">/</text><rect x="150" y="327" width="250" height="6" rx="3" fill="#0a0e14"/><rect x="150" y="327" width="140" height="6" rx="3" fill="#4d8dff" opacity=".35"/><text x="452" y="334" text-anchor="end" fill="#5b6675">598</text>
+    <text x="32" y="352" class="txt">/.env</text><rect x="150" y="345" width="250" height="6" rx="3" fill="#0a0e14"/><rect x="150" y="345" width="60" height="6" rx="3" fill="#d9a441" opacity=".4"/><text x="452" y="352" text-anchor="end" fill="#5b6675">207</text>
+  </g>
+
+  <rect x="484" y="258" width="228" height="118" rx="12" class="card"/>
+  <text x="500" y="278" class="lbl">TOP IPS</text>
+  <g class="mono" font-size="11">
+    <text x="500" y="298" class="txt">🇷🇺 45.9.x.x</text><text x="690" y="298" text-anchor="end" fill="#d9a441">1.2k</text>
+    <text x="500" y="316" class="txt">🇨🇳 185.2.x.x</text><text x="690" y="316" text-anchor="end" fill="#e07070">318</text>
+    <text x="500" y="334" class="txt">🇳🇱 51.7.x.x</text><text x="690" y="334" text-anchor="end" fill="#5b6675">207</text>
+    <text x="500" y="352" class="txt">🇩🇪 88.1.x.x</text><text x="690" y="352" text-anchor="end" fill="#5b6675">96</text>
+  </g>
+
+  <rect x="720" y="258" width="224" height="118" rx="12" class="card"/>
+  <text x="736" y="278" class="lbl">STATUS</text>
+  <g class="mono" font-size="11">
+    <text x="736" y="298" fill="#6fcf97">200</text><rect x="800" y="291" width="110" height="6" rx="3" fill="#0a0e14"/><rect x="800" y="291" width="102" height="6" rx="3" fill="#6fcf97" opacity=".5"/><text x="928" y="298" text-anchor="end" fill="#5b6675">15k</text>
+    <text x="736" y="316" fill="#d9a441">403</text><rect x="800" y="309" width="110" height="6" rx="3" fill="#0a0e14"/><rect x="800" y="309" width="36" height="6" rx="3" fill="#d9a441" opacity=".5"/><text x="928" y="316" text-anchor="end" fill="#5b6675">540</text>
+    <text x="736" y="334" fill="#e07070">502</text><rect x="800" y="327" width="110" height="6" rx="3" fill="#0a0e14"/><rect x="800" y="327" width="10" height="6" rx="3" fill="#e07070" opacity=".5"/><text x="928" y="334" text-anchor="end" fill="#5b6675">28</text>
+  </g>
+
+  <!-- filter rail + stream -->
+  <rect x="16" y="384" width="150" height="160" rx="12" class="card"/>
+  <text x="32" y="404" class="lbl">COUNTRY</text>
+  <g class="mono" font-size="11" fill="#c4cdda">
+    <text x="32" y="422">🇷🇺 RU</text><text x="150" y="422" text-anchor="end" fill="#5b6675">1.2k</text>
+    <text x="32" y="440">🇨🇳 CN</text><text x="150" y="440" text-anchor="end" fill="#5b6675">840</text>
+  </g>
+  <text x="32" y="464" class="lbl">HOST</text>
+  <g class="mono" font-size="11" fill="#c4cdda">
+    <text x="32" y="482">site-a</text><text x="150" y="482" text-anchor="end" fill="#5b6675">3.9k</text>
+    <text x="32" y="500">site-b</text><text x="150" y="500" text-anchor="end" fill="#5b6675">1.1k</text>
+  </g>
+
+  <rect x="174" y="384" width="770" height="160" rx="12" class="card"/>
+  <text x="190" y="404" class="lbl">ROWS UNDER FILTER</text>
+  <g class="mono" font-size="11">
+    <g><rect x="186" y="414" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="426" fill="#5b6675">14:58:02</text><text x="270" y="426" fill="#d9a441">403</text><text x="308" y="426" class="dim">GET</text><text x="346" y="426" fill="#e7ecf4">/wp-login.php</text><text x="620" y="426" fill="#5b6675">🇷🇺 45.9.x.x · nginx</text><text x="928" y="426" text-anchor="end" fill="#5b6675">12 ms</text></g>
+    <rect x="186" y="434" width="758" height="18" fill="#111826"/>
+    <g><rect x="186" y="434" width="2" height="18" fill="#e07070" opacity=".6"/><text x="196" y="447" fill="#5b6675">14:58:01</text><text x="270" y="447" fill="#e07070">502</text><text x="308" y="447" class="dim">POST</text><text x="346" y="447" fill="#e7ecf4">/api/checkout</text><text x="620" y="447" fill="#5b6675">🇨🇳 185.2.x.x · nginx</text><text x="928" y="447" text-anchor="end" fill="#e07070">1840 ms</text></g>
+    <g><rect x="186" y="454" width="2" height="16" fill="#334155"/><text x="196" y="466" fill="#5b6675">14:58:00</text><text x="270" y="466" fill="#6fcf97">200</text><text x="308" y="466" class="dim">GET</text><text x="346" y="466" fill="#c4cdda">/</text><text x="620" y="466" fill="#5b6675">🇩🇪 88.1.x.x · nginx</text><text x="928" y="466" text-anchor="end" fill="#5b6675">44 ms</text></g>
+    <g><rect x="186" y="474" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="486" fill="#5b6675">14:57:58</text><text x="270" y="486" fill="#d9a441">403</text><text x="308" y="486" class="dim">GET</text><text x="346" y="486" fill="#c4cdda">/xmlrpc.php</text><text x="620" y="486" fill="#5b6675">🇷🇺 45.9.x.x · nginx</text><text x="928" y="486" text-anchor="end" fill="#5b6675">9 ms</text></g>
+    <g><rect x="186" y="494" width="2" height="16" fill="#334155"/><text x="196" y="506" fill="#5b6675">14:57:55</text><text x="270" y="506" fill="#6fcf97">200</text><text x="308" y="506" class="dim">GET</text><text x="346" y="506" fill="#c4cdda">/blog/post-1</text><text x="620" y="506" fill="#5b6675">🇳🇱 51.7.x.x · nginx</text><text x="928" y="506" text-anchor="end" fill="#5b6675">61 ms</text></g>
+  </g>
+  <text x="559" y="532" text-anchor="middle" font-size="10" fill="#5b6675">↓ старше</text>
+</svg>
