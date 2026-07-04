@@ -10,7 +10,7 @@ dashboard. Bilingual UI (EN/RU).
 
 - **Log explorer** — click paths/IPs/status to filter, traffic chart with 4xx/5xx. No query language.
 - **Bans everywhere** — Cloudflare · nginx · ingress, grouped per rule, auto-resynced.
-- **Auto-ban** — by path / regex / rate / country, with dry-run before arming.
+- **Auto-ban** — by path / regex / rate / country, with dry-run before arming. *(below)*
 - **403 rules** — block scanner paths (`/.env`, `/wp-login`) at the edge.
 - **Threat feeds** — Spamhaus / Tor / custom lists, self-syncing.
 - **WAF/CRS + IP intel** — ModSecurity offenders, GeoIP, ASN, VPN/Tor reputation.
@@ -18,6 +18,8 @@ dashboard. Bilingual UI (EN/RU).
 - **Alerts** — Slack / Telegram routing.
 
 **403 path rules** — return `403` for scanner paths at the nginx/ingress layer; attach each rule to any targets, toggle on/off, star a default.
+
+![Auto-ban](docs/screenshots/autoban.svg?v=1)
 
 ![403 rules](docs/screenshots/rules-403.svg?v=1)
 
