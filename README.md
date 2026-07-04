@@ -17,6 +17,10 @@ dashboard. Bilingual UI (EN/RU).
 - **LLM analyst** — plain-language insight + anomaly detection (toggle off anytime).
 - **Alerts** — Slack / Telegram routing.
 
+**403 path rules** — return `403` for scanner paths at the nginx/ingress layer; attach each rule to any targets, toggle on/off, star a default.
+
+![403 rules](docs/screenshots/rules-403.svg?v=1)
+
 ## Deploy
 
 **Central** (Loki + dashboard + bans):
