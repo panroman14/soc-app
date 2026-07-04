@@ -23,7 +23,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import analyze, config, db, llm, loki, logging_conf, metrics
+from . import analyze, auth, config, db, llm, loki, logging_conf, metrics
 
 log = logging_conf.setup()
 
@@ -91,33 +91,42 @@ async def security(request: Request, call_next):
     return resp
 
 
-@app.middleware("http")
-async def basic_auth(request: Request, call_next):
-    """HTTP Basic auth on everything except AUTH_EXEMPT.
+# self-service API a signed-in viewer may POST (everything else mutating = admin only)
+_SELF_SERVICE = {"/api/auth/logout", "/api/auth/password",
+                 "/api/auth/totp/setup", "/api/auth/totp/enable", "/api/auth/totp/disable"}
 
-    FAILS CLOSED: if no creds are configured, every non-exempt path returns 503
-    (this is a ban/settings/backend-control appliance — never open by default).
-    Set SOC_DEV_NO_AUTH=1 to intentionally run without auth on a trusted host."""
-    if request.url.path in config.AUTH_EXEMPT:
+
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    """Session-cookie auth with roles (admin / viewer).
+
+    - AUTH_EXEMPT paths + the static SPA shell (GET) load without a session; the API
+      itself is what's gated, so the shell is useless until you log in.
+    - FAILS CLOSED: with no users AND no bootstrap creds, /api returns 503 (setup).
+    - viewer is read-only: only GET/HEAD + a small self-service set (logout, own
+      password/TOTP); admin has full access; /api/users* is admin-only.
+    Set SOC_DEV_NO_AUTH=1 to bypass entirely on a trusted host."""
+    path = request.url.path
+    if path in config.AUTH_EXEMPT or config.DEV_NO_AUTH:
         return await call_next(request)
-    if not (config.BASIC_AUTH_USER and config.BASIC_AUTH_PASS):
-        if config.DEV_NO_AUTH:
-            return await call_next(request)          # explicit dev opt-in
+    # static SPA shell + assets (non-API GETs) load unauthenticated; API is gated
+    if request.method in ("GET", "HEAD") and not path.startswith("/api/"):
+        return await call_next(request)
+    if auth.user_count() == 0:
         return JSONResponse(
-            {"error": "auth не настроен — задай BASIC_AUTH_USER/BASIC_AUTH_PASS "
-                      "(или SOC_DEV_NO_AUTH=1 для доверенного хоста)"},
+            {"error": "no users — set BASIC_AUTH_USER/PASS to seed the first admin "
+                      "(or SOC_DEV_NO_AUTH=1 on a trusted host)", "setup": True},
             status_code=503)
-    ok = False
-    hdr = request.headers.get("authorization", "")
-    if hdr.startswith("Basic "):
-        try:
-            user, _, pw = base64.b64decode(hdr[6:]).decode().partition(":")
-            ok = (secrets.compare_digest(user, config.BASIC_AUTH_USER)
-                  and secrets.compare_digest(pw, config.BASIC_AUTH_PASS))
-        except Exception:
-            ok = False
-    if not ok:
-        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="soc"'})
+    payload = auth.read_session(request.cookies.get(auth.COOKIE))
+    if not payload:
+        return JSONResponse({"error": "not authenticated", "login": True}, status_code=401)
+    role = payload.get("role")
+    if role != "admin":
+        if path.startswith("/api/users"):
+            return JSONResponse({"error": "admin only"}, status_code=403)
+        if request.method not in ("GET", "HEAD", "OPTIONS") and path not in _SELF_SERVICE:
+            return JSONResponse({"error": "read-only (viewer role)"}, status_code=403)
+    request.state.user = payload
     return await call_next(request)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
@@ -229,6 +238,11 @@ def insight_loop():
 
 @app.on_event("startup")
 def _startup():
+    db.init()
+    auth.init()                                  # users table + bootstrap first admin
+    if not config.DEV_NO_AUTH and auth.user_count() == 0:
+        print("[auth] no users yet — set BASIC_AUTH_USER/PASS to seed the first admin, "
+              "then add more in Settings → Users.", flush=True)
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=analytics_loop, daemon=True).start()
     threading.Thread(target=insight_loop, daemon=True).start()
@@ -3186,6 +3200,149 @@ def api_status():
 def health():
     with _state_lock:
         return {"ok": True, "loki_up": _state["loki_up"], "updated": _state["updated"]}
+
+
+# ── auth endpoints (multi-user + TOTP) ──────────────────────────────────────────
+def _client_ip(request: Request):
+    xff = request.headers.get("x-forwarded-for", "")
+    return (xff.split(",")[0].strip() if xff else "") or (request.client.host if request.client else "?")
+
+
+def _set_session_cookie(resp, request, username, role, epoch):
+    secure = (request.url.scheme == "https"
+              or request.headers.get("x-forwarded-proto", "") == "https")
+    resp.set_cookie(auth.COOKIE, auth.make_session(username, role, epoch),
+                    max_age=auth._SESSION_TTL, httponly=True, secure=secure, samesite="strict", path="/")
+
+
+@app.post("/api/auth/login")
+async def api_login(request: Request):
+    body = await request.json()
+    u = (body.get("username") or "").strip()
+    p = body.get("password") or ""
+    code = (body.get("totp") or "").strip()
+    if auth.user_count() == 0:
+        return JSONResponse({"ok": False, "error": "no users configured", "setup": True}, status_code=503)
+    payload, err = auth.authenticate(u, p, code, _client_ip(request))
+    if err == "totp_required":
+        return JSONResponse({"ok": False, "totp_required": True})
+    if err != "ok":
+        msg = {"locked": "too many attempts — try again later",
+               "totp_bad": "invalid 2FA code"}.get(err, "invalid username or password")
+        return JSONResponse({"ok": False, "error": msg}, status_code=401)
+    resp = JSONResponse({"ok": True, "username": u, "role": payload["r"]})
+    _set_session_cookie(resp, request, u, payload["r"], payload["e"])
+    return resp
+
+
+@app.post("/api/auth/logout")
+def api_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth.COOKIE, path="/")
+    return resp
+
+
+@app.get("/api/auth/me")
+def api_me(request: Request):
+    p = getattr(request.state, "user", None)
+    if not p:
+        return JSONResponse({"authenticated": False}, status_code=401)
+    u = auth.get_user(p["u"]) or {}
+    return {"authenticated": True, "username": p["u"], "role": p.get("role"),
+            "totp": bool(u.get("totp_secret"))}
+
+
+@app.post("/api/auth/password")
+async def api_change_password(request: Request):
+    p = request.state.user
+    body = await request.json()
+    if not auth.verify_pw(body.get("current") or "", (auth.get_user(p["u"]) or {}).get("pw_hash", "")):
+        return JSONResponse({"ok": False, "error": "current password is wrong"}, status_code=403)
+    try:
+        auth.set_password(p["u"], body.get("new") or "")
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    resp = JSONResponse({"ok": True})            # epoch bumped → re-issue this session
+    nu = auth.get_user(p["u"])
+    _set_session_cookie(resp, request, p["u"], nu["role"], nu["epoch"])
+    return resp
+
+
+@app.post("/api/auth/totp/setup")
+def api_totp_setup(request: Request):
+    p = request.state.user
+    secret = auth.totp_new_secret()
+    _pending_totp[p["u"]] = secret               # not enabled until verified
+    return {"secret": secret, "uri": auth.totp_uri(p["u"], secret)}
+
+
+@app.post("/api/auth/totp/enable")
+async def api_totp_enable(request: Request):
+    p = request.state.user
+    body = await request.json()
+    secret = _pending_totp.get(p["u"])
+    if not secret:
+        return JSONResponse({"ok": False, "error": "run setup first"}, status_code=400)
+    if not auth.totp_verify(secret, body.get("code") or ""):
+        return JSONResponse({"ok": False, "error": "code did not match"}, status_code=400)
+    auth.set_totp(p["u"], secret)
+    _pending_totp.pop(p["u"], None)
+    return {"ok": True}
+
+
+@app.post("/api/auth/totp/disable")
+async def api_totp_disable(request: Request):
+    p = request.state.user
+    body = await request.json()
+    if not auth.verify_pw(body.get("password") or "", (auth.get_user(p["u"]) or {}).get("pw_hash", "")):
+        return JSONResponse({"ok": False, "error": "password is wrong"}, status_code=403)
+    auth.set_totp(p["u"], None)
+    return {"ok": True}
+
+
+_pending_totp = {}          # username -> secret awaiting verification (in-memory)
+
+
+@app.get("/api/users")
+def api_users():
+    return {"users": auth.list_users()}
+
+
+@app.post("/api/users")
+async def api_users_upsert(request: Request):
+    """Admin: create a user, or update an existing one's role / reset its password."""
+    body = await request.json()
+    u = (body.get("username") or "").strip()
+    if not u:
+        return JSONResponse({"ok": False, "error": "username required"}, status_code=400)
+    exists = auth.get_user(u)
+    try:
+        if not exists:
+            auth.create_user(u, body.get("password") or "", role=body.get("role") or "viewer")
+        else:
+            if body.get("role"):
+                auth.set_role(u, body["role"])
+            if body.get("password"):
+                auth.set_password(u, body["password"])
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    return {"ok": True, "username": u}
+
+
+@app.post("/api/users/delete")
+async def api_users_delete(request: Request):
+    body = await request.json()
+    u = (body.get("username") or "").strip()
+    me = request.state.user["u"]
+    if u == me:
+        return JSONResponse({"ok": False, "error": "can't delete your own account"}, status_code=400)
+    # don't strand the system without an admin
+    admins = [x for x in auth.list_users() if x["role"] == "admin"]
+    tgt = auth.get_user(u)
+    if tgt and tgt["role"] == "admin" and len(admins) <= 1:
+        return JSONResponse({"ok": False, "error": "can't delete the last admin"}, status_code=400)
+    auth.delete_user(u)
+    return {"ok": True}
 
 
 # Serve the dashboard (single-page, no build). Mounted last so /api/* and

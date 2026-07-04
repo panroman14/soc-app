@@ -21,8 +21,11 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "gemma3:4b")
 BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "")
 DEV_NO_AUTH = os.environ.get("SOC_DEV_NO_AUTH", "") not in ("0", "", "false", "False")
-# Paths served without auth (Prometheus scrape + health probes).
-AUTH_EXEMPT = {"/metrics", "/api/health"}
+# Signs session cookies (multi-user auth). If set, rotating it logs everyone out;
+# if empty, a random key is generated and persisted in the DB. `openssl rand -hex 32`.
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
+# Paths served without auth (Prometheus scrape + health probes + the login flow).
+AUTH_EXEMPT = {"/metrics", "/api/health", "/api/auth/login", "/login"}
 # CSRF: mutating requests whose browser Origin doesn't match are rejected. Behind a
 # reverse proxy that rewrites Host, list the public origin(s) here (comma-separated,
 # e.g. "https://soc.example.com"); empty = compare Origin against the Host header.
