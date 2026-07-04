@@ -53,6 +53,6 @@ Store options: `STORE=sqlite|file` (VMs) or `configmap` (k8s). Full guide + all 
 
 - Set `BLOCKLIST_TOKEN` + `BASIC_AUTH_*` — no token = unauthenticated API.
 - Use `PUBLIC_URL=https://…` across untrusted networks (the agent installer runs as root).
-- Set `SECRET_KEY` (e.g. `openssl rand -hex 32`) to encrypt GUI-entered secrets (Cloudflare token) at rest — the key stays in ENV, the store keeps only ciphertext. Without it they're plaintext (startup warns).
+- Set `SECRET_KEY` (e.g. `openssl rand -hex 32`) to encrypt GUI-entered secrets (Cloudflare token) at rest with Fernet — key stays in ENV, store keeps only ciphertext; comma-separated keys rotate. Without it they're plaintext (startup warns).
 
 [MIT](LICENSE) © 2026 panroman14

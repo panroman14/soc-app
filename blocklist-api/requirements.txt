@@ -1,5 +1,8 @@
 fastapi==0.115.*
 uvicorn[standard]==0.32.*
+# Encryption-at-rest for GUI secrets (SECRET_KEY). Audited AES-128-CBC + HMAC via
+# Fernet/MultiFernet. Required whenever SECRET_KEY is set (any store type).
+cryptography==43.*
 # Only needed for STORE=configmap or ENFORCE=ingress-cm (Kubernetes). The code
 # imports it lazily, so a plain-VM install (STORE=file/sqlite) runs without it —
 # you may drop this line from a non-k8s image.

@@ -18,7 +18,7 @@ def test_roundtrip():
     _key("test-key-123")
     tok = "cf_abc123-TOKEN.with/special+chars=="
     ct = crypto.seal(tok)
-    assert ct.startswith("enc1:") and tok not in ct      # actually encrypted
+    assert ct.startswith("enc:") and tok not in ct       # actually encrypted (Fernet)
     assert crypto.open_(ct) == tok
 
 
@@ -61,13 +61,35 @@ def test_wrong_key_fails():
 def test_tamper_detected():
     _key("k")
     ct = crypto.seal("secret")
-    import base64
-    blob = bytearray(base64.b64decode(ct[len("enc1:"):]))
-    blob[-1] ^= 0x01                                       # flip a tag bit
-    tampered = "enc1:" + base64.b64encode(bytes(blob)).decode()
+    body = ct[len("enc:"):]
+    tampered = "enc:" + body[:-2] + ("AA" if body[-2:] != "AA" else "BB")  # corrupt token tail
     try:
         crypto.open_(tampered)
         assert False, "expected auth failure on tamper"
+    except ValueError:
+        pass
+
+
+def test_key_rotation():
+    # new key prepended, old kept → old ciphertext still decrypts; new writes use new key
+    _key("old-key")
+    old_ct = crypto.seal("secret")
+    _key("new-key,old-key")                               # MultiFernet: new encrypts, both decrypt
+    assert crypto.open_(old_ct) == "secret"              # old ciphertext still readable
+    new_ct = crypto.seal("secret")
+    _key("new-key")                                       # drop old key
+    assert crypto.open_(new_ct) == "secret"              # re-saved secret readable
+    try:
+        crypto.open_(old_ct); assert False, "old ct should fail once old key dropped"
+    except ValueError:
+        pass
+
+
+def test_legacy_scheme_rejected():
+    _key("k")
+    try:
+        crypto.open_("enc1:whatever")
+        assert False, "legacy enc1: must be rejected, not returned as plaintext"
     except ValueError:
         pass
 

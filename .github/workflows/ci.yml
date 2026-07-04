@@ -43,6 +43,11 @@ jobs:
           python -m pip install --quiet -r backend/requirements.txt
           python backend/tests/test_units.py
 
+      - name: Unit tests (secret encryption)
+        run: |
+          python -m pip install --quiet cryptography
+          python blocklist-api/tests/test_crypto.py
+
       - uses: azure/setup-helm@v4
 
       - name: Helm chart lint + render (incl. fail-closed guard)
