@@ -133,7 +133,8 @@ def _cf_targets():
         cf_targets.migrate_from_envs()        # idempotent; runs once
         out = []
         for tid, e in cf_targets.all_full().items():
-            t = {"id": tid, "type": "cloudflare", "mode": e.get("mode") or ""}
+            t = {"id": tid, "type": "cloudflare", "mode": e.get("mode") or "",
+                 "token_set": bool(e.get("token"))}
             if e.get("env"):
                 t["env"] = e["env"]
             out.append(t)
