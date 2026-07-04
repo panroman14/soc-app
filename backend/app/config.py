@@ -26,6 +26,20 @@ DEV_NO_AUTH = os.environ.get("SOC_DEV_NO_AUTH", "") not in ("0", "", "false", "F
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
 # Paths served without auth (Prometheus scrape + health probes + the login flow).
 AUTH_EXEMPT = {"/metrics", "/api/health", "/api/auth/login", "/login"}
+# IP allow-list (network-level gate, checked before auth). Comma-separated CIDRs
+# (v4/v6); empty = disabled. /metrics + /api/health are exempt so probes/scrape work.
+# Env-only on purpose — editing it in the GUI could lock you out. TRUST_PROXY=1 to
+# read the client IP from X-Forwarded-For (only behind a proxy you control).
+import ipaddress as _ipaddress
+ALLOW_NETS = []
+for _c in os.environ.get("ALLOW_IPS", "").split(","):
+    _c = _c.strip()
+    if _c:
+        try:
+            ALLOW_NETS.append(_ipaddress.ip_network(_c, strict=False))
+        except ValueError:
+            pass
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "") not in ("0", "", "false", "False")
 # CSRF: mutating requests whose browser Origin doesn't match are rejected. Behind a
 # reverse proxy that rewrites Host, list the public origin(s) here (comma-separated,
 # e.g. "https://soc.example.com"); empty = compare Origin against the Host header.

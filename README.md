@@ -52,6 +52,7 @@ Store options: `STORE=sqlite|file` (VMs) or `configmap` (k8s). Full guide + all 
 ## Notes
 
 - **Dashboard login is multi-user:** accounts with roles (admin / viewer), optional TOTP 2FA, brute-force lockout, signed session cookies. `BASIC_AUTH_USER/PASS` seed the **first admin** on first run; add more in Settings → Users. `SECRET_KEY` signs sessions (rotate = log everyone out). `SOC_DEV_NO_AUTH=1` bypasses auth on a trusted host.
+- Optional **IP allow-list**: `ALLOW_IPS=CIDR,CIDR` gates the dashboard at the network level (before login); add `TRUST_PROXY=1` behind a reverse proxy.
 - Set `BLOCKLIST_TOKEN` for the ban API — no token = unauthenticated.
 - Use `PUBLIC_URL=https://…` across untrusted networks (the agent installer runs as root).
 - Set `SECRET_KEY` (e.g. `openssl rand -hex 32`) to encrypt GUI-entered secrets (Cloudflare token) at rest with Fernet — key stays in ENV, store keeps only ciphertext; comma-separated keys rotate. Without it they're plaintext (startup warns).

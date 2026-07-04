@@ -63,6 +63,24 @@ _CSP = ("default-src 'self'; "
         "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
 
 
+def _source_ip(request: Request):
+    """Client IP for the allow-list. Trust X-Forwarded-For ONLY behind a proxy
+    (TRUST_PROXY=1) — otherwise a client could spoof the header to bypass the list."""
+    if config.TRUST_PROXY:
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            return xff.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+def _ip_allowed(request: Request):
+    try:
+        addr = ipaddress.ip_address(_source_ip(request))
+    except ValueError:
+        return False
+    return any(addr in n for n in config.ALLOW_NETS)
+
+
 @app.middleware("http")
 async def security(request: Request, call_next):
     """Security headers on every response + CSRF Origin check on mutations.
@@ -74,6 +92,11 @@ async def security(request: Request, call_next):
     """
     rid = (request.headers.get("x-request-id") or uuid.uuid4().hex[:12])
     logging_conf.set_rid(rid)
+    # IP allow-list (network-level gate, outermost). Empty = disabled. Health/metrics
+    # are exempt so k8s probes + Prometheus keep working from inside the cluster.
+    if config.ALLOW_NETS and request.url.path not in ("/api/health", "/metrics"):
+        if not _ip_allowed(request):
+            return JSONResponse({"error": "your IP is not allowed"}, status_code=403)
     if request.method in ("POST", "PUT", "PATCH", "DELETE"):
         origin = request.headers.get("origin")
         if origin:
