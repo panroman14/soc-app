@@ -4,7 +4,7 @@
 surfaces attacks, and **bans IPs/paths on Cloudflare, nginx, or Kubernetes ingress** — from one
 dashboard. Bilingual UI (EN/RU).
 
-![Logs explorer](docs/screenshots/logs.svg)
+![Logs explorer](docs/screenshots/logs.svg?v=2)
 
 ## What it does
 
