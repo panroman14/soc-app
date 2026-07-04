@@ -3246,6 +3246,8 @@ def api_logout():
 def api_me(request: Request):
     p = getattr(request.state, "user", None)
     if not p:
+        if config.DEV_NO_AUTH:                    # auth bypassed on a trusted host
+            return {"authenticated": True, "username": "dev", "role": "admin", "totp": False, "dev": True}
         return JSONResponse({"authenticated": False}, status_code=401)
     u = auth.get_user(p["u"]) or {}
     return {"authenticated": True, "username": p["u"], "role": p.get("role"),

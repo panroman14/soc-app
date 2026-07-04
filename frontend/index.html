@@ -231,6 +231,23 @@
 </style>
 </head>
 <body class="min-h-screen">
+<!-- login gate (shown until authenticated) -->
+<div id="login-overlay" class="hidden" style="position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="card p-5" style="width:340px;max-width:100%">
+    <div class="text-center mb-4"><div class="text-lg font-semibold text-slate-100">🛡️ SOC Dashboard</div>
+      <div class="text-[12px] mt-1" style="color:var(--faint)" data-i18n="login.sub">Sign in to continue</div></div>
+    <div id="login-setup" class="hidden text-[12px] mb-3 p-2 rounded" style="background:#3a2e0e;color:#f0d089">
+      <span data-i18n="login.setup">No users yet — set BASIC_AUTH_USER/PASS to seed the first admin.</span></div>
+    <label class="block text-[11px] mb-2" style="color:var(--muted)"><span data-i18n="login.user">Username</span>
+      <input id="login-user" class="input mt-1 w-full" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"></label>
+    <label class="block text-[11px] mb-2" style="color:var(--muted)"><span data-i18n="login.pass">Password</span>
+      <input id="login-pass" type="password" class="input mt-1 w-full" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()"></label>
+    <label id="login-totp-wrap" class="hidden text-[11px] mb-2" style="color:var(--muted)"><span data-i18n="login.totp">2FA code</span>
+      <input id="login-totp" inputmode="numeric" class="input mono mt-1 w-full" placeholder="000000" onkeydown="if(event.key==='Enter')authLogin()"></label>
+    <button onclick="authLogin()" class="btn btn-primary w-full mt-1" data-i18n="login.go">Sign in</button>
+    <div id="login-msg" class="text-[12px] mt-2 text-center" style="color:#f0a2a2"></div>
+  </div>
+</div>
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="group relative flex items-center gap-2.5 px-1 pb-3 mb-2 border-b" style="border-color:var(--border)">
@@ -259,7 +276,7 @@
     <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')" title="menu">☰</button>
     <label class="search"><span style="color:var(--faint)">⌕</span><input id="topsearch" onkeydown="if(event.key==='Enter')quickSearch(this.value)" placeholder="Search IP → profile" data-i18n-ph="search.ph"></label>
     <div style="flex:1"></div>
-    <button class="btn btn-primary" onclick="quickBan()" title="Ban an IP / CIDR"><span>＋</span><span data-i18n="ban.quick">Ban IP</span></button>
+    <button id="topban" class="btn btn-primary" onclick="quickBan()" title="Ban an IP / CIDR"><span>＋</span><span data-i18n="ban.quick">Ban IP</span></button>
     <div id="status-badge" class="chip">—</div>
     <div class="hidden sm:flex items-center gap-1.5 text-xs" title="data freshness">
       <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
@@ -270,6 +287,11 @@
     <button id="lang-btn" onclick="toggleLang()" class="iconbtn-x btn btn-ghost btn-xs" title="language">EN</button>
     <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
     <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
+    <div id="user-chip" class="hidden items-center gap-1.5">
+      <button onclick="showView('settings');setSub('account')" class="btn btn-ghost btn-xs" title="account">
+        <span>👤</span><span id="user-name" class="mono"></span><span id="user-role" class="text-[9px] px-1 rounded ml-1"></span></button>
+      <button onclick="authLogout()" class="btn btn-ghost btn-xs" title="log out">⎋</button>
+    </div>
     <h1 id="view-title" class="hidden" data-i18n="title">SOC Dashboard</h1>
   </header>
 
@@ -843,6 +865,8 @@
       <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span>🔔</span><span data-i18n="set.notify">Notifications</span></button>
       <button id="ssub-autoban" onclick="setSub('autoban')" class="setnav-btn"><span>🚫</span><span data-i18n="set.autoban">Auto-ban</span></button>
       <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span>⚙️</span><span data-i18n="set.global">Global</span></button>
+      <button id="ssub-account" onclick="setSub('account')" class="setnav-btn"><span>👤</span><span data-i18n="set.account">Account</span></button>
+      <button id="ssub-users" onclick="setSub('users')" class="setnav-btn hidden"><span>👥</span><span data-i18n="set.users">Users</span></button>
     </div>
     <div>
 
@@ -943,6 +967,56 @@
       </div>
       <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
       <div id="set-msg" class="text-[11px] mt-3"></div>
+    </section>
+
+    <!-- ── Account (self) ── -->
+    <section id="ssec-account" class="hidden card p-4 space-y-4">
+      <h2 class="text-sm font-medium text-slate-200">👤 <span data-i18n="acc.h">Your account</span> <span id="acc-who" class="text-[11px]" style="color:var(--faint)"></span></h2>
+      <div class="card p-3">
+        <div class="text-xs font-medium text-slate-300 mb-2" data-i18n="acc.pw">Change password</div>
+        <div class="flex flex-wrap items-end gap-2 text-[11px]">
+          <label class="block"><span data-i18n="acc.pw.cur">Current</span><input id="acc-pw-cur" type="password" class="input mt-1 w-44"></label>
+          <label class="block"><span data-i18n="acc.pw.new">New (min 8)</span><input id="acc-pw-new" type="password" class="input mt-1 w-44"></label>
+          <button onclick="accChangePw()" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
+          <span id="acc-pw-msg" class="text-[11px]" style="color:var(--faint)"></span>
+        </div>
+      </div>
+      <div class="card p-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-xs font-medium text-slate-300">🔐 <span data-i18n="acc.2fa">Two-factor (TOTP)</span> <span id="acc-2fa-state" class="text-[11px]" style="color:var(--faint)"></span></div>
+          <div class="flex gap-1.5">
+            <button id="acc-2fa-setup" onclick="totpSetup()" class="btn btn-ghost btn-xs" data-i18n="acc.2fa.enable">Enable</button>
+            <button id="acc-2fa-off" onclick="totpDisable()" class="btn btn-ghost btn-xs hidden" data-i18n="acc.2fa.disable">Disable</button>
+          </div>
+        </div>
+        <div id="acc-2fa-body" class="hidden text-[11px]">
+          <p style="color:var(--faint)" data-i18n="acc.2fa.scan">Add this secret to your authenticator app, then confirm a code:</p>
+          <div class="mono mt-2 p-2 rounded bg-slate-950/60 break-all" id="acc-2fa-secret"></div>
+          <div class="flex items-end gap-2 mt-2">
+            <label class="block"><span data-i18n="acc.2fa.code">6-digit code</span><input id="acc-2fa-code" inputmode="numeric" class="input mono mt-1 w-28" placeholder="000000"></label>
+            <button onclick="totpEnable()" class="btn btn-primary btn-xs" data-i18n="acc.2fa.confirm">Confirm</button>
+            <span id="acc-2fa-msg" class="text-[11px]" style="color:var(--faint)"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Users (admin) ── -->
+    <section id="ssec-users" class="hidden card p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-medium text-slate-200">👥 <span data-i18n="usr.h">Users</span></h2>
+        <button onclick="usrAddToggle()" class="btn btn-primary btn-xs"><span>＋</span> <span data-i18n="usr.add">Add user</span></button>
+      </div>
+      <div id="usr-add" class="hidden card p-3">
+        <div class="flex flex-wrap items-end gap-2 text-[11px]">
+          <label class="block"><span data-i18n="usr.name">Username</span><input id="usr-new-name" class="input mono mt-1 w-40"></label>
+          <label class="block"><span data-i18n="usr.pass">Password</span><input id="usr-new-pass" type="password" class="input mt-1 w-40"></label>
+          <label class="block"><span data-i18n="usr.role">Role</span><select id="usr-new-role" class="input mt-1"><option value="viewer">viewer</option><option value="admin">admin</option></select></label>
+          <button onclick="usrCreate()" class="btn btn-primary btn-xs" data-i18n="usr.create">Create</button>
+          <span id="usr-msg" class="text-[11px]" style="color:var(--faint)"></span>
+        </div>
+      </div>
+      <div id="usr-list" class="space-y-1.5"><div class="text-slate-600 text-xs">…</div></div>
     </section>
     </div><!-- /setwrap content -->
     </div><!-- /setwrap -->
@@ -1131,7 +1205,10 @@ const I18N={en:{
   "ing.s2":"Logs into Loki","ing.s2.sub":"The dashboard reads traffic/attacks from Loki. You need one of:","ing.s2.a":"Loki + Promtail already in the cluster","ing.s2.a2":"— then just give the dashboard access to that Loki (set its URL in the dashboard config/deploy).","ing.s2.b":"Loki only on the dashboard","ing.s2.b2":"— then install Promtail in the cluster so it ships ingress-nginx logs to the dashboard's Loki. URL below:",
   "ing.s3":"values.yaml — where the target is set","ing.s3.sub":"The ingress target IS the controller's namespace + ConfigMap pair. Same values as the command above:",
   "nav.system":"System","sys.h":"System","sys.sub":"Host running the SOC dashboard (soc-app) — its own load, memory and uptime.","нет данных о хосте":"no host data","tg.sub":"A group bundles several targets (nginx nodes + Cloudflare). 403 & auto-ban rules attach to a group and apply to all its targets at once.","tg.newname":"New group:","tg.create":"Create","tg.add":"Add","таргет":"target","нет токена":"no token","токен задан":"token set","nav.journal":"Journal","nav.logs":"Logs","nav.settings":"Settings",
-  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.autoban":"Auto-ban","set.global":"Global",
+  "grp.monitor":"Monitor","grp.defend":"Defend","grp.infra":"Infra","ban.quick":"Ban IP","search.ph":"Search IP → profile","window":"window","set.env":"Environments","set.cf":"CF targets","set.notify":"Notifications","set.autoban":"Auto-ban","set.global":"Global","set.account":"Account","set.users":"Users",
+  "login.sub":"Sign in to continue","login.setup":"No users yet — set BASIC_AUTH_USER/PASS to seed the first admin.","login.user":"Username","login.pass":"Password","login.totp":"2FA code","login.go":"Sign in",
+  "acc.h":"Your account","acc.pw":"Change password","acc.pw.cur":"Current","acc.pw.new":"New (min 8)","acc.2fa":"Two-factor (TOTP)","acc.2fa.enable":"Enable","acc.2fa.disable":"Disable","acc.2fa.scan":"Add this secret to your authenticator app, then confirm a code:","acc.2fa.code":"6-digit code","acc.2fa.confirm":"Confirm",
+  "usr.h":"Users","usr.add":"Add user","usr.name":"Username","usr.pass":"Password","usr.role":"Role","usr.create":"Create","usr.reset":"reset pw",
   "cft.h":"Cloudflare targets","cft.sub":"A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).","cft.new":"New CF target",
   "env.h":"Environments","env.new":"New environment","env.sub":"Each environment is one bundle — its nodes, its Cloudflare token, its Loki, its rules and alert channels. Nodes join one at install (--env).",
   "set.global.sub":"LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.",
@@ -1158,7 +1235,10 @@ const I18N={en:{
   "ing.s2":"Логи в Loki","ing.s2.sub":"Дашборд читает трафик/атаки из Loki. Нужен один из вариантов:","ing.s2.a":"Loki + Promtail уже в кластере","ing.s2.a2":"— тогда просто дай дашборду доступ к этому Loki (укажи его URL в настройках/при деплое дашборда).","ing.s2.b":"Loki только на дашборде","ing.s2.b2":"— тогда поставь Promtail в кластер, чтобы он слал логи ingress-nginx в Loki дашборда. URL ниже:",
   "ing.s3":"values.yaml — где указывается таргет","ing.s3.sub":"Таргет ingress — это и есть пара «namespace + ConfigMap контроллера». Те же значения, что в команде выше:",
   "nav.system":"Система","sys.h":"Система","sys.sub":"Хост, на котором крутится SOC-дашборд (soc-app) — его нагрузка, память и аптайм.","tg.sub":"Группа — набор таргетов (nginx-ноды + Cloudflare). Правила 403 и автобан привязываются к группе и применяются сразу ко всем её таргетам.","tg.newname":"Новая группа:","tg.create":"Создать","tg.add":"Добавить","nav.journal":"Журнал","nav.logs":"Логи","nav.settings":"Настройки",
-  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.autoban":"Автобан","set.global":"Глобальные",
+  "grp.monitor":"Мониторинг","grp.defend":"Защита","grp.infra":"Инфра","ban.quick":"Бан IP","search.ph":"Поиск IP → профиль","window":"окно","set.env":"Окружения","set.cf":"CF-таргеты","set.notify":"Уведомления","set.autoban":"Автобан","set.global":"Глобальные","set.account":"Аккаунт","set.users":"Пользователи",
+  "login.sub":"Войдите, чтобы продолжить","login.setup":"Пользователей нет — задай BASIC_AUTH_USER/PASS для первого админа.","login.user":"Логин","login.pass":"Пароль","login.totp":"Код 2FA","login.go":"Войти",
+  "acc.h":"Ваш аккаунт","acc.pw":"Смена пароля","acc.pw.cur":"Текущий","acc.pw.new":"Новый (мин 8)","acc.2fa":"Двухфакторка (TOTP)","acc.2fa.enable":"Включить","acc.2fa.disable":"Выключить","acc.2fa.scan":"Добавь этот секрет в приложение-аутентификатор и подтверди кодом:","acc.2fa.code":"6-значный код","acc.2fa.confirm":"Подтвердить",
+  "usr.h":"Пользователи","usr.add":"Добавить","usr.name":"Логин","usr.pass":"Пароль","usr.role":"Роль","usr.create":"Создать","usr.reset":"сброс пароля",
   "cft.h":"Cloudflare-таргеты","cft.sub":"Именованный аккаунт/зона Cloudflare, который привязывается к группам и 403-правилам как любой таргет. Токен write-only (хранится на сервере, показывается только как «задан»).","cft.new":"Новый CF-таргет",
   "env.h":"Окружения","env.new":"Новое окружение","edit":"Изменить","env.sub":"Каждое окружение — связка: свои ноды, свой Cloudflare-токен, свой Loki, свои правила и каналы уведомлений. Ноды вступают при установке (--env).",
   "env.ing.hint":"Эндпоинт кластера тут не нужен: blocklist-api работает внутри кластера и патчит этот ConfigMap через свой ServiceAccount. Дашборд общается только с blocklist-api (адрес задаётся в BLOCKLIST_API_URL при деплое).",
@@ -3242,17 +3322,127 @@ function renderJournal(){
 let _sub="notify";
 function setSub(name){
   _sub=name;
-  [["notify","ssec-notify"],["autoban","ssec-autoban"],["global","ssec-global"]].forEach(([n,sec])=>{
-    document.getElementById(sec).classList.toggle("hidden",n!==name);
-    document.getElementById("ssub-"+n).className="setnav-btn"+(n===name?" on":"");
+  [["notify","ssec-notify"],["autoban","ssec-autoban"],["global","ssec-global"],["account","ssec-account"],["users","ssec-users"]].forEach(([n,sec])=>{
+    const s=document.getElementById(sec); if(s)s.classList.toggle("hidden",n!==name);
+    const b=document.getElementById("ssub-"+n); if(b)b.className="setnav-btn"+(n===name?" on":"")+(b.classList.contains("hidden")?" hidden":"");
   });
   if(name==="notify")loadNotify(); if(name==="global")loadGlobal();
   if(name==="autoban"){ loadEscalation(); loadThreatFeeds(); loadProtectedPaths(); }
+  if(name==="account")loadAccount(); if(name==="users")loadUsers();
 }
 async function loadProtectedPaths(){
   try{ const d=await fetch("/api/autoban/rules").then(r=>r.json());
     _abIgnore=Array.isArray(d.ignore_paths)?d.ignore_paths:[]; renderAbIgnore();
   }catch(e){}
+}
+
+// ── auth: login gate, session, account, user management ─────────────────────────
+let _me=null;
+async function authInit(){
+  try{
+    const r=await fetch("/api/auth/me");
+    if(r.status===200){ _me=await r.json(); authApply(); return true; }
+    const d=await r.json().catch(()=>({}));
+    showLogin(r.status===503&&d.setup);
+    return false;
+  }catch(e){ showLogin(false); return false; }
+}
+function showLogin(setup){
+  document.getElementById("login-overlay").classList.remove("hidden");
+  document.getElementById("login-setup").classList.toggle("hidden",!setup);
+  const u=document.getElementById("login-user"); if(u)setTimeout(()=>u.focus(),50);
+}
+function authApply(){
+  document.getElementById("login-overlay").classList.add("hidden");
+  const tb=document.getElementById("topban"); if(tb)tb.classList.toggle("hidden",_me.role!=="admin");
+  const chip=document.getElementById("user-chip"); chip.classList.remove("hidden"); chip.classList.add("flex");
+  document.getElementById("user-name").textContent=_me.username;
+  const rb=document.getElementById("user-role"); rb.textContent=_me.role;
+  rb.style.background=_me.role==="admin"?"#4d8dff22":"#33415522"; rb.style.color=_me.role==="admin"?"#9cc0ff":"#94a3b8";
+  const admin=_me.role==="admin";
+  document.getElementById("ssub-users").classList.toggle("hidden",!admin);
+  document.body.classList.toggle("role-viewer",!admin);
+}
+async function authLogin(){
+  const msg=document.getElementById("login-msg"); msg.textContent="";
+  const body={username:document.getElementById("login-user").value.trim(),
+    password:document.getElementById("login-pass").value,
+    totp:document.getElementById("login-totp").value.trim()};
+  try{
+    const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.totp_required){ document.getElementById("login-totp-wrap").classList.remove("hidden");
+      document.getElementById("login-totp").focus(); msg.style.color="#f0d089"; msg.textContent=_trText("нужен код 2FA"); return; }
+    if(!d.ok){ msg.style.color="#f0a2a2"; msg.textContent=_trText(d.error||"вход не удался"); return; }
+    location.reload();
+  }catch(e){ msg.textContent="✗ "+e.message; }
+}
+async function authLogout(){ try{ await _post("/api/auth/logout",{}); }catch(e){} location.reload(); }
+
+async function loadAccount(){
+  try{ const d=await fetch("/api/auth/me").then(r=>r.json()); _me=d;
+    document.getElementById("acc-who").textContent=d.username+" · "+d.role;
+    document.getElementById("acc-2fa-state").textContent=d.totp?("✓ "+_trText("включено")):_trText("выключено");
+    document.getElementById("acc-2fa-setup").classList.toggle("hidden",!!d.totp);
+    document.getElementById("acc-2fa-off").classList.toggle("hidden",!d.totp);
+    document.getElementById("acc-2fa-body").classList.add("hidden");
+  }catch(e){}
+}
+async function accChangePw(){
+  const msg=document.getElementById("acc-pw-msg"); msg.textContent="…";
+  const r=await _post("/api/auth/password",{current:document.getElementById("acc-pw-cur").value,new:document.getElementById("acc-pw-new").value});
+  if(r&&r.ok){ msg.style.color="#6fcf97"; msg.textContent="✓"; document.getElementById("acc-pw-cur").value=""; document.getElementById("acc-pw-new").value=""; }
+  else { msg.style.color="#f0a2a2"; msg.textContent=_trText((r&&r.error)||"не удалось"); }
+}
+async function totpSetup(){
+  const r=await _post("/api/auth/totp/setup",{}); if(!r||!r.secret)return;
+  document.getElementById("acc-2fa-body").classList.remove("hidden");
+  document.getElementById("acc-2fa-secret").innerHTML=`${esc(r.secret)}<br><span style="color:var(--faint)">${esc(r.uri)}</span>`;
+}
+async function totpEnable(){
+  const msg=document.getElementById("acc-2fa-msg");
+  const r=await _post("/api/auth/totp/enable",{code:document.getElementById("acc-2fa-code").value.trim()});
+  if(r&&r.ok){ loadAccount(); } else { msg.style.color="#f0a2a2"; msg.textContent=_trText((r&&r.error)||"код не совпал"); }
+}
+async function totpDisable(){
+  const pw=await uiPrompt(_trText("пароль для отключения 2FA:")); if(!pw)return;
+  const r=await _post("/api/auth/totp/disable",{password:pw});
+  if(r&&r.ok)loadAccount(); else uiAlert(_trText((r&&r.error)||"не удалось"));
+}
+
+function usrAddToggle(){ document.getElementById("usr-add").classList.toggle("hidden"); }
+async function loadUsers(){
+  const el=document.getElementById("usr-list"); if(!el)return;
+  try{ const d=await fetch("/api/users").then(r=>r.json()); const me=(_me||{}).username;
+    el.innerHTML=(d.users||[]).map(u=>`<div class="flex items-center gap-2 flex-wrap bg-slate-900/40 border border-slate-800 rounded-lg px-3 py-2 text-[12px]">
+      <span class="mono text-slate-100">${esc(u.username)}</span>
+      ${u.totp?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">🔐 2FA</span>':''}
+      ${u.username===me?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">you</span>':''}
+      <select onchange="usrSetRole('${escJs(u.username)}',this.value)" class="input ml-auto" style="padding:2px 6px">
+        <option value="viewer"${u.role==="viewer"?" selected":""}>viewer</option>
+        <option value="admin"${u.role==="admin"?" selected":""}>admin</option></select>
+      <button onclick="usrResetPw('${escJs(u.username)}')" class="btn btn-ghost btn-xs" data-i18n="usr.reset">reset pw</button>
+      ${u.username===me?'':`<button onclick="usrDelete('${escJs(u.username)}')" class="btn btn-ghost btn-xs" style="color:#f0a2a2">🗑</button>`}
+    </div>`).join("")||`<div class="text-slate-600 text-xs">${_trText("нет данных")}</div>`;
+    applyI18n();
+  }catch(e){ el.innerHTML='<div class="text-red-400 text-xs">'+_trText("ошибка")+'</div>'; }
+}
+async function usrCreate(){
+  const msg=document.getElementById("usr-msg");
+  const r=await _post("/api/users",{username:document.getElementById("usr-new-name").value.trim(),
+    password:document.getElementById("usr-new-pass").value,role:document.getElementById("usr-new-role").value});
+  if(r&&r.ok){ document.getElementById("usr-new-name").value=""; document.getElementById("usr-new-pass").value="";
+    document.getElementById("usr-add").classList.add("hidden"); loadUsers(); }
+  else { msg.style.color="#f0a2a2"; msg.textContent=_trText((r&&r.error)||"не удалось"); }
+}
+async function usrSetRole(u,role){ await _post("/api/users",{username:u,role}); }
+async function usrResetPw(u){
+  const pw=await uiPrompt(_trText("новый пароль для ")+u+" (min 8):"); if(!pw)return;
+  const r=await _post("/api/users",{username:u,password:pw}); uiAlert(r&&r.ok?"✓":_trText((r&&r.error)||"не удалось"));
+}
+async function usrDelete(u){
+  if(!await uiConfirm(_trText("удалить пользователя ")+u+"?"))return;
+  const r=await _post("/api/users/delete",{username:u}); if(r&&r.ok)loadUsers(); else uiAlert(_trText((r&&r.error)||"не удалось"));
 }
 // ── Targets: подвкладки (nginx-ноды / Cloudflare / группы) ─────────────────────
 let _tsub="nginx";
@@ -5195,10 +5385,14 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();initCards();parseHash();renderWinSel();renderStats(null);refresh();loadDigest();renderBlocklist();renderBanCandidates();renderSuspects();startTranslator();loadBranding();loadScope();
-setInterval(()=>{if(isActive())refresh();},20000);setInterval(()=>{if(isActive())loadDigest();},300000);
-setInterval(()=>{if(isActive())renderBlocklist();},60000);
-setInterval(()=>{if(isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
+applyI18n();initCards();startTranslator();                         // pure-UI, safe before auth
+authInit().then(ok=>{ if(!ok)return;                               // gate app data on login
+  parseHash();renderWinSel();renderStats(null);refresh();loadDigest();
+  renderBlocklist();renderBanCandidates();renderSuspects();loadBranding();loadScope();
+});
+setInterval(()=>{if(_me&&isActive())refresh();},20000);setInterval(()=>{if(_me&&isActive())loadDigest();},300000);
+setInterval(()=>{if(_me&&isActive())renderBlocklist();},60000);
+setInterval(()=>{if(_me&&isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
 </script>
 </body>
 </html>
