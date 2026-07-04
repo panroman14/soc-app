@@ -20,7 +20,7 @@
   <rect x="326" y="30" width="34" height="18" rx="9" class="pill"/><text x="343" y="43" text-anchor="middle" font-size="11" fill="#6fcf97">2xx</text>
   <rect x="364" y="30" width="34" height="18" rx="9" class="pill"/><text x="381" y="43" text-anchor="middle" font-size="11" fill="#d9a441">4xx</text>
   <rect x="402" y="30" width="34" height="18" rx="9" class="pill"/><text x="419" y="43" text-anchor="middle" font-size="11" fill="#e07070">5xx</text>
-  <rect x="444" y="29" width="230" height="20" rx="8" fill="#0a0e14" stroke="#2a3340"/><text x="456" y="43" class="dim mono" fill="#5b6675">⌕  поиск по пути…</text>
+  <rect x="444" y="29" width="230" height="20" rx="8" fill="#0a0e14" stroke="#2a3340"/><text x="456" y="43" class="dim mono" fill="#5b6675">⌕  search paths…</text>
   <rect x="740" y="30" width="30" height="18" rx="9" class="pill"/><text x="755" y="43" text-anchor="middle" font-size="11" class="dim">1h</text>
   <rect x="774" y="30" width="30" height="18" rx="9" class="pillon"/><text x="789" y="43" text-anchor="middle" font-size="11" fill="#9cc0ff">6h</text>
   <rect x="808" y="30" width="34" height="18" rx="9" class="pill"/><text x="825" y="43" text-anchor="middle" font-size="11" class="dim">24h</text>
@@ -28,7 +28,7 @@
 
   <!-- chart -->
   <rect x="16" y="72" width="928" height="176" rx="12" class="card"/>
-  <text x="34" y="96" class="mono" fill="#e7ecf4" font-size="14">18 402 <tspan class="lbl">запросов</tspan></text>
+  <text x="34" y="96" class="mono" fill="#e7ecf4" font-size="14">18 402 <tspan class="lbl">requests</tspan></text>
   <text x="150" y="96" class="mono" fill="#d9a441" font-size="14">612 <tspan class="lbl">4xx</tspan></text>
   <text x="228" y="96" class="mono" fill="#e07070" font-size="14">37 <tspan class="lbl">5xx</tspan></text>
   <rect x="770" y="82" width="158" height="20" rx="8" fill="#0e1420" stroke="#2a3340"/>
@@ -39,7 +39,7 @@
   <text x="64" y="120" text-anchor="end" font-size="9" fill="#5b6675">200</text>
   <text x="64" y="172" text-anchor="end" font-size="9" fill="#5b6675">100</text>
   <text x="64" y="224" text-anchor="end" font-size="9" fill="#5b6675">0</text>
-  <text x="52" y="110" text-anchor="end" font-size="8" fill="#5b6675">запр/мин</text>
+  <text x="52" y="110" text-anchor="end" font-size="8" fill="#5b6675">req/min</text>
   <!-- bars -->
   <g>
     <rect x="80" y="196" width="28" height="26" fill="#6fcf97" opacity=".3"/>
@@ -123,5 +123,5 @@
     <g><rect x="186" y="474" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="486" fill="#5b6675">14:57:58</text><text x="270" y="486" fill="#d9a441">403</text><text x="308" y="486" class="dim">GET</text><text x="346" y="486" fill="#c4cdda">/xmlrpc.php</text><text x="620" y="486" fill="#5b6675">45.9.x.x · nginx</text><text x="928" y="486" text-anchor="end" fill="#5b6675">9 ms</text></g>
     <g><rect x="186" y="494" width="2" height="16" fill="#334155"/><text x="196" y="506" fill="#5b6675">14:57:55</text><text x="270" y="506" fill="#6fcf97">200</text><text x="308" y="506" class="dim">GET</text><text x="346" y="506" fill="#c4cdda">/blog/post-1</text><text x="620" y="506" fill="#5b6675">51.7.x.x · nginx</text><text x="928" y="506" text-anchor="end" fill="#5b6675">61 ms</text></g>
   </g>
-  <text x="559" y="532" text-anchor="middle" font-size="10" fill="#5b6675">↓ старше</text>
+  <text x="559" y="532" text-anchor="middle" font-size="10" fill="#5b6675">↓ older</text>
 </svg>
