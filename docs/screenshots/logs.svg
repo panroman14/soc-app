@@ -86,10 +86,10 @@
   <rect x="484" y="258" width="228" height="118" rx="12" class="card"/>
   <text x="500" y="278" class="lbl">TOP IPS</text>
   <g class="mono" font-size="11">
-    <text x="500" y="298" class="txt">🇷🇺 45.9.x.x</text><text x="690" y="298" text-anchor="end" fill="#d9a441">1.2k</text>
-    <text x="500" y="316" class="txt">🇨🇳 185.2.x.x</text><text x="690" y="316" text-anchor="end" fill="#e07070">318</text>
-    <text x="500" y="334" class="txt">🇳🇱 51.7.x.x</text><text x="690" y="334" text-anchor="end" fill="#5b6675">207</text>
-    <text x="500" y="352" class="txt">🇩🇪 88.1.x.x</text><text x="690" y="352" text-anchor="end" fill="#5b6675">96</text>
+    <text x="500" y="298" class="txt">45.9.x.x</text><text x="690" y="298" text-anchor="end" fill="#d9a441">1.2k</text>
+    <text x="500" y="316" class="txt">185.2.x.x</text><text x="690" y="316" text-anchor="end" fill="#e07070">318</text>
+    <text x="500" y="334" class="txt">51.7.x.x</text><text x="690" y="334" text-anchor="end" fill="#5b6675">207</text>
+    <text x="500" y="352" class="txt">88.1.x.x</text><text x="690" y="352" text-anchor="end" fill="#5b6675">96</text>
   </g>
 
   <rect x="720" y="258" width="224" height="118" rx="12" class="card"/>
@@ -102,10 +102,10 @@
 
   <!-- filter rail + stream -->
   <rect x="16" y="384" width="150" height="160" rx="12" class="card"/>
-  <text x="32" y="404" class="lbl">COUNTRY</text>
+  <text x="32" y="404" class="lbl">METHOD</text>
   <g class="mono" font-size="11" fill="#c4cdda">
-    <text x="32" y="422">🇷🇺 RU</text><text x="150" y="422" text-anchor="end" fill="#5b6675">1.2k</text>
-    <text x="32" y="440">🇨🇳 CN</text><text x="150" y="440" text-anchor="end" fill="#5b6675">840</text>
+    <text x="32" y="422">GET</text><text x="150" y="422" text-anchor="end" fill="#5b6675">14k</text>
+    <text x="32" y="440">POST</text><text x="150" y="440" text-anchor="end" fill="#5b6675">2.1k</text>
   </g>
   <text x="32" y="464" class="lbl">HOST</text>
   <g class="mono" font-size="11" fill="#c4cdda">
@@ -116,12 +116,12 @@
   <rect x="174" y="384" width="770" height="160" rx="12" class="card"/>
   <text x="190" y="404" class="lbl">ROWS UNDER FILTER</text>
   <g class="mono" font-size="11">
-    <g><rect x="186" y="414" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="426" fill="#5b6675">14:58:02</text><text x="270" y="426" fill="#d9a441">403</text><text x="308" y="426" class="dim">GET</text><text x="346" y="426" fill="#e7ecf4">/wp-login.php</text><text x="620" y="426" fill="#5b6675">🇷🇺 45.9.x.x · nginx</text><text x="928" y="426" text-anchor="end" fill="#5b6675">12 ms</text></g>
+    <g><rect x="186" y="414" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="426" fill="#5b6675">14:58:02</text><text x="270" y="426" fill="#d9a441">403</text><text x="308" y="426" class="dim">GET</text><text x="346" y="426" fill="#e7ecf4">/wp-login.php</text><text x="620" y="426" fill="#5b6675">45.9.x.x · nginx</text><text x="928" y="426" text-anchor="end" fill="#5b6675">12 ms</text></g>
     <rect x="186" y="434" width="758" height="18" fill="#111826"/>
-    <g><rect x="186" y="434" width="2" height="18" fill="#e07070" opacity=".6"/><text x="196" y="447" fill="#5b6675">14:58:01</text><text x="270" y="447" fill="#e07070">502</text><text x="308" y="447" class="dim">POST</text><text x="346" y="447" fill="#e7ecf4">/api/checkout</text><text x="620" y="447" fill="#5b6675">🇨🇳 185.2.x.x · nginx</text><text x="928" y="447" text-anchor="end" fill="#e07070">1840 ms</text></g>
-    <g><rect x="186" y="454" width="2" height="16" fill="#334155"/><text x="196" y="466" fill="#5b6675">14:58:00</text><text x="270" y="466" fill="#6fcf97">200</text><text x="308" y="466" class="dim">GET</text><text x="346" y="466" fill="#c4cdda">/</text><text x="620" y="466" fill="#5b6675">🇩🇪 88.1.x.x · nginx</text><text x="928" y="466" text-anchor="end" fill="#5b6675">44 ms</text></g>
-    <g><rect x="186" y="474" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="486" fill="#5b6675">14:57:58</text><text x="270" y="486" fill="#d9a441">403</text><text x="308" y="486" class="dim">GET</text><text x="346" y="486" fill="#c4cdda">/xmlrpc.php</text><text x="620" y="486" fill="#5b6675">🇷🇺 45.9.x.x · nginx</text><text x="928" y="486" text-anchor="end" fill="#5b6675">9 ms</text></g>
-    <g><rect x="186" y="494" width="2" height="16" fill="#334155"/><text x="196" y="506" fill="#5b6675">14:57:55</text><text x="270" y="506" fill="#6fcf97">200</text><text x="308" y="506" class="dim">GET</text><text x="346" y="506" fill="#c4cdda">/blog/post-1</text><text x="620" y="506" fill="#5b6675">🇳🇱 51.7.x.x · nginx</text><text x="928" y="506" text-anchor="end" fill="#5b6675">61 ms</text></g>
+    <g><rect x="186" y="434" width="2" height="18" fill="#e07070" opacity=".6"/><text x="196" y="447" fill="#5b6675">14:58:01</text><text x="270" y="447" fill="#e07070">502</text><text x="308" y="447" class="dim">POST</text><text x="346" y="447" fill="#e7ecf4">/api/checkout</text><text x="620" y="447" fill="#5b6675">185.2.x.x · nginx</text><text x="928" y="447" text-anchor="end" fill="#e07070">1840 ms</text></g>
+    <g><rect x="186" y="454" width="2" height="16" fill="#334155"/><text x="196" y="466" fill="#5b6675">14:58:00</text><text x="270" y="466" fill="#6fcf97">200</text><text x="308" y="466" class="dim">GET</text><text x="346" y="466" fill="#c4cdda">/</text><text x="620" y="466" fill="#5b6675">88.1.x.x · nginx</text><text x="928" y="466" text-anchor="end" fill="#5b6675">44 ms</text></g>
+    <g><rect x="186" y="474" width="2" height="16" fill="#d9a441" opacity=".6"/><text x="196" y="486" fill="#5b6675">14:57:58</text><text x="270" y="486" fill="#d9a441">403</text><text x="308" y="486" class="dim">GET</text><text x="346" y="486" fill="#c4cdda">/xmlrpc.php</text><text x="620" y="486" fill="#5b6675">45.9.x.x · nginx</text><text x="928" y="486" text-anchor="end" fill="#5b6675">9 ms</text></g>
+    <g><rect x="186" y="494" width="2" height="16" fill="#334155"/><text x="196" y="506" fill="#5b6675">14:57:55</text><text x="270" y="506" fill="#6fcf97">200</text><text x="308" y="506" class="dim">GET</text><text x="346" y="506" fill="#c4cdda">/blog/post-1</text><text x="620" y="506" fill="#5b6675">51.7.x.x · nginx</text><text x="928" y="506" text-anchor="end" fill="#5b6675">61 ms</text></g>
   </g>
   <text x="559" y="532" text-anchor="middle" font-size="10" fill="#5b6675">↓ старше</text>
 </svg>
