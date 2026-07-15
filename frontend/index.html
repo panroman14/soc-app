@@ -252,6 +252,8 @@
   .db-mp label{display:flex;align-items:center;gap:7px;padding:3px 5px;font-size:12px;color:var(--muted);cursor:pointer;border-radius:6px}
   .db-mp label:hover{background:#ffffff08}
   .db-crosshair{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3}
+  .db-tsi{position:absolute;z-index:8;pointer-events:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:6px 9px;font-size:11px;color:var(--text);box-shadow:var(--shadow-lg);white-space:nowrap;line-height:1.5}
+  .db-tsi .db-tsi-t{color:var(--faint);font-size:10px;margin-bottom:2px}
   .db-ax{font-size:9px;fill:var(--faint);font-family:ui-monospace,monospace}
   .db-tip-box{fill:var(--surface2);stroke:var(--border2);stroke-width:1}
   @media(max-width:760px){.db-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:auto}
@@ -1342,7 +1344,7 @@ async function loadBackendHealth(){
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
   "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
-  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Источник (топ)":"Source (top-list)","Ширина":"Width","не удалось сохранить: ":"save failed: ",
+  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Метрики":"Metrics","Источник (топ)":"Source (top-list)","Ширина":"Width","Высота":"Height","Заливка area":"Area fill","нет строк под фильтр":"no rows match","не удалось сохранить: ":"save failed: ",
   // _trText-consumed strings mistakenly added only to I18N (leaked Russian in EN) — now in RU2EN
   "Удалить это подключение?":"Delete this connection?","доступен, токен принят":"reachable, token accepted","нет ingress-таргетов":"no ingress targets","нет данных о хосте":"no host data","нет связи":"no connection","нет токена":"no token","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","проверяю":"checking","сделать активным":"make active","сохранено и активно":"saved and active","таргет":"target","токен задан":"token set","токен не принят":"token rejected","укажи hostname выше":"enter a hostname above",
   "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
@@ -2341,31 +2343,33 @@ function _dbTimeseries(p,stacked){
     ax+=`<text class="db-ax" x="${xs[i].toFixed(1)}" y="${(H-6)}" text-anchor="middle">${esc(_dbHHMM(snaps[i].ts))}</text>`; }
   _dbHov[p.id]={W,H,pl,plotW,n,xs,pt,plotH,series:seriesMeta,fmt:v=>_dbNum(v),snaps};
   const legend=seriesMeta.map(s=>`<span style="color:${s.color}">● <span style="color:var(--muted)">${esc(s.name)}</span></span>`).join(" &nbsp; ");
+  // hover dots pre-created inside the SVG string (parsed in SVG namespace by the HTML parser)
+  const hdots=seriesMeta.map((s,k)=>`<circle class="db-hd" data-k="${k}" r="3.4" fill="${s.color}" stroke="var(--surface)" stroke-width="1.6" style="display:none"/>`).join("");
   return `<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:calc(100% - 16px)" onmousemove="dbTsMove(event,'${escJs(p.id)}')" onmouseleave="dbTsLeave('${escJs(p.id)}')">
     <defs>${defs.join("")}</defs>${ax}${paths.join("")}${dots.join("")}
-    <g id="cx-${esc(p.id)}" style="display:none"><line class="db-crosshair" y1="${pt}" y2="${pt+plotH}"/></g></svg>`;
+    <line id="cx-${esc(p.id)}" class="db-crosshair" y1="${pt}" y2="${pt+plotH}" style="display:none"/>${hdots}</svg>
+    <div class="db-tsi" id="tip-${esc(p.id)}" style="display:none"></div>`;
 }
 function dbTsMove(ev,id){
   const H=_dbHov[id]; if(!H)return; const svg=ev.currentTarget,r=svg.getBoundingClientRect();
+  if(!r.width)return;
   const vx=(ev.clientX-r.left)/r.width*H.W;
   let i=Math.round((vx-H.pl)/H.plotW*(H.n-1)); i=Math.max(0,Math.min(H.n-1,i));
-  const g=document.getElementById("cx-"+id); if(!g)return;
-  const x=H.xs[i]; g.style.display="";
-  const ln=g.querySelector("line"); ln.setAttribute("x1",x); ln.setAttribute("x2",x);
-  [...g.querySelectorAll(".db-hd,.db-tip-g")].forEach(n=>n.remove());
-  let dots="";
-  H.series.forEach(s=>{ const py=s.pts[i][1]; dots+=`<circle class="db-hd" cx="${x.toFixed(1)}" cy="${py.toFixed(1)}" r="3.2" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5"/>`; });
-  // tooltip box
-  const lines=H.series.map(s=>`${s.name}: ${H.fmt(s.vals[i])}`);
-  const tw=Math.max(...lines.map(l=>l.length),8)*5.4+16, th=14+lines.length*13, tx=Math.min(H.W-tw-4,Math.max(4,x+8)), ty=H.pt+4;
-  let tip=`<g class="db-tip-g"><rect class="db-tip-box" x="${tx.toFixed(1)}" y="${ty}" width="${tw.toFixed(1)}" height="${th}" rx="6"/>`;
-  tip+=`<text class="db-ax" x="${(tx+8).toFixed(1)}" y="${ty+12}" style="fill:var(--faint)">${esc(_dbHHMM(H.snaps[i].ts))}</text>`;
-  H.series.forEach((s,k)=>{ tip+=`<text x="${(tx+8).toFixed(1)}" y="${ty+25+k*13}" font-size="10" fill="var(--text)"><tspan fill="${s.color}">●</tspan> ${esc(s.name)}: ${esc(String(H.fmt(s.vals[i])))}</text>`; });
-  tip+=`</g>`;
-  g.insertAdjacentHTML("beforeend",dots+tip);
+  const ln=document.getElementById("cx-"+id); if(!ln)return;
+  const x=H.xs[i]; ln.style.display=""; ln.setAttribute("x1",x); ln.setAttribute("x2",x);
+  const dots=svg.querySelectorAll(".db-hd");
+  H.series.forEach((s,k)=>{ const c=dots[k]; if(c){ c.setAttribute("cx",x.toFixed(1)); c.setAttribute("cy",s.pts[i][1].toFixed(1)); c.style.display=""; } });
+  const tip=document.getElementById("tip-"+id); if(!tip)return;
+  tip.innerHTML=`<div class="db-tsi-t">${esc(_dbHHMM(H.snaps[i].ts))}</div>`+
+    H.series.map(s=>`<div><span style="color:${s.color}">●</span> ${esc(s.name)}: <b>${esc(String(H.fmt(s.vals[i])))}</b></div>`).join("");
+  tip.style.display="block";
+  const frac=(x-H.pl)/H.plotW, right=frac>0.6;                 // flip side near the right edge
+  tip.style.left=right?"auto":(frac*100+2)+"%"; tip.style.right=right?((1-frac)*100+2)+"%":"auto"; tip.style.top="4px";
 }
-function dbTsLeave(id){ const g=document.getElementById("cx-"+id); if(g){g.style.display="none";[...g.querySelectorAll(".db-hd,.db-tip-g")].forEach(n=>n.remove());} }
+function dbTsLeave(id){ const ln=document.getElementById("cx-"+id),tip=document.getElementById("tip-"+id),b=ln&&ln.closest(".db-body");
+  if(ln)ln.style.display="none"; if(tip)tip.style.display="none";
+  if(b)b.querySelectorAll(".db-hd").forEach(c=>c.style.display="none"); }
 
 function _dbStat(p){
   const m=p.metric,meta=_DB_METRICS[m]||{l:m,f:v=>v},v=(_dbData.summary||{})[m];
@@ -2409,7 +2413,7 @@ function _dbTable(p){
 }
 function _dbPie(p,donut){
   const rows=_dbList(p.key).slice(0,7); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
-  const total=rows.reduce((s,r)=>s+r.n,0)||1; const R=52,sw=donut?15:26,C=2*Math.PI*R; let off=0;
+  const total=rows.reduce((s,r)=>s+r.n,0)||1; const R=donut?50:30,sw=donut?16:60,C=2*Math.PI*R; let off=0;
   const ring=rows.map((r,i)=>{const frac=r.n/total,len=frac*C,seg=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${_DB_PALETTE[i%_DB_PALETTE.length]}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"><title>${esc(String(r.k))}: ${_dbNum(r.n)} (${Math.round(frac*100)}%)</title></circle>`;off+=len;return seg;}).join("");
   const center=donut?`<text x="60" y="56" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)">${_dbNum(total)}</text><text x="60" y="72" text-anchor="middle" font-size="9" fill="var(--faint)">total</text>`:"";
   const legend=rows.map((r,i)=>`<div class="flex items-center gap-1.5 text-[11px]"><span style="color:${_DB_PALETTE[i%_DB_PALETTE.length]}">●</span><span class="truncate flex-1" style="color:var(--muted)">${esc(String(r.k))}</span><span style="color:var(--text)">${Math.round(r.n/total*100)}%</span></div>`).join("");
@@ -2474,7 +2478,7 @@ function _dbGridMetrics(){ const g=document.getElementById("db-grid"),r=g.getBou
 function dbDragStart(ev,id){
   if(!_db.editing)return; if(ev.target.closest(".db-tools"))return;
   ev.preventDefault(); const d=dbCur(),p=d.panels.find(x=>x.id===id); if(!p)return;
-  const {colW}=_dbGridMetrics(),el=ev.currentTarget.closest(".db-panel");
+  const {colW}=_dbGridMetrics(); if(colW<=0)return; const el=ev.currentTarget.closest(".db-panel");
   _dbDrag={id,p,mode:"move",colW,sx:ev.clientX,sy:ev.clientY,gx0:p.gx,gy0:p.gy,el};
   el.classList.add("db-dragging"); el.setPointerCapture&&el.setPointerCapture(ev.pointerId);
   _dbShowGhost(p); window.addEventListener("pointermove",_dbDragMove); window.addEventListener("pointerup",_dbDragEnd);
@@ -2482,7 +2486,7 @@ function dbDragStart(ev,id){
 function dbResizeStart(ev,id){
   if(!_db.editing)return; ev.preventDefault(); ev.stopPropagation();
   const d=dbCur(),p=d.panels.find(x=>x.id===id); if(!p)return;
-  const {colW}=_dbGridMetrics(),el=document.querySelector(`.db-panel[data-pid="${CSS.escape(id)}"]`);
+  const {colW}=_dbGridMetrics(); if(colW<=0)return; const el=document.querySelector(`.db-panel[data-pid="${CSS.escape(id)}"]`);
   _dbDrag={id,p,mode:"resize",colW,sx:ev.clientX,sy:ev.clientY,w0:p.w,h0:p.h,el};
   _dbShowGhost(p); window.addEventListener("pointermove",_dbDragMove); window.addEventListener("pointerup",_dbDragEnd);
 }
