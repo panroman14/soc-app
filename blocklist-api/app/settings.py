@@ -87,9 +87,13 @@ def get(key):
 
 
 def is_set(key):
-    """Whether a non-empty value is resolved (for secrets: is a token configured?)."""
-    v = get(key)
-    return bool(v)
+    """Whether a non-empty value is resolved (for secrets: is a token configured?).
+    A stored-but-undecryptable secret counts as SET (a value exists) — callers that
+    render the GUI must not 500 just because the key is wrong (P2-R3)."""
+    try:
+        return bool(get(key))
+    except ValueError:
+        return True
 
 
 def _validate_json(key, val):
@@ -178,6 +182,13 @@ def public_view():
             item["choices"] = spec["choices"]
         if spec["type"] == "secret":
             item["set"] = is_set(key)
+            # surface an undecryptable stored secret so the GUI can prompt a re-entry
+            # instead of the whole /settings page 500ing (P2-R3)
+            if overridden:
+                try:
+                    get(key)
+                except ValueError:
+                    item["error"] = "секрет не расшифровывается (не тот SECRET_KEY?) — введите заново"
             # secrets can't be written into a ConfigMap store (plaintext) — env only
             item["writable"] = (not locked) and config.STORE != "configmap"
         else:

@@ -18,6 +18,7 @@ import hmac
 import json
 import os
 import struct
+import threading
 import time
 
 from . import config, db
@@ -114,21 +115,24 @@ def totp_verify(secret, code, window=1, now=None):
 
 
 _totp_used = {}             # (user, code) -> ts — consumed TOTP codes, to block replay
+_totp_lock = threading.Lock()
 
 
 def totp_consume(username, code, now=None):
     """Record a just-verified code as used; return False if it was ALREADY used within
     the validity window (a replay). Bounds the ~90s window in which a phished/observed
-    code could be re-submitted."""
+    code could be re-submitted. Lock-guarded so two concurrent logins with the same code
+    can't both pass the check before either writes (P2-N7)."""
     now = now if now is not None else time.time()
-    for k, ts in list(_totp_used.items()):        # prune expired
-        if now - ts > 90:
-            _totp_used.pop(k, None)
-    k = (username, str(code))
-    if k in _totp_used:
-        return False
-    _totp_used[k] = now
-    return True
+    with _totp_lock:
+        for k, ts in list(_totp_used.items()):     # prune expired
+            if now - ts > 90:
+                _totp_used.pop(k, None)
+        k = (username, str(code))
+        if k in _totp_used:
+            return False
+        _totp_used[k] = now
+        return True
 
 
 def totp_uri(username, secret):
@@ -234,13 +238,15 @@ def admin_count():
 def set_role(username, role):
     if role not in ("admin", "viewer"):
         raise ValueError("bad role")
-    # Never let the last admin be demoted — same protection as delete_user has, but on
-    # the upsert/set-role path too, so nobody can strand the system with zero admins (S14).
-    if role != "admin":
-        cur = get_user(username)
-        if cur and cur["role"] == "admin" and admin_count() <= 1:
-            raise ValueError("can't demote the last admin")
+    # Guard + write in ONE locked transaction so two concurrent demotions can't both
+    # pass the last-admin check and strand the system with zero admins (S14 / P2-N6).
     with db._lock, db._conn() as c:
+        if role != "admin":
+            cur = c.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
+            if cur and cur["role"] == "admin":
+                n = c.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+                if n <= 1:
+                    raise ValueError("can't demote the last admin")
         c.execute("UPDATE users SET role=? WHERE username=?", (role, username))
 
 
@@ -260,7 +266,14 @@ def touch_login(username):
 
 
 def delete_user(username):
+    # Atomic last-admin guard (P2-N6): check the admin count and delete under one lock so
+    # two concurrent deletes of different admins can't both slip past and leave zero.
     with db._lock, db._conn() as c:
+        row = c.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
+        if row and row["role"] == "admin":
+            n = c.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+            if n <= 1:
+                raise ValueError("can't delete the last admin")
         c.execute("DELETE FROM users WHERE username=?", (username,))
 
 

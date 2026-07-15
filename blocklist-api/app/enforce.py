@@ -132,11 +132,15 @@ def _cf_targets():
         from . import cf_targets
         cf_targets.migrate_from_envs()        # idempotent; runs once
         out = []
-        for tid, e in cf_targets.all_full().items():
-            t = {"id": tid, "type": "cloudflare", "mode": e.get("mode") or "",
-                 "token_set": bool(e.get("token"))}
-            if e.get("env"):
-                t["env"] = e["env"]
+        # public_view() reads the store WITHOUT decrypting — building the target list
+        # must not depend on every token decrypting, or one bad/rotated token would drop
+        # the ENTIRE CF fan-out silently (P2-R2). The token is decrypted lazily later, at
+        # apply time (cloudflare.py), where a failure degrades only that one target.
+        for p in cf_targets.public_view():
+            t = {"id": p["id"], "type": "cloudflare", "mode": p.get("mode") or "",
+                 "token_set": bool(p.get("token_set"))}
+            if p.get("env"):
+                t["env"] = p["env"]
             out.append(t)
         return out
     except Exception as ex:

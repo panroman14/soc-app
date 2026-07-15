@@ -22,9 +22,14 @@ auth.init()
 
 
 def _fresh():
-    for u in [x["username"] for x in auth.list_users()]:
-        auth.delete_user(u)
+    # wipe at the storage layer — delete_user now refuses to remove the last admin
+    # (production invariant), so tests reset state directly rather than via that guard.
+    from app import db
+    with db._lock, db._conn() as c:
+        c.execute("DELETE FROM users")
     auth._fails.clear()
+    auth._fails_user.clear()
+    auth._totp_used.clear()
 
 
 def test_password_hash_roundtrip():

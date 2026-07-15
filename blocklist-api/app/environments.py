@@ -14,7 +14,7 @@ import re
 import threading
 import time
 
-from . import storage
+from . import crypto, storage
 
 DOC = "environments.json"
 _LOCK = threading.Lock()
@@ -64,10 +64,18 @@ def get(env_id):
 
 
 def get_cf(env_id):
-    """The env's Cloudflare config (with token) if enabled, else None."""
+    """The env's Cloudflare config (with DECRYPTED token) if enabled, else None.
+    Decrypts defensively: an undecryptable token yields None (this env's CF is skipped)
+    rather than crashing the caller."""
     e = _load().get(env_id) or {}
-    cf = e.get("cloudflare") or {}
-    return cf if cf.get("enabled") and cf.get("token") else None
+    cf = dict(e.get("cloudflare") or {})
+    if not (cf.get("enabled") and cf.get("token")):
+        return None
+    try:
+        cf["token"] = crypto.open_(cf["token"])
+    except ValueError:
+        return None
+    return cf
 
 
 def upsert(env_id="", name="", loki_url="", cloudflare=None, ingress=None):
@@ -75,12 +83,14 @@ def upsert(env_id="", name="", loki_url="", cloudflare=None, ingress=None):
     eid = _slug(env_id) or _slug(name)
     if not eid:
         raise ValueError("env id or name required")
-    # Refuse to persist a CF token into a plaintext ConfigMap store (S6).
+    # Refuse to persist a CF token into a plaintext ConfigMap store unless it's
+    # encrypted (S6 / P2-N1) — mirrors cf_targets/settings.
     from . import config
-    if cloudflare and str(cloudflare.get("token") or "").strip() and config.STORE == "configmap":
+    if (cloudflare and str(cloudflare.get("token") or "").strip()
+            and config.STORE == "configmap" and not crypto.enabled()):
         raise ValueError(
-            "CF-токен нельзя хранить в configmap-сторе (ConfigMap — открытый текст). "
-            "Используйте STORE=sqlite или задайте токен через ENV.")
+            "CF-токен нельзя хранить в configmap-сторе открытым текстом. "
+            "Задайте SECRET_KEY (шифрование) или используйте STORE=sqlite / ENV.")
     now = int(time.time())
     with _LOCK:
         d = _load()
@@ -90,7 +100,7 @@ def upsert(env_id="", name="", loki_url="", cloudflare=None, ingress=None):
             tok = cloudflare.get("token")
             cf.update({k: v for k, v in cloudflare.items() if k != "token"})
             if tok:                                  # blank → keep existing token
-                cf["token"] = tok
+                cf["token"] = crypto.seal(tok)       # encrypt at rest (P2-N1)
         ing = dict(rec.get("ingress") or {})
         if ingress is not None:
             ing.update(ingress)

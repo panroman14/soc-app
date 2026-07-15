@@ -126,19 +126,22 @@ async def security(request: Request, call_next):
         ref = request.headers.get("referer")
         host = request.headers.get("host", "")
 
-        def _same(u):
+        def _netloc(u):
             try:
-                return urllib.parse.urlparse(u).netloc == host
+                return urllib.parse.urlparse(u).netloc
             except Exception:
-                return False
-        # Prefer Origin; fall back to Referer so a browser request that omits Origin
-        # (some same-origin navigations) is still validated rather than waved through.
+                return None
+        # Compare by NETLOC EQUALITY — never a prefix/startswith test, which would let
+        # `https://trusted.example.com.evil.net/…` pass (P2-R1). Trusted origins are
+        # reduced to their netlocs too. Prefer Origin; fall back to Referer so a browser
+        # request that omits Origin is still validated, not waved through.
+        trusted_netlocs = {_netloc(t) for t in config.TRUSTED_ORIGINS} if config.TRUSTED_ORIGINS else None
         if origin:
-            o = origin.rstrip("/")
-            allowed = (o in config.TRUSTED_ORIGINS) if config.TRUSTED_ORIGINS else _same(o)
+            on = _netloc(origin)
+            allowed = (on in trusted_netlocs) if trusted_netlocs else (on == host)
         elif ref:
-            allowed = any(ref.rstrip("/").startswith(t) for t in config.TRUSTED_ORIGINS) \
-                if config.TRUSTED_ORIGINS else _same(ref)
+            rn = _netloc(ref)
+            allowed = (rn in trusted_netlocs) if trusted_netlocs else (rn == host)
         else:
             allowed = True        # no browser origin headers at all → SameSite=Strict covers it
         if not allowed:
@@ -173,7 +176,12 @@ async def auth_gate(request: Request, call_next):
     if config.ALLOW_NETS and path not in ("/api/health", "/metrics"):
         if not _ip_allowed(request):
             return JSONResponse({"error": "your IP is not allowed"}, status_code=403)
-    if path in config.AUTH_EXEMPT or config.DEV_NO_AUTH:
+    if config.DEV_NO_AUTH:
+        # trusted-host bypass: still populate a synthetic admin so handlers that read
+        # request.state.user (self-service, admin-only GETs) don't 500 (P2-N12).
+        request.state.user = {"u": "dev", "role": "admin", "e": 0}
+        return await call_next(request)
+    if path in config.AUTH_EXEMPT:
         return await call_next(request)
     # static SPA shell + assets (non-API GETs) load unauthenticated; API is gated
     if request.method in ("GET", "HEAD") and not path.startswith("/api/"):
@@ -1005,6 +1013,7 @@ def _safe_opener(allow_internal):
     address. Redirects reuse the same handlers, so each hop is re-validated too."""
     import http.client
     import socket
+    import urllib.error as _ue
     import urllib.request as _ur
 
     _SENTINEL = socket._GLOBAL_DEFAULT_TIMEOUT
@@ -1047,7 +1056,31 @@ def _safe_opener(allow_internal):
         def https_open(self, req):
             return self.do_open(_GuardedHTTPS, req)
 
-    return _ur.build_opener(_HTTPHandler(), _HTTPSHandler())
+    # Only http/https go through the guarded connections. A server can 302 to another
+    # scheme; ftp/file/data are otherwise served by urllib's DEFAULT handlers, which
+    # never see _addr_allowed — a redirect to ftp://10.0.0.5 would bypass the SSRF guard
+    # (P2-N2). Reject non-http(s) redirects, and disable those schemes outright.
+    class _Redir(_ur.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            import urllib.parse as _upp
+            if _upp.urlparse(newurl).scheme not in ("http", "https"):
+                raise _ue.HTTPError(newurl, code, "redirect scheme запрещён", headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    class _NoFTP(_ur.FTPHandler):
+        def ftp_open(self, req):
+            raise _ue.URLError("ftp scheme запрещён")
+
+    class _NoFile(_ur.FileHandler):
+        def file_open(self, req):
+            raise _ue.URLError("file scheme запрещён")
+
+    class _NoData(_ur.DataHandler):
+        def data_open(self, req):
+            raise _ue.URLError("data scheme запрещён")
+
+    return _ur.build_opener(_HTTPHandler(), _HTTPSHandler(), _Redir(),
+                            _NoFTP(), _NoFile(), _NoData())
 
 
 # --- blocklist (proxy to in-cluster blocklist-api) ---
@@ -1070,8 +1103,11 @@ def _bcall_to(base_url, token, method, path, payload=None, timeout=15):
             return e.code, json.loads(e.read().decode())
         except Exception:
             return e.code, {"error": "HTTP %s" % e.code}
-    except Exception as e:
-        return None, {"error": str(e)}
+    except Exception:
+        # str(e) here embeds the internal blocklist-api URL, which surfaces to viewers
+        # via backend_errors on fan-out GETs (P2-N10). Log detail, return generic.
+        log.warning("[blocklist] call to %s failed", path, exc_info=True)
+        return None, {"error": "blocklist-api недоступен"}
 
 
 def _blocklist_call(method, path, payload=None):
@@ -1560,9 +1596,14 @@ async def api_nodes_delete(request: Request):
 
 
 @app.get("/api/nodes/install")
-def api_nodes_install():
+def api_nodes_install(request: Request):
     """Build the «Добавить ноду» install one-liner from blocklist-api's enroll info.
-    The enroll secret stays server-side until an authed operator opens this."""
+    ADMIN-ONLY: the returned command enrolls a node into the ban fan-out. The role gate
+    in auth_gate only covers non-GET + /api/users*, so sensitive GETs must check here
+    (P2-N3)."""
+    u = getattr(request.state, "user", None)
+    if u and u.get("role") != "admin":
+        return JSONResponse({"error": "admin only"}, status_code=403)
     if not config.BLOCKLIST_API_URL:
         return JSONResponse({"enabled": False})
     # blocklist-api renders the one-liner itself now (S3) — the raw ENROLL_SECRET is
@@ -3100,8 +3141,6 @@ def api_verdicts(ips: str = ""):
 def api_judge_ip(request: Request, ip: str = "", window: str = "1h", force: int = 0):
     if not ip:
         return JSONResponse({"verdict": None})
-    if force and not _rate_ok(request, "judge_ip", 15):   # force=1 bypasses the verdict cache → LLM
-        return JSONResponse(_RL_MSG, status_code=429)
     w = window if window in _BC_WINDOWS else "1h"
     # --- deterministic checks FIRST (override LLM + any stale cache) ---
     # 1) reverse-DNS verified good bot → legit, never ban
@@ -3131,6 +3170,11 @@ def api_judge_ip(request: Request, ip: str = "", window: str = "1h", force: int 
             if c.get("ip") == ip:
                 cand = c
                 break
+    # Reaching here means a live LLM inference (+ external ASN lookup) — throttle EVERY
+    # path that gets here, not just force=1, so a viewer can't loop novel IPs to saturate
+    # the LLM (P2-R4). Cache hits + deterministic verdicts above already returned.
+    if not _rate_ok(request, "judge_ip", 15):
+        return JSONResponse(_RL_MSG, status_code=429)
     a = loki.asn_lookup(ip)
     item = {"ip": ip, "count": (cand or {}).get("count"), "country": (cand or {}).get("country"),
             "paths": (cand or {}).get("paths"), "isp": a.get("isp") or a.get("org"),
@@ -3388,7 +3432,16 @@ async def api_login(request: Request):
 
 
 @app.post("/api/auth/logout")
-def api_logout():
+def api_logout(request: Request):
+    # Real revocation: bump the user's epoch so the stateless cookie is invalidated
+    # server-side, not just cleared client-side (a copied cookie stops working). This
+    # logs the user out on ALL their devices (P2-N5).
+    u = getattr(request.state, "user", None)
+    if u and u.get("u") and not config.DEV_NO_AUTH:
+        try:
+            auth.bump_epoch(u["u"])
+        except Exception:
+            pass
     resp = JSONResponse({"ok": True})
     resp.delete_cookie(auth.COOKIE, path="/")
     return resp
@@ -3490,12 +3543,11 @@ async def api_users_delete(request: Request):
     me = request.state.user["u"]
     if u == me:
         return JSONResponse({"ok": False, "error": "can't delete your own account"}, status_code=400)
-    # don't strand the system without an admin
-    admins = [x for x in auth.list_users() if x["role"] == "admin"]
-    tgt = auth.get_user(u)
-    if tgt and tgt["role"] == "admin" and len(admins) <= 1:
-        return JSONResponse({"ok": False, "error": "can't delete the last admin"}, status_code=400)
-    auth.delete_user(u)
+    # last-admin protection is enforced atomically inside delete_user (P2-N6)
+    try:
+        auth.delete_user(u)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     return {"ok": True}
 
 
