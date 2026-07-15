@@ -875,6 +875,10 @@
         <select class="input" style="width:auto" onchange="if(this.value){dbNewFromPreset(this.value);this.value='';}"><option value="" data-i18n="db.preset">+ preset…</option><option value="attacks">Attacks</option><option value="performance">Performance</option></select>
         <button onclick="dbRenameDash()" class="btn btn-ghost btn-xs" id="db-edit-controls">✎</button>
         <button onclick="dbDeleteDash()" class="btn btn-ghost btn-xs text-rose-300">🗑</button>
+        <span class="lg-sep"></span>
+        <button onclick="dbExport()" class="btn btn-ghost btn-xs" title="export JSON">⭳ <span data-i18n="db.export">export</span></button>
+        <button onclick="document.getElementById('db-import-file').click()" class="btn btn-ghost btn-xs" title="import JSON">⭱ <span data-i18n="db.import">import</span></button>
+        <input id="db-import-file" type="file" accept="application/json,.json" class="hidden" onchange="dbImport(this)">
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">
         <span class="text-[10px] uppercase tracking-wide" style="color:var(--faint)">env</span>
@@ -1225,7 +1229,7 @@ function _withEnv(url){ return url; }
 // ── i18n (en default, ru toggle) ──────────────────────────────────────────────
 const I18N={en:{
   "title":"SOC Dashboard","subtitle":"traffic & attack monitoring · all domains","tagline":"traffic & attack monitor",
-  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","db.preset":"+ preset…","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"Registered ingress-nginx (k8s) backends — each is its own entity you can name, edit and remove. Its in-cluster ingress-cm targets are listed under it.","нет ingress-таргетов":"no ingress targets",
+  "nav.dash":"Overview","nav.autoban":"Auto-ban","nav.p403":"403 rules","nav.nodes":"Nodes","nav.targets":"Resources","nav.dashboards":"Dashboards","db.new":"dashboard","db.panel":"panel","db.edit":"edit","db.preset":"+ preset…","db.export":"export","db.import":"import","tg.groups":"Groups","ing.h":"Ingress","ing.sub":"Registered ingress-nginx (k8s) backends — each is its own entity you can name, edit and remove. Its in-cluster ingress-cm targets are listed under it.","нет ingress-таргетов":"no ingress targets",
   "ing.setup":"Setup cluster","ing.setup.h":"Connect a cluster","ing.setup.sub":"Three steps: deploy blocklist-api into the cluster, wire logs into Loki, and make sure the values target points at your ingress-nginx.",
   "ing.s1":"Install blocklist-api (Helm)","ing.s1.sub":"The chart carries the RBAC to patch the ingress-nginx ConfigMap — a web form can't, Helm can. Run it with cluster-admin.","ing.s1.after":"After install, point the dashboard at the API: BLOCKLIST_API_URL=https://<hostname>",
   "ing.connect":"After install — verify the dashboard can reach this API:","ing.connect.hint":"Host and token are taken from the fields above. Save adds this ingress as an entity above — its ingress-cm targets become available for 403 / auto-ban.",
@@ -1257,7 +1261,7 @@ const I18N={en:{
   "esc.h":"Escalation ladder","esc.sub":"Repeat offenders (re-banned after a prior ban expired) get a longer ban each time. Off = every rule uses its own fixed TTL.","esc.ladder":"TTL ladder (1st, 2nd, 3rd… offense)","esc.memory":"Forgive after (days)",
 },ru:{
   "title":"SOC Дашборд","subtitle":"мониторинг трафика и атак · все домены","tagline":"монитор трафика и атак",
-  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","db.preset":"+ пресет…","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"Зарегистрированные ingress-nginx (k8s) бэкенды — каждый отдельная сущность: имя, правка, удаление. Его ingress-cm таргеты показаны под ним.",
+  "nav.dash":"Обзор","nav.autoban":"Автобан","nav.p403":"Правила 403","nav.nodes":"Ноды","nav.targets":"Ресурсы","nav.dashboards":"Дашборды","db.new":"дашборд","db.panel":"панель","db.edit":"править","db.preset":"+ пресет…","db.export":"экспорт","db.import":"импорт","tg.groups":"Группы","ing.h":"Ingress","ing.sub":"Зарегистрированные ingress-nginx (k8s) бэкенды — каждый отдельная сущность: имя, правка, удаление. Его ingress-cm таргеты показаны под ним.",
   "ing.setup":"Подключить кластер","ing.setup.h":"Подключить кластер","ing.setup.sub":"Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.",
   "ing.s1":"Установить blocklist-api (Helm)","ing.s1.sub":"Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.","ing.s1.after":"После установки укажи дашборду адрес API: BLOCKLIST_API_URL=https://<хостнейм>",
   "ing.connect":"После установки — проверь, что дашборд достучится до этого API:","ing.connect.hint":"Хост и токен берутся из полей выше. Save добавляет ingress как сущность выше — его ingress-cm таргеты станут доступны для 403/автобана.",
@@ -1344,7 +1348,7 @@ async function loadBackendHealth(){
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
   "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
-  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Метрики":"Metrics","Источник (топ)":"Source (top-list)","Ширина":"Width","Высота":"Height","Заливка area":"Area fill","нет строк под фильтр":"no rows match","не удалось сохранить: ":"save failed: ",
+  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Метрики":"Metrics","Источник (топ)":"Source (top-list)","Ширина":"Width","Высота":"Height","Заливка area":"Area fill","Цвета серий":"Series colors","Пороговые линии":"Thresholds","порог":"threshold","выберите метрики":"pick metrics","нет строк под фильтр":"no rows match","не удалось сохранить: ":"save failed: ","не похоже на дашборд":"not a dashboard file","не удалось импортировать: ":"import failed: ",
   // _trText-consumed strings mistakenly added only to I18N (leaked Russian in EN) — now in RU2EN
   "Удалить это подключение?":"Delete this connection?","доступен, токен принят":"reachable, token accepted","нет ingress-таргетов":"no ingress targets","нет данных о хосте":"no host data","нет связи":"no connection","нет токена":"no token","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","проверяю":"checking","сделать активным":"make active","сохранено и активно":"saved and active","таргет":"target","токен задан":"token set","токен не принят":"token rejected","укажи hostname выше":"enter a hostname above",
   "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
@@ -2307,13 +2311,14 @@ function _dbTimeseries(p,stacked){
   let max=1;
   if(stacked){ for(let i=0;i<n;i++){ let sum=0; vals.forEach(v=>sum+=v[i]); if(sum>max)max=sum; } }
   else { vals.forEach(v=>v.forEach(x=>{ if(x>max)max=x; })); }
+  const thr=(p.thresholds||[]).filter(t=>t&&isFinite(+t.v)); thr.forEach(t=>{ if(+t.v>max)max=+t.v; });  // keep thresholds on-chart
   max=_niceMax(max);
   const Y=v=>pt+plotH-(v/max)*plotH;
   const defs=[],paths=[],dots=[];
   const stackTop=new Array(n).fill(0); // running total for stacked
   const seriesMeta=[];
   metrics.forEach((m,mi)=>{
-    const col=_DB_PALETTE[mi%_DB_PALETTE.length];
+    const col=(p.colors&&p.colors[m])||_DB_PALETTE[mi%_DB_PALETTE.length];
     let linePts,areaPts;
     if(stacked){
       const topY=[],botY=[];
@@ -2341,13 +2346,17 @@ function _dbTimeseries(p,stacked){
   const xticks=Math.min(4,n-1);
   for(let t=0;t<=xticks;t++){ const i=Math.round(t/xticks*(n-1));
     ax+=`<text class="db-ax" x="${xs[i].toFixed(1)}" y="${(H-6)}" text-anchor="middle">${esc(_dbHHMM(snaps[i].ts))}</text>`; }
+  // threshold lines (dashed, labelled at the right edge)
+  const thrSvg=thr.map(t=>{ const y=Y(+t.v),c=t.c||"var(--crit)";
+    return `<line x1="${pl}" y1="${y.toFixed(1)}" x2="${W-pr}" y2="${y.toFixed(1)}" stroke="${c}" stroke-width="1.2" stroke-dasharray="5 3" opacity=".85"/>`+
+      `<text class="db-ax" x="${W-pr-2}" y="${(y-3).toFixed(1)}" text-anchor="end" style="fill:${c}">${esc(_dbNum(+t.v))}</text>`; }).join("");
   _dbHov[p.id]={W,H,pl,plotW,n,xs,pt,plotH,series:seriesMeta,fmt:v=>_dbNum(v),snaps};
   const legend=seriesMeta.map(s=>`<span style="color:${s.color}">● <span style="color:var(--muted)">${esc(s.name)}</span></span>`).join(" &nbsp; ");
   // hover dots pre-created inside the SVG string (parsed in SVG namespace by the HTML parser)
   const hdots=seriesMeta.map((s,k)=>`<circle class="db-hd" data-k="${k}" r="3.4" fill="${s.color}" stroke="var(--surface)" stroke-width="1.6" style="display:none"/>`).join("");
   return `<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:calc(100% - 16px)" onmousemove="dbTsMove(event,'${escJs(p.id)}')" onmouseleave="dbTsLeave('${escJs(p.id)}')">
-    <defs>${defs.join("")}</defs>${ax}${paths.join("")}${dots.join("")}
+    <defs>${defs.join("")}</defs>${ax}${thrSvg}${paths.join("")}${dots.join("")}
     <line id="cx-${esc(p.id)}" class="db-crosshair" y1="${pt}" y2="${pt+plotH}" style="display:none"/>${hdots}</svg>
     <div class="db-tsi" id="tip-${esc(p.id)}" style="display:none"></div>`;
 }
@@ -2395,7 +2404,8 @@ function _dbMulti(p){
   const ms=(p.metrics&&p.metrics.length?p.metrics:[p.metric||"requests_total"]).filter(Boolean);
   const sum=_dbData.summary||{};
   return `<div class="db-multi">`+ms.map(m=>{ const meta=_DB_METRICS[m]||{l:m,f:v=>v},v=sum[m];
-    return `<div class="m"><div class="mv">${v==null?"—":esc(String(meta.f(v)))}</div><div class="ml">${esc(meta.l)}</div></div>`;
+    const c=(p.colors&&p.colors[m])?` style="color:${p.colors[m]}"`:"";
+    return `<div class="m"><div class="mv"${c}>${v==null?"—":esc(String(meta.f(v)))}</div><div class="ml">${esc(meta.l)}</div></div>`;
   }).join("")+`</div>`;
 }
 function _dbList(key){ let v=(_dbData.analytics||{})[key]; if(!Array.isArray(v))v=[];
@@ -2521,6 +2531,7 @@ async function dbEditPanel(id){
   _dbEdit=src?JSON.parse(JSON.stringify(src)):{id:"p"+Date.now(),type:"stat",w:4,h:_dbDefH("stat")};
   if(!_dbEdit.metric)_dbEdit.metric="requests_total"; if(!_dbEdit.key)_dbEdit.key="top_paths";
   if(!_dbEdit.metrics)_dbEdit.metrics=[_dbEdit.metric];
+  if(!_dbEdit.colors)_dbEdit.colors={}; if(!_dbEdit.thresholds)_dbEdit.thresholds=[];
   const mo=Object.keys(_DB_METRICS).map(k=>`<option value="${k}" ${_dbEdit.metric===k?"selected":""}>${esc(_DB_METRICS[k].l)}</option>`).join("");
   const ao=Object.keys(_DB_ANALYTICS).map(k=>`<option value="${k}" ${_dbEdit.key===k?"selected":""}>${esc(_DB_ANALYTICS[k])}</option>`).join("");
   const to=_DB_TYPES.map(([t,l])=>`<option value="${t}" ${_dbEdit.type===t?"selected":""}>${esc(l)}</option>`).join("");
@@ -2533,6 +2544,9 @@ async function dbEditPanel(id){
     <label class="block" id="dbe-ana-wrap">${_trText("Источник (топ)")}<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
     <label class="block hidden" id="dbe-logs-wrap">${_trText("Поиск в логах")}<input class="input mono mt-1" oninput="_dbEdit.search=this.value" value="${esc(_dbEdit.search||"")}" placeholder="/wp-login"></label>
     <label class="flex items-center gap-2 hidden" id="dbe-area-wrap"><input type="checkbox" ${_dbEdit.area!==false?"checked":""} onchange="_dbEdit.area=this.checked"> ${_trText("Заливка area")}</label>
+    <div class="block hidden" id="dbe-colors-wrap">${_trText("Цвета серий")}<div class="mt-1 space-y-1" id="dbe-colors"></div></div>
+    <div class="block hidden" id="dbe-thr-wrap">${_trText("Пороговые линии")}<div class="mt-1 space-y-1" id="dbe-thr"></div>
+      <button type="button" class="btn btn-ghost btn-xs mt-1" onclick="dbeThrAdd()">＋ ${_trText("порог")}</button></div>
     <div class="flex gap-2"><label class="flex-1">${_trText("Ширина")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.w=+this.value" value="${_dbEdit.w||4}"></label>
     <label class="flex-1">${_trText("Высота")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.h=+this.value" value="${_dbEdit.h||_dbDefH(_dbEdit.type)}"></label></div></div>`;
   setTimeout(dbeTypeChange,0);
@@ -2540,7 +2554,8 @@ async function dbEditPanel(id){
     buttons:[{label:_CANCEL(),value:null,esc:true},{label:_trText("Сохранить"),kind:"primary",value:"save",enter:true}]});
   if(r==="save")dbSavePanel(id);
 }
-function dbeMetricsToggle(cb){ const s=new Set(_dbEdit.metrics||[]); cb.checked?s.add(cb.value):s.delete(cb.value); _dbEdit.metrics=[...s]; }
+function dbeMetricsToggle(cb){ const s=new Set(_dbEdit.metrics||[]); cb.checked?s.add(cb.value):s.delete(cb.value); _dbEdit.metrics=[...s]; dbeRenderColors(); }
+const _DB_T_COLORS=["timeseries","stacked","multistat"], _DB_T_THR=["timeseries","stacked"];
 function dbeTypeChange(){
   const t=_dbEdit.type;
   const show=(elid,on)=>{const e=document.getElementById(elid);if(e)e.classList.toggle("hidden",!on);};
@@ -2549,13 +2564,36 @@ function dbeTypeChange(){
   show("dbe-ana-wrap",_DB_T_ANALYTICS.includes(t));
   show("dbe-logs-wrap",t==="logs");
   show("dbe-area-wrap",t==="timeseries");
+  show("dbe-colors-wrap",_DB_T_COLORS.includes(t));
+  show("dbe-thr-wrap",_DB_T_THR.includes(t));
+  dbeRenderColors(); dbeRenderThr();
 }
+function dbeRenderColors(){
+  const wrap=document.getElementById("dbe-colors"); if(!wrap)return; _dbEdit.colors=_dbEdit.colors||{};
+  const ms=_dbEdit.metrics||[];
+  wrap.innerHTML=ms.map((m,i)=>{ const c=_dbEdit.colors[m]||_DB_PALETTE[i%_DB_PALETTE.length];
+    return `<div class="flex items-center gap-2"><input type="color" value="${esc(c)}" oninput="dbeColor('${escJs(m)}',this.value)" style="width:30px;height:22px;padding:0;border:none;background:none;cursor:pointer">
+      <span style="font-size:11px;color:var(--muted)">${esc((_DB_METRICS[m]||{l:m}).l)}</span></div>`; }).join("")
+    ||`<span style="font-size:11px;color:var(--faint)">${_trText("выберите метрики")}</span>`;
+}
+function dbeColor(m,v){ _dbEdit.colors=_dbEdit.colors||{}; _dbEdit.colors[m]=v; }
+function dbeRenderThr(){
+  const wrap=document.getElementById("dbe-thr"); if(!wrap)return; _dbEdit.thresholds=_dbEdit.thresholds||[];
+  wrap.innerHTML=_dbEdit.thresholds.map((t,i)=>`<div class="flex items-center gap-2">
+    <input type="number" class="input" style="width:96px" value="${t.v!=null?esc(String(t.v)):""}" oninput="_dbEdit.thresholds[${i}].v=this.value" placeholder="value">
+    <input type="color" value="${esc(t.c||'#f472b6')}" oninput="_dbEdit.thresholds[${i}].c=this.value" style="width:30px;height:22px;padding:0;border:none;background:none;cursor:pointer">
+    <button type="button" class="text-rose-300 text-[11px]" onclick="dbeThrDel(${i})">✕</button></div>`).join("");
+}
+function dbeThrAdd(){ _dbEdit.thresholds=_dbEdit.thresholds||[]; _dbEdit.thresholds.push({v:"",c:"#f472b6"}); dbeRenderThr(); }
+function dbeThrDel(i){ _dbEdit.thresholds.splice(i,1); dbeRenderThr(); }
 function dbSavePanel(id){
   const d=dbCur(),e=_dbEdit,t=e.type;
   const p={id:e.id,type:t,title:(e.title||"").trim(),w:Math.max(2,Math.min(12,+e.w||4)),h:Math.max(2,Math.min(12,+e.h||_dbDefH(t))),gx:e.gx,gy:e.gy};
   p.span=p.w;
   if(_DB_T_METRIC.includes(t)){p.source="summary";p.metric=e.metric;}
-  else if(_DB_T_METRICS.includes(t)){p.source=(t==="multistat")?"summary":"history";p.metrics=(e.metrics&&e.metrics.length?e.metrics:[e.metric]); if(t==="timeseries")p.area=e.area!==false;}
+  else if(_DB_T_METRICS.includes(t)){p.source=(t==="multistat")?"summary":"history";p.metrics=(e.metrics&&e.metrics.length?e.metrics:[e.metric]); if(t==="timeseries")p.area=e.area!==false;
+    if(_DB_T_COLORS.includes(t)){ const cs={}; (p.metrics||[]).forEach(m=>{ if(e.colors&&e.colors[m])cs[m]=e.colors[m]; }); if(Object.keys(cs).length)p.colors=cs; }
+    if(_DB_T_THR.includes(t)){ const th=(e.thresholds||[]).map(x=>({v:+x.v,c:x.c||"#f472b6"})).filter(x=>isFinite(x.v)); if(th.length)p.thresholds=th; }}
   else if(_DB_T_ANALYTICS.includes(t)){p.source="analytics";p.key=e.key;}
   else if(t==="geo"){p.source="analytics";p.key="geo";}
   else if(t==="logs"){p.source="logs";p.search=e.search||"";p.minutes=15;}
@@ -2605,6 +2643,28 @@ async function dbRenameDash(){ const d=dbCur(); if(!d)return; const n=await uiPr
 async function dbDeleteDash(){ const d=dbCur(); if(!d)return; if(!await uiConfirm(_trText("Удалить дашборд?")+" «"+d.name+"»"))return;
   _db.list=_db.list.filter(x=>x.id!==d.id); _db.curId=(_db.list[0]||{}).id||""; await dbPersist(); dbFillPicker(); dbLoad(false); }
 async function dbPersist(){ try{ await fetch("/api/dashboards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({list:_db.list,default:_db.def||_db.curId})}); }catch(e){ uiAlert("не удалось сохранить: "+(e.message||e)); } }
+// ── export / import a dashboard as JSON ────────────────────────────────────────
+function dbExport(){
+  const d=dbCur(); if(!d)return;
+  const doc={soc_dashboard:1,exported:new Date().toISOString(),name:d.name,panels:d.panels,vars:d.vars||{}};
+  const blob=new Blob([JSON.stringify(doc,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=(d.name||"dashboard").replace(/[^\w.-]+/g,"_")+".json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+async function dbImport(input){
+  const f=input.files&&input.files[0]; input.value=""; if(!f)return;
+  try{
+    const doc=JSON.parse(await f.text());
+    if(!doc||!Array.isArray(doc.panels))throw new Error(_trText("не похоже на дашборд"));
+    const id="d"+Date.now();
+    const panels=doc.panels.map((p,i)=>Object.assign({},p,{id:"p"+Date.now()+i}));
+    const dash={id,name:(doc.name||"imported").toString().slice(0,60),panels,vars:doc.vars||{},range:""};
+    _dbNormalize(dash);
+    _db.list.push(dash); _db.curId=id;
+    await dbPersist(); dbFillPicker(); dbSyncVars(); dbLoad(true);
+  }catch(e){ uiAlert(_trText("не удалось импортировать: ")+(e.message||e)); }
+}
 
 const CNAMES={US:"США",UA:"Украина",RU:"Россия",GB:"Великобритания",DE:"Германия",FR:"Франция",NL:"Нидерланды",IE:"Ирландия",PL:"Польша",CA:"Канада",IN:"Индия",CN:"Китай",SG:"Сингапур",IT:"Италия",ES:"Испания",SE:"Швеция",FI:"Финляндия",CZ:"Чехия",RO:"Румыния",LV:"Латвия",LT:"Литва",EE:"Эстония",BY:"Беларусь",KZ:"Казахстан",TR:"Турция",BR:"Бразилия",JP:"Япония",KR:"Корея",AU:"Австралия",CH:"Швейцария",AT:"Австрия",BE:"Бельгия",DK:"Дания",NO:"Норвегия",PT:"Португалия",MD:"Молдова",GE:"Грузия",AM:"Армения",AZ:"Азербайджан",IL:"Израиль",AE:"ОАЭ",HK:"Гонконг",VN:"Вьетнам",ID:"Индонезия",MX:"Мексика",ZA:"ЮАР",BG:"Болгария",HU:"Венгрия",GR:"Греция"};
 function flag(cc){if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc))return"🏳️";return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));}
