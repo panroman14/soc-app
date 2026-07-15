@@ -13,6 +13,13 @@ def _env(name, default):
     return v if v not in (None, "") else default
 
 
+def _flag(name):
+    """Strict boolean env: TRUE only for an explicit affirmative. Anything else — empty,
+    'off', 'no', a typo — is FALSE. Avoids the footgun where DEV_NO_AUTH=off (or any
+    non-'0'/'false' value) silently opens the API (S10)."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 # Hybrid config: ENV values below are DEFAULTS the dashboard can override at runtime
 # (stored in the settings doc — see settings.py). Set CONFIG_LOCK=env to freeze that:
 # overrides are ignored and ENV is the single source of truth (declarative / GitOps).
@@ -135,7 +142,7 @@ ENROLL_SECRET = _env("ENROLL_SECRET", "")        # one shared key agents use to 
 SECRET_KEY = _env("SECRET_KEY", "")
 # Empty TOKEN fails closed (503 on everything but /healthz). Opt into an open API
 # on a trusted host ONLY with an explicit flag — never silently, it's a ban API.
-DEV_NO_AUTH = _env("DEV_NO_AUTH", "") not in ("0", "", "false", "False")
+DEV_NO_AUTH = _flag("DEV_NO_AUTH")
 
 # Public URL agents on nginx VMs use to reach THIS api (for the install one-liner
 # the dashboard shows). Often differs from the in-cluster BLOCKLIST_API_URL.

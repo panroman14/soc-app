@@ -1,6 +1,13 @@
 """Configuration for the soc backend. Override via environment variables."""
 import os
 
+
+def _flag(name):
+    """Strict boolean env: TRUE only for an explicit affirmative. Anything else — empty,
+    'off', 'no', a typo — is FALSE. Prevents a footgun where e.g. SOC_DEV_NO_AUTH=off (or
+    any value that isn't literally '0'/'false') silently disables authentication (S10)."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
 # --- Loki ---
 LOKI_URL = os.environ.get("LOKI_URL", "https://loki.example.com")
 INGRESS_SELECTOR = os.environ.get("INGRESS_SELECTOR", '{app="ingress-nginx"}')
@@ -8,7 +15,7 @@ WINDOW = os.environ.get("WINDOW", "5m")          # aggregation window
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "30"))
 # Tor exit-list enrichment (off by default — the ~700 KB download/refresh isn't
 # worth the latency; set TOR_ENABLED=1 to re-enable).
-TOR_ENABLED = os.environ.get("TOR_ENABLED", "0") not in ("0", "", "false", "False")
+TOR_ENABLED = _flag("TOR_ENABLED")
 
 # --- LLM (Ollama / OpenAI-compatible) ---
 LLM_URL = os.environ.get("LLM_URL", "http://192.0.2.20:11434")
@@ -20,7 +27,7 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "gemma3:4b")
 # To run without auth on a trusted host, opt in explicitly with SOC_DEV_NO_AUTH=1.
 BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "")
-DEV_NO_AUTH = os.environ.get("SOC_DEV_NO_AUTH", "") not in ("0", "", "false", "False")
+DEV_NO_AUTH = _flag("SOC_DEV_NO_AUTH")
 # Signs session cookies (multi-user auth). If set, rotating it logs everyone out;
 # if empty, a random key is generated and persisted in the DB. `openssl rand -hex 32`.
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
@@ -39,7 +46,7 @@ for _c in os.environ.get("ALLOW_IPS", "").split(","):
             ALLOW_NETS.append(_ipaddress.ip_network(_c, strict=False))
         except ValueError:
             pass
-TRUST_PROXY = os.environ.get("TRUST_PROXY", "") not in ("0", "", "false", "False")
+TRUST_PROXY = _flag("TRUST_PROXY")
 # CSRF: mutating requests whose browser Origin doesn't match are rejected. Behind a
 # reverse proxy that rewrites Host, list the public origin(s) here (comma-separated,
 # e.g. "https://soc.example.com"); empty = compare Origin against the Host header.

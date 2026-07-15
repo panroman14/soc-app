@@ -337,15 +337,19 @@ def enroll_info():
     the command an authed operator explicitly fetched). See S3."""
     url = (config.PUBLIC_URL or "").rstrip("/")
     configured = bool(config.ENROLL_SECRET)
+    is_https = url.startswith("https://")
     cmd = ""
-    if configured and url:
-        # installer refuses plaintext HTTP unless INSECURE=1 (operator chose this URL)
-        insecure = "" if url.startswith("https://") else "INSECURE=1 "
+    # NEVER auto-bypass install.sh's plaintext-HTTP guard: over http the one-liner would
+    # download+run agent code as root over a MITM-able channel (S1 = fleet-wide root RCE),
+    # and the same channel carries ENROLL_SECRET + node tokens. We refuse to emit a
+    # command for a non-https PUBLIC_URL — the operator must fix PUBLIC_URL instead.
+    if configured and url and is_https:
         cmd = ("curl -fsSL %s/install/soc-nginx-agent.sh | "
-               "sudo %sBLOCKLIST_API_URL=%s ENROLL_SECRET=%s bash"
-               % (url, insecure, url, config.ENROLL_SECRET))
+               "sudo BLOCKLIST_API_URL=%s ENROLL_SECRET=%s bash"
+               % (url, url, config.ENROLL_SECRET))
     return {"enroll_configured": configured, "public_url": url,
-            "install_cmd": cmd, "needs_public_url": configured and not url}
+            "install_cmd": cmd, "needs_public_url": configured and not url,
+            "needs_https": configured and bool(url) and not is_https}
 
 
 @app.post("/block")

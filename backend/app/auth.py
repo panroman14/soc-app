@@ -22,13 +22,16 @@ import time
 
 from . import config, db
 
-_LOCKOUT_MAX = 6            # failed attempts before lockout
+_LOCKOUT_MAX = 6            # failed attempts before lockout (per user+ip)
+_LOCKOUT_MAX_USER = 20      # AND a global per-username cap across ALL ips in the window
 _LOCKOUT_WINDOW = 900       # ...within this many seconds
 _LOCKOUT_FOR = 900          # lock duration
 _SESSION_TTL = 12 * 3600
 COOKIE = "soc_session"
 
 _fails = {}                 # (user,ip) -> [ts, ...]  (in-memory, single process)
+_fails_user = {}            # user -> [ts, ...]  — global cap so a spoofed X-Forwarded-For
+                            # can't spread guesses across unlimited (user,ip) buckets (S2)
 
 
 # ── schema ────────────────────────────────────────────────────────────────────
@@ -61,6 +64,18 @@ def hash_pw(pw):
     salt = os.urandom(16)
     dk = hashlib.scrypt(pw.encode("utf-8"), salt=salt, n=16384, r=8, p=1, dklen=32)
     return "scrypt$16384$8$1$%s$%s" % (salt.hex(), dk.hex())
+
+
+# A valid throwaway hash used to spend the SAME scrypt time on a non-existent username
+# as on a real one, so response timing doesn't reveal which usernames exist (S11).
+_DUMMY_HASH = None
+
+
+def _dummy_hash():
+    global _DUMMY_HASH
+    if _DUMMY_HASH is None:
+        _DUMMY_HASH = hash_pw(os.urandom(16).hex())
+    return _DUMMY_HASH
 
 
 def verify_pw(pw, stored):
@@ -96,6 +111,24 @@ def totp_verify(secret, code, window=1, now=None):
     now = now if now is not None else time.time()
     return any(hmac.compare_digest(_totp_at(secret, now + w * 30), code)
                for w in range(-window, window + 1))
+
+
+_totp_used = {}             # (user, code) -> ts — consumed TOTP codes, to block replay
+
+
+def totp_consume(username, code, now=None):
+    """Record a just-verified code as used; return False if it was ALREADY used within
+    the validity window (a replay). Bounds the ~90s window in which a phished/observed
+    code could be re-submitted."""
+    now = now if now is not None else time.time()
+    for k, ts in list(_totp_used.items()):        # prune expired
+        if now - ts > 90:
+            _totp_used.pop(k, None)
+    k = (username, str(code))
+    if k in _totp_used:
+        return False
+    _totp_used[k] = now
+    return True
 
 
 def totp_uri(username, secret):
@@ -193,9 +226,20 @@ def set_password(username, password):
                   (hash_pw(password), username))          # epoch bump = log out everywhere
 
 
+def admin_count():
+    with db._conn() as c:
+        return c.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+
+
 def set_role(username, role):
     if role not in ("admin", "viewer"):
         raise ValueError("bad role")
+    # Never let the last admin be demoted — same protection as delete_user has, but on
+    # the upsert/set-role path too, so nobody can strand the system with zero admins (S14).
+    if role != "admin":
+        cur = get_user(username)
+        if cur and cur["role"] == "admin" and admin_count() <= 1:
+            raise ValueError("can't demote the last admin")
     with db._lock, db._conn() as c:
         c.execute("UPDATE users SET role=? WHERE username=?", (role, username))
 
@@ -221,20 +265,30 @@ def delete_user(username):
 
 
 # ── lockout ──────────────────────────────────────────────────────────────────────
+def _recent(seq, now):
+    return [t for t in (seq or []) if now - t < _LOCKOUT_WINDOW]
+
+
 def locked(username, ip):
-    k = (username, ip)
     now = time.time()
-    hits = [t for t in _fails.get(k, []) if now - t < _LOCKOUT_WINDOW]
-    _fails[k] = hits
-    return len(hits) >= _LOCKOUT_MAX
+    hits = _recent(_fails.get((username, ip)), now)
+    _fails[(username, ip)] = hits
+    ghits = _recent(_fails_user.get(username), now)
+    _fails_user[username] = ghits
+    # locked if EITHER this ip has too many fails, OR the account has too many total
+    # fails across all ips this window (bounds distributed / XFF-spoofed guessing).
+    return len(hits) >= _LOCKOUT_MAX or len(ghits) >= _LOCKOUT_MAX_USER
 
 
 def note_fail(username, ip):
-    _fails.setdefault((username, ip), []).append(time.time())
+    now = time.time()
+    _fails.setdefault((username, ip), []).append(now)
+    _fails_user.setdefault(username, []).append(now)
 
 
 def clear_fails(username, ip):
     _fails.pop((username, ip), None)
+    _fails_user.pop(username, None)
 
 
 # ── the check used by the request middleware ─────────────────────────────────────
@@ -244,14 +298,17 @@ def authenticate(username, password, code, ip):
     if locked(username, ip):
         return None, "locked"
     u = get_user(username)
-    if not u or not verify_pw(password, u["pw_hash"]):
+    # Always run scrypt (against a dummy hash when the user is missing) so the response
+    # time is the same whether or not the username exists — no enumeration oracle (S11).
+    ok = verify_pw(password, u["pw_hash"] if u else _dummy_hash())
+    if not u or not ok:
         note_fail(username, ip)
         return None, "bad"
     if u["totp_secret"]:
         if not code:
             return None, "totp_required"
-        if not totp_verify(u["totp_secret"], code):
-            note_fail(username, ip)
+        if not totp_verify(u["totp_secret"], code) or not totp_consume(username, code):
+            note_fail(username, ip)                # wrong OR replayed code
             return None, "totp_bad"
     clear_fails(username, ip)
     touch_login(username)

@@ -212,8 +212,12 @@ def _lbl_escape(s):
 
 
 def _re2_esc(s):
-    """Escape RE2 metacharacters for a Loki regex match (=~/!~)."""
-    return re.sub(r'([.+*?()\[\]{}^$|\\])', r'\\\1', str(s))
+    r"""Escape RE2 metacharacters for a Loki regex match (=~/!~), THEN neutralize the
+    double-quote so the value can't terminate the enclosing LogQL "..." string and
+    inject extra matchers/pipeline stages (S7). ('-' stays literal — Loki's RE2 rejects
+    \-.)"""
+    r = re.sub(r'([.+*?()\[\]{}^$|\\])', r'\\\1', str(s))
+    return r.replace('"', '\\"')
 
 
 def _chip_clause(field, op, value):
@@ -785,9 +789,10 @@ AUTOBAN_FAMILIES = [
 
 
 def _re2_escape(s):
-    """Escape regex metacharacters for RE2 (Loki's engine). Unlike re.escape we
-    DON'T escape '-' (RE2 rejects `\\-` outside a character class)."""
-    return re.sub(r'([.+*?()\[\]{}^$|\\])', r'\\\1', s)
+    r"""Escape regex metacharacters for RE2 (Loki's engine), then neutralize the
+    double-quote so a value can't break out of the enclosing LogQL "..." string (S7).
+    Unlike re.escape we DON'T escape '-' (RE2 rejects `\-` outside a character class)."""
+    return re.sub(r'([.+*?()\[\]{}^$|\\])', r'\\\1', str(s)).replace('"', '\\"')
 
 
 def _autoban_base(match_type, path, host=""):

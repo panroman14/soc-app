@@ -29,10 +29,39 @@ def test_nonce_differs():
     assert crypto.open_(a) == crypto.open_(b) == "same"
 
 
-def test_plaintext_passthrough():
+def test_plaintext_passthrough_only_when_disabled():
+    _key("")                                                # encryption OFF → legacy passthrough
+    assert crypto.open_("plain-legacy-token") == "plain-legacy-token"
     _key("k")
-    assert crypto.open_("plain-legacy-token") == "plain-legacy-token"   # no prefix → as-is
     assert crypto.seal("") == "" and crypto.seal(None) is None
+    assert crypto.open_("") == ""                           # empty always ok
+
+
+def test_plaintext_rejected_when_enabled():
+    # once a key is set, a plaintext secret is a legacy-not-resaved OR a tamper/downgrade
+    # substitution — open_ must refuse it, not hand it to enforcement.
+    _key("k")
+    try:
+        crypto.open_("plain-or-injected-token")
+        assert False, "plaintext secret must be rejected while SECRET_KEY is set"
+    except ValueError:
+        pass
+
+
+def test_stretched_key_derivation():
+    # new ciphertext must not be decryptable with the pre-stretching (plain sha256) key —
+    # proves PBKDF2 stretching is actually in the encrypt path.
+    import base64 as _b64, hashlib as _h
+    from cryptography.fernet import Fernet as _F, InvalidToken as _IT
+    _key("some-passphrase")
+    ct = crypto.open_ and crypto.seal("secret")
+    legacy = _F(_b64.urlsafe_b64encode(_h.sha256(b"some-passphrase").digest()))
+    try:
+        legacy.decrypt(ct[len("enc:"):].encode())
+        assert False, "new ciphertext should not decrypt under the un-stretched key"
+    except _IT:
+        pass
+    assert crypto.open_(ct) == "secret"                     # but the module reads it fine
 
 
 def test_disabled_no_key_stores_plaintext():

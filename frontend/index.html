@@ -3952,7 +3952,8 @@ async function showAddNode(){
     if(d.enabled===false){ pre.textContent="# blocklist-api не настроен"; return; }
     if(!d.configured){ pre.textContent="# ENROLL_SECRET не задан в blocklist-api — задай его, чтобы агенты могли регистрироваться."; return; }
     if(d.needs_public_url){ hint.textContent="⚠ Задай PUBLIC_URL в blocklist-api (адрес, по которому VM достучатся до API) — без него команда неполная."; hint.classList.remove("hidden"); }
-    pre.textContent=d.install_cmd||"# команда недоступна";
+    else if(d.needs_https){ hint.textContent="⚠ PUBLIC_URL использует http:// — команда установки не выдаётся. Агент качается и запускается от root, поэтому по незашифрованному каналу это риск удалённого выполнения кода (MITM). Задай https:// PUBLIC_URL."; hint.classList.remove("hidden"); }
+    pre.textContent=d.install_cmd||"# команда недоступна (нужен https PUBLIC_URL)";
   }catch(e){ pre.textContent="# ошибка: "+e.message; }
 }
 function copyInstallCmd(){

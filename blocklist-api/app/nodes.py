@@ -128,10 +128,22 @@ def token_owner(token):
     return None
 
 
+# Enrolled agents are pull-mode nginx-file targets by definition (see module docstring).
+# They may NOT self-declare a privileged enforcement type: a node claiming
+# target_type="ingress-cm"/"cloudflare" would otherwise be auto-promoted into the ban
+# fan-out and drive the k8s/CF adapters (S5). Lock every enrolled node to nginx-file.
+_ENROLL_TYPE = "nginx-file"
+
+
 def enroll(node_id="", hostname="", group="", target_type="nginx-file",
            files=None, agent_version="", ip=""):
     """Register (or re-register) a node and return its record INCLUDING the token.
-    Re-enrolling an existing id keeps its token (idempotent installer reruns)."""
+
+    Re-enrolling an existing id MINTS A FRESH token and invalidates the old one — the
+    endpoint never returns a node's pre-existing token, so a holder of ENROLL_SECRET
+    cannot read a live node's credential by re-enrolling its id (S4). The installer
+    writes the returned token on each run, so idempotent reruns still yield a working
+    agent (they just rotate the credential)."""
     nid = _slug(node_id) or _slug(hostname)
     if not nid:
         raise ValueError("node_id or hostname required")
@@ -139,11 +151,11 @@ def enroll(node_id="", hostname="", group="", target_type="nginx-file",
     with _LOCK:
         d = _load()
         rec = d.get(nid, {})
-        token = rec.get("token") or secrets.token_hex(24)
+        token = secrets.token_hex(24)     # always fresh → no token disclosure on re-enroll
         rec.update({
             "hostname": _str(hostname, 253) or rec.get("hostname", ""),
             "group": _slug(group) or rec.get("group", ""),
-            "target_type": _str(target_type, 32) or rec.get("target_type", "nginx-file"),
+            "target_type": _ENROLL_TYPE,   # enrolled nodes are always nginx-file (S5)
             "files": _clean_files(files) or rec.get("files", {}),
             "agent_version": _str(agent_version, 32) or rec.get("agent_version", ""),
             "token": token,

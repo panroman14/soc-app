@@ -155,8 +155,13 @@ def migrate_from_envs():
     d = _load()
     if d.get("migrated"):
         return 0
-    from . import environments
+    from . import config, environments
     n = 0
+    # Same rule the GUI upsert enforces (S6): never write a plaintext CF token into a
+    # ConfigMap store. If crypto is off on a configmap deployment, migrate the target
+    # WITHOUT its token (operator re-enters it in the GUI, which seals it) rather than
+    # leaking the credential in cleartext into k8s.
+    drop_token = (config.STORE == "configmap" and not crypto.enabled())
     with _LOCK:
         d = _load()                       # re-read under lock
         if d.get("migrated"):
@@ -171,7 +176,9 @@ def migrate_from_envs():
             now = int(time.time())
             d["targets"][tid] = {
                 "name": (e.get("name") or e["id"]) + " · Cloudflare",
-                "token": cf.get("token"), "mode": cf.get("mode") or "ip-list",
+                # seal at rest (matches every other write path); drop if unsafe
+                "token": "" if drop_token else crypto.seal(cf.get("token")),
+                "mode": cf.get("mode") or "ip-list",
                 "zone_id": cf.get("zone_id") or "", "zone_name": cf.get("zone_name") or "",
                 "account_id": cf.get("account_id") or "",
                 "list_name": cf.get("list_name") or "", "rule_desc": cf.get("rule_desc") or "",

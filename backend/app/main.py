@@ -81,6 +81,33 @@ def _ip_allowed(request: Request):
     return any(addr in n for n in config.ALLOW_NETS)
 
 
+# ── per-caller rate limiting for expensive endpoints (LLM / heavy Loki) ───────────
+# A signed-in viewer can otherwise saturate the local LLM / Loki by hammering these
+# uncached GETs (S9). Sliding window, keyed on the authenticated user (or source IP).
+_rl_hits = {}                       # (who, bucket) -> [ts, ...]
+_rl_lock = threading.Lock()
+
+
+def _rate_ok(request: Request, bucket, limit, window=60):
+    u = getattr(request.state, "user", None)
+    who = (u.get("u") if u else None) or _source_ip(request) or "?"
+    now = time.time()
+    with _rl_lock:
+        hits = [t for t in _rl_hits.get((who, bucket), []) if now - t < window]
+        if len(hits) >= limit:
+            _rl_hits[(who, bucket)] = hits
+            return False
+        hits.append(now)
+        _rl_hits[(who, bucket)] = hits
+        if len(_rl_hits) > 4096:    # coarse cap so the map can't grow unbounded
+            for k in [k for k, v in _rl_hits.items() if not [t for t in v if now - t < window]]:
+                _rl_hits.pop(k, None)
+    return True
+
+
+_RL_MSG = {"error": "слишком часто — подожди немного (rate limit)"}
+
+
 @app.middleware("http")
 async def security(request: Request, call_next):
     """Security headers on every response + CSRF Origin check on mutations.
@@ -92,19 +119,30 @@ async def security(request: Request, call_next):
     """
     rid = (request.headers.get("x-request-id") or uuid.uuid4().hex[:12])
     logging_conf.set_rid(rid)
-    # IP allow-list (network-level gate, outermost). Empty = disabled. Health/metrics
-    # are exempt so k8s probes + Prometheus keep working from inside the cluster.
-    if config.ALLOW_NETS and request.url.path not in ("/api/health", "/metrics"):
-        if not _ip_allowed(request):
-            return JSONResponse({"error": "your IP is not allowed"}, status_code=403)
+    # (IP allow-list lives in auth_gate — the actually-outermost middleware — so it gates
+    # before any session/DB work; see auth_gate. S8.)
     if request.method in ("POST", "PUT", "PATCH", "DELETE"):
         origin = request.headers.get("origin")
+        ref = request.headers.get("referer")
+        host = request.headers.get("host", "")
+
+        def _same(u):
+            try:
+                return urllib.parse.urlparse(u).netloc == host
+            except Exception:
+                return False
+        # Prefer Origin; fall back to Referer so a browser request that omits Origin
+        # (some same-origin navigations) is still validated rather than waved through.
         if origin:
             o = origin.rstrip("/")
-            allowed = (o in config.TRUSTED_ORIGINS) if config.TRUSTED_ORIGINS \
-                else (urllib.parse.urlparse(o).netloc == request.headers.get("host", ""))
-            if not allowed:
-                return JSONResponse({"error": "cross-origin запрос отклонён (CSRF)"}, status_code=403)
+            allowed = (o in config.TRUSTED_ORIGINS) if config.TRUSTED_ORIGINS else _same(o)
+        elif ref:
+            allowed = any(ref.rstrip("/").startswith(t) for t in config.TRUSTED_ORIGINS) \
+                if config.TRUSTED_ORIGINS else _same(ref)
+        else:
+            allowed = True        # no browser origin headers at all → SameSite=Strict covers it
+        if not allowed:
+            return JSONResponse({"error": "cross-origin запрос отклонён (CSRF)"}, status_code=403)
     resp = await call_next(request)
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -130,6 +168,11 @@ async def auth_gate(request: Request, call_next):
       password/TOTP); admin has full access; /api/users* is admin-only.
     Set SOC_DEV_NO_AUTH=1 to bypass entirely on a trusted host."""
     path = request.url.path
+    # IP allow-list — the network-level gate, checked FIRST (this is the outermost
+    # middleware). Empty = disabled. Health/metrics stay reachable for probes/scrape.
+    if config.ALLOW_NETS and path not in ("/api/health", "/metrics"):
+        if not _ip_allowed(request):
+            return JSONResponse({"error": "your IP is not allowed"}, status_code=403)
     if path in config.AUTH_EXEMPT or config.DEV_NO_AUTH:
         return await call_next(request)
     # static SPA shell + assets (non-API GETs) load unauthenticated; API is gated
@@ -306,9 +349,10 @@ def api_summary(env: str = ""):
                 summ = loki.collect_summary()
             return JSONResponse({"updated": int(time.time()), "loki_up": True,
                                  "summary": summ, "env": env})
-        except Exception as e:
+        except Exception:
+            log.warning("[summary] live env query failed for %s", env, exc_info=True)
             return JSONResponse({"updated": int(time.time()), "loki_up": False,
-                                 "summary": None, "env": env, "error": str(e)})
+                                 "summary": None, "env": env, "error": "запрос к логам не удался"})
     with _state_lock:
         return JSONResponse({
             "updated": _state["updated"],
@@ -327,8 +371,9 @@ def api_logs(stream: str = "access", minutes: int = 15, q: str = "", env: str = 
         with loki.scope(env, _env_loki_url(env)):
             lines = loki.recent_logs(st, min(max(int(minutes), 1), 1440), q, 300)
         return JSONResponse({"enabled": True, "lines": lines})
-    except Exception as e:
-        return JSONResponse({"enabled": True, "lines": [], "error": str(e)})
+    except Exception:
+        log.warning("[logs] recent_logs failed", exc_info=True)
+        return JSONResponse({"enabled": True, "lines": [], "error": "запрос к логам не удался"})
 
 
 # ── Live Logs explorer ────────────────────────────────────────────────────────
@@ -837,7 +882,7 @@ _AN_TTL = 45
 
 
 @app.get("/api/analytics")
-def api_analytics(window: str = "", host: str = "", env: str = ""):
+def api_analytics(request: Request, window: str = "", host: str = "", env: str = ""):
     # default (no params) → cached background snapshot; custom window/host/env → live
     if not window and not host and not env:
         with _state_lock:
@@ -847,6 +892,9 @@ def api_analytics(window: str = "", host: str = "", env: str = ""):
     hit = _an_cache.get(key)
     if hit and now - hit[0] < _AN_TTL:
         return JSONResponse({"updated": hit[0], "analytics": hit[1], "cached": True})
+    # cache miss → a heavy live Loki sweep; throttle to stop cache-busting host/env values
+    if not _rate_ok(request, "analytics", 20):
+        return JSONResponse(_RL_MSG, status_code=429)
     with loki.scope(env, _env_loki_url(env)):
         data = loki.collect_analytics(key[0], host)
     _an_cache[key] = (now, data)
@@ -856,17 +904,20 @@ def api_analytics(window: str = "", host: str = "", env: str = ""):
 
 
 @app.get("/api/nl")
-def api_nl(q: str = ""):
+def api_nl(request: Request, q: str = ""):
     if not q:
         return JSONResponse({"filters": {}, "requests": []})
+    if not _rate_ok(request, "nl", 8):        # each call = a fresh LLM inference
+        return JSONResponse(_RL_MSG, status_code=429)
     f = llm.nl_to_filters(q)
     mins = f.pop("minutes", 60)
     err = f.pop("error", None)
     try:
         reqs = loki.recent_requests(f.get("host", ""), f.get("path", ""), f.get("status", ""),
                                     f.get("ip", ""), "", 80, mins)
-    except Exception as e:
-        return JSONResponse({"filters": f, "requests": [], "error": str(e)})
+    except Exception:
+        log.warning("[nl] loki query failed", exc_info=True)
+        return JSONResponse({"filters": f, "requests": [], "error": "запрос к логам не удался"})
     return JSONResponse({"filters": {**f, "minutes": mins}, "requests": reqs, "llm_error": err})
 
 
@@ -882,8 +933,10 @@ def api_webcheck(job: str = "", url: str = ""):
     try:
         with _ur.urlopen(q, timeout=30) as r:
             return JSONResponse(json.loads(r.read().decode()))
-    except Exception as e:
-        return JSONResponse({"error": str(e)})
+    except Exception:
+        # str(e) would leak the internal WEBCHECK_URL to any signed-in user (S13)
+        log.warning("[webcheck] upstream call failed", exc_info=True)
+        return JSONResponse({"error": "web-check недоступен"}, status_code=502)
 
 
 @app.get("/api/trusted")
@@ -929,19 +982,72 @@ def _egress_check(url, allow_internal=True):
     return True, None
 
 
-def _safe_opener(allow_internal):
-    """urllib opener that re-runs _egress_check on every redirect hop (X2) — a
-    validated URL must not 302 to metadata/loopback."""
-    import urllib.request as _ur
-    import urllib.error as _ue
+def _addr_allowed(ip_str, allow_internal):
+    """Is a resolved IP a permitted egress destination? (metadata/link-local never;
+    loopback/private/reserved only when allow_internal)."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        return False
+    if not allow_internal and (ip.is_loopback or ip.is_private or ip.is_reserved):
+        return False
+    return True
 
-    class _Redir(_ur.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            ok, err = _egress_check(newurl, allow_internal=allow_internal)
-            if not ok:
-                raise _ue.HTTPError(newurl, code, "redirect egress запрещён: %s" % err, headers, fp)
-            return super().redirect_request(req, fp, code, msg, headers, newurl)
-    return _ur.build_opener(_Redir())
+
+def _safe_opener(allow_internal):
+    """urllib opener that validates the destination IP AT CONNECT TIME — not via a
+    separate earlier resolution. This closes the TOCTOU / DNS-rebinding gap (X8): a
+    hostname that resolved to a public IP during _egress_check can't flip to
+    169.254.169.254 / loopback before the socket is opened, because the connection
+    itself resolves and re-validates immediately before connecting to that exact
+    address. Redirects reuse the same handlers, so each hop is re-validated too."""
+    import http.client
+    import socket
+    import urllib.request as _ur
+
+    _SENTINEL = socket._GLOBAL_DEFAULT_TIMEOUT
+
+    class _GuardedHTTP(http.client.HTTPConnection):
+        def connect(self):
+            infos = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)
+            vetted = [(fam, sa) for fam, _t, _p, _c, sa in infos
+                      if _addr_allowed(sa[0], allow_internal)]
+            if not vetted:
+                raise OSError("egress запрещён: %s резолвится в недопустимый адрес" % self.host)
+            last = None
+            for fam, sa in vetted:
+                s = None
+                try:
+                    s = socket.socket(fam, socket.SOCK_STREAM)
+                    if self.timeout is not _SENTINEL:
+                        s.settimeout(self.timeout)
+                    if self.source_address:
+                        s.bind(self.source_address)
+                    s.connect(sa)
+                    self.sock = s
+                    return
+                except OSError as e:
+                    last = e
+                    if s is not None:
+                        s.close()
+            raise last
+
+    class _GuardedHTTPS(_GuardedHTTP, http.client.HTTPSConnection):
+        def connect(self):
+            _GuardedHTTP.connect(self)                 # vetted plaintext socket
+            self.sock = self._context.wrap_socket(self.sock, server_hostname=self.host)
+
+    class _HTTPHandler(_ur.HTTPHandler):
+        def http_open(self, req):
+            return self.do_open(_GuardedHTTP, req)
+
+    class _HTTPSHandler(_ur.HTTPSHandler):
+        def https_open(self, req):
+            return self.do_open(_GuardedHTTPS, req)
+
+    return _ur.build_opener(_HTTPHandler(), _HTTPSHandler())
 
 
 # --- blocklist (proxy to in-cluster blocklist-api) ---
@@ -1466,7 +1572,8 @@ def api_nodes_install():
     return JSONResponse({"enabled": True, "configured": bool(info.get("enroll_configured")),
                          "public_url": (info.get("public_url") or "").rstrip("/"),
                          "install_cmd": info.get("install_cmd") or "",
-                         "needs_public_url": bool(info.get("needs_public_url"))})
+                         "needs_public_url": bool(info.get("needs_public_url")),
+                         "needs_https": bool(info.get("needs_https"))})
 
 
 @app.get("/api/blocklist")
@@ -2176,8 +2283,9 @@ def api_autoban_preview(id: int = 0, match_type: str = "substring", path: str = 
             data["total_ips"] = len(kept)
             data["total_hits"] = sum(m["count"] for m in kept)
         return JSONResponse(data)
-    except Exception as e:
-        return JSONResponse({"matches": [], "error": str(e)})
+    except Exception:
+        log.warning("[matches] loki query failed", exc_info=True)
+        return JSONResponse({"matches": [], "error": "запрос к логам не удался"})
 
 
 @app.post("/api/block")
@@ -2889,8 +2997,9 @@ def api_ban_candidates(window: str = "1h", host: str = "", env: str = ""):
         if len(_bc_cache) > 20:
             _bc_cache.clear()
         return JSONResponse(_drop_already_blocked(data))
-    except Exception as e:
-        return JSONResponse({"candidates": [], "top_paths": [], "error": str(e)})
+    except Exception:
+        log.warning("[ban_candidates] loki query failed", exc_info=True)
+        return JSONResponse({"candidates": [], "top_paths": [], "error": "запрос к логам не удался"})
     finally:
         _bc_lock.release()
 
@@ -2902,8 +3011,9 @@ def api_crs_offenders(window: str = "1h", env: str = ""):
     try:
         with loki.scope(env, _env_loki_url(env)):
             return JSONResponse({"window": w, "offenders": loki.crs_offenders(w)})
-    except Exception as e:
-        return JSONResponse({"window": w, "offenders": [], "error": str(e)})
+    except Exception:
+        log.warning("[crs_offenders] loki query failed", exc_info=True)
+        return JSONResponse({"window": w, "offenders": [], "error": "запрос к логам не удался"})
 
 
 _sc_cache = {}
@@ -2927,8 +3037,9 @@ def api_suspect_ips(window: str = "1h", host: str = "", env: str = ""):
         if len(_sc_cache) > 20:
             _sc_cache.clear()
         return JSONResponse(_drop_already_blocked(data))
-    except Exception as e:
-        return JSONResponse({"candidates": [], "top_paths": [], "error": str(e)})
+    except Exception:
+        log.warning("[suspect_ips] loki query failed", exc_info=True)
+        return JSONResponse({"candidates": [], "top_paths": [], "error": "запрос к логам не удался"})
     finally:
         _bc_lock.release()
 
@@ -2986,9 +3097,11 @@ def api_verdicts(ips: str = ""):
 
 
 @app.get("/api/judge_ip")
-def api_judge_ip(ip: str = "", window: str = "1h", force: int = 0):
+def api_judge_ip(request: Request, ip: str = "", window: str = "1h", force: int = 0):
     if not ip:
         return JSONResponse({"verdict": None})
+    if force and not _rate_ok(request, "judge_ip", 15):   # force=1 bypasses the verdict cache → LLM
+        return JSONResponse(_RL_MSG, status_code=429)
     w = window if window in _BC_WINDOWS else "1h"
     # --- deterministic checks FIRST (override LLM + any stale cache) ---
     # 1) reverse-DNS verified good bot → legit, never ban
@@ -3033,24 +3146,29 @@ def api_judge_ip(ip: str = "", window: str = "1h", force: int = 0):
         if verdict:
             db.cache_put("verdict:" + ip, verdict)
         return JSONResponse({"verdict": verdict})
-    except Exception as e:
-        return JSONResponse({"verdict": None, "error": str(e)})
+    except Exception:
+        log.warning("[judge_ip] llm/loki failed for %s", ip, exc_info=True)
+        return JSONResponse({"verdict": None, "error": "оценка недоступна"})
 
 
 @app.get("/api/ip_profile")
-def api_ip_profile(ip: str = "", window: str = "1h"):
+def api_ip_profile(request: Request, ip: str = "", window: str = "1h"):
+    if not _rate_ok(request, "ip_profile", 30):    # pulls up to ~5k log lines per call
+        return JSONResponse(_RL_MSG, status_code=429)
     try:
         return JSONResponse(loki.ip_profile(ip, _win(window) if window in _WINDOWS else "1h"))
-    except Exception as e:
-        return JSONResponse({"ip": ip, "error": str(e)})
+    except Exception:
+        log.warning("[ip_profile] error for %s", ip, exc_info=True)
+        return JSONResponse({"ip": ip, "error": "не удалось построить профиль IP"}, status_code=502)
 
 
 @app.get("/api/crs_samples")
 def api_crs_samples(family: str = "", window: str = "1h", limit: int = 30):
     try:
         return JSONResponse({"samples": loki.crs_samples(family, limit, _win(window) if window in _WINDOWS else "1h")})
-    except Exception as e:
-        return JSONResponse({"samples": [], "error": str(e)})
+    except Exception:
+        log.warning("[crs_samples] loki query failed", exc_info=True)
+        return JSONResponse({"samples": [], "error": "запрос к логам не удался"})
 
 
 @app.get("/api/requests")
@@ -3059,8 +3177,9 @@ def api_requests(host: str = "", path: str = "", status: str = "", ip: str = "",
     try:
         with loki.scope(env, _env_loki_url(env)):
             return JSONResponse({"requests": loki.recent_requests(host, path, status, ip, ua, ref, limit, minutes)})
-    except Exception as e:
-        return JSONResponse({"requests": [], "error": str(e)})
+    except Exception:
+        log.warning("[requests] loki query failed", exc_info=True)
+        return JSONResponse({"requests": [], "error": "запрос к логам не удался"})
 
 
 @app.get("/api/ips")
@@ -3068,8 +3187,9 @@ def api_ips(country: str = "", limit: int = 20, window: str = "", host: str = ""
     try:
         return JSONResponse({"country": country,
                              "ips": loki.top_ips(country, limit, _win(window), host)})
-    except Exception as e:
-        return JSONResponse({"country": country, "ips": [], "error": str(e)})
+    except Exception:
+        log.warning("[ips] loki query failed", exc_info=True)
+        return JSONResponse({"country": country, "ips": [], "error": "запрос к логам не удался"})
 
 
 @app.get("/api/digest")
@@ -3091,7 +3211,9 @@ def api_digest():
 
 
 @app.get("/api/suggest")
-def api_suggest():
+def api_suggest(request: Request):
+    if not _rate_ok(request, "suggest", 8):    # each call = a fresh LLM inference
+        return JSONResponse(_RL_MSG, status_code=429)
     with _state_lock:
         summary = _state["summary"]
         analytics = _state["analytics"] or {}
@@ -3227,13 +3349,20 @@ def health():
 
 # ── auth endpoints (multi-user + TOTP) ──────────────────────────────────────────
 def _client_ip(request: Request):
-    xff = request.headers.get("x-forwarded-for", "")
-    return (xff.split(",")[0].strip() if xff else "") or (request.client.host if request.client else "?")
+    # Proxy-aware, like _source_ip: trust X-Forwarded-For ONLY behind a declared proxy
+    # (TRUST_PROXY=1). Otherwise a client forges the header and each brute-force attempt
+    # lands under a different (user,ip) lockout bucket, defeating the lockout entirely
+    # (S2). Falls back to the real socket peer.
+    return _source_ip(request) or (request.client.host if request.client else "?")
 
 
 def _set_session_cookie(resp, request, username, role, epoch):
+    # Secure whenever TLS is in play, including behind a TLS-terminating proxy — either
+    # it forwards X-Forwarded-Proto, or the operator declared TRUST_PROXY (edge is HTTPS).
+    # Without this a proxy that drops the header would issue the cookie over plaintext.
     secure = (request.url.scheme == "https"
-              or request.headers.get("x-forwarded-proto", "") == "https")
+              or request.headers.get("x-forwarded-proto", "") == "https"
+              or config.TRUST_PROXY)
     resp.set_cookie(auth.COOKIE, auth.make_session(username, role, epoch),
                     max_age=auth._SESSION_TTL, httponly=True, secure=secure, samesite="strict", path="/")
 
