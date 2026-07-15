@@ -210,25 +210,53 @@
   .lg-row.head{position:sticky;top:0;background:#0d131d;color:#64748b;text-transform:uppercase;font-size:9px;letter-spacing:.04em;cursor:default;z-index:1}
   .lg-detail{background:#070b11;border-bottom:1px solid #131a26;padding:8px 10px}
   .lg-raw-line{padding:3px 8px;border-bottom:1px solid #131a26;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;line-height:1.5}
-  /* Custom dashboards grid */
-  .db-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-  .db-panel{background:var(--card,#0f1623);border:1px solid var(--border);border-radius:12px;padding:12px;min-height:120px;display:flex;flex-direction:column;overflow:hidden}
-  .db-panel .db-head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
-  .db-panel .db-title{font-size:12px;font-weight:600;color:#cbd5e1;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Custom dashboards grid (Grafana-style: 12-col grid, row units, drag/resize) */
+  .db-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:40px;gap:12px;position:relative}
+  .db-panel{background:linear-gradient(165deg,var(--surface),var(--surface2));border:1px solid var(--border);border-radius:14px;padding:12px;min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow);transition:border-color .15s var(--ease),box-shadow .15s var(--ease)}
+  .db-panel:hover{border-color:var(--border2)}
+  .db-panel .db-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex:none}
+  .db-panel .db-title{font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .db-panel .db-body{flex:1;min-height:0;position:relative}
   .db-panel .db-tools{display:none;gap:4px}
   .db-editing .db-panel .db-tools{display:flex}
-  .db-editing .db-panel{border-style:dashed;border-color:#3b4860}
-  .db-stat-val{font-size:30px;font-weight:700;color:#e7ecf4;line-height:1.1}
-  .db-stat-sub{font-size:11px;color:#64748b}
-  .db-bar-row{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px}
-  .db-bar-row .db-bar-k{width:42%;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,monospace}
-  .db-bar-row .db-bar-track{flex:1;height:12px;background:#1e293b;border-radius:3px;overflow:hidden}
-  .db-bar-row .db-bar-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa)}
-  .db-bar-row .db-bar-n{width:46px;text-align:right;color:#cbd5e1;font-variant-numeric:tabular-nums}
+  .db-editing .db-panel{border-style:dashed;border-color:var(--border2)}
+  .db-editing .db-panel .db-head{cursor:grab;user-select:none}
+  .db-panel.db-dragging{opacity:.8;z-index:30;box-shadow:var(--shadow-lg);border-color:var(--accent);cursor:grabbing}
+  .db-resize{position:absolute;right:4px;bottom:4px;width:13px;height:13px;cursor:se-resize;display:none;z-index:6;
+    border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);border-bottom-right-radius:3px;opacity:.55}
+  .db-resize:hover{opacity:1;border-color:var(--accent)}
+  .db-editing .db-panel .db-resize{display:block}
+  .db-ghost{position:absolute;background:var(--accent-weak);border:1.5px dashed var(--accent);border-radius:14px;pointer-events:none;z-index:4;display:none}
+  .db-stat-wrap{height:100%;display:flex;flex-direction:column;justify-content:center}
+  .db-stat-val{font-size:clamp(20px,3vw,34px);font-weight:700;color:var(--text);line-height:1.05;font-variant-numeric:tabular-nums}
+  .db-stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .db-delta{font-size:11px;font-weight:600;margin-left:8px}
+  .db-delta.up{color:var(--ok)} .db-delta.dn{color:var(--crit)} .db-delta.flat{color:var(--faint)}
+  .db-multi{height:100%;display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+  .db-multi .m{flex:1 1 90px;min-width:80px}
+  .db-multi .mv{font-size:23px;font-weight:700;color:var(--text);line-height:1.1;font-variant-numeric:tabular-nums}
+  .db-multi .ml{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .db-bar-row{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:5px}
+  .db-bar-row .db-bar-k{width:42%;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,monospace}
+  .db-bar-row .db-bar-track{flex:1;height:12px;background:#ffffff0d;border-radius:4px;overflow:hidden}
+  .db-bar-row .db-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .55s var(--ease)}
+  .db-bar-row .db-bar-n{width:48px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+  .db-hm-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .db-hm-lbl{width:88px;font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+  .db-hm-cells{display:flex;gap:2px;flex:1;min-width:0}
+  .db-hm-cell{flex:1;height:15px;border-radius:2px;min-width:2px}
   .db-tbl{width:100%;font-size:11px;border-collapse:collapse}
-  .db-tbl td,.db-tbl th{padding:3px 6px;border-bottom:1px solid #15202e;text-align:left}
-  .db-tbl th{color:#64748b;font-weight:500;text-transform:uppercase;font-size:9px}
-  @media(max-width:760px){.db-grid{grid-template-columns:repeat(2,1fr)}.db-panel{grid-column:span 2!important}}
+  .db-tbl td,.db-tbl th{padding:3px 6px;border-bottom:1px solid var(--border);text-align:left}
+  .db-tbl th{color:var(--faint);font-weight:500;text-transform:uppercase;font-size:9px}
+  .db-mp{max-height:148px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:5px;background:#0b0f16}
+  .db-mp label{display:flex;align-items:center;gap:7px;padding:3px 5px;font-size:12px;color:var(--muted);cursor:pointer;border-radius:6px}
+  .db-mp label:hover{background:#ffffff08}
+  .db-crosshair{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3}
+  .db-ax{font-size:9px;fill:var(--faint);font-family:ui-monospace,monospace}
+  .db-tip-box{fill:var(--surface2);stroke:var(--border2);stroke-width:1}
+  @media(max-width:760px){.db-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:auto}
+    .db-panel{grid-column:auto!important;grid-row:auto!important;min-height:120px}
+    .db-resize{display:none!important}}
 </style>
 </head>
 <body class="min-h-screen">
@@ -2117,8 +2145,20 @@ const _DB_METRICS={
 const _DB_ANALYTICS={top_paths:"Top paths",top_talkers:"Top talkers (IPs)",top_user_agents:"Top UA",
   top_domains:"Top domains",attack_types:"Attack types",methods:"Methods",crs_rules:"CRS rules",
   geo:"Countries",slow_endpoints:"Slow endpoints"};
+// panel-type taxonomy: which input(s) each type consumes
+const _DB_TYPES=[["stat","Stat"],["multistat","Multi-stat"],["timeseries","Time series"],["stacked","Stacked area"],
+  ["heatmap","Heatmap"],["gauge","Gauge"],["bar","Bar"],["hbar","Bar %"],["table","Table"],["pie","Pie"],
+  ["donut","Donut"],["geo","Countries"],["logs","Logs"]];
+const _DB_T_METRIC=["stat","gauge"];                               // one summary metric
+const _DB_T_METRICS=["multistat","timeseries","stacked","heatmap"]; // many metrics / history series
+const _DB_T_ANALYTICS=["bar","hbar","table","pie","donut"];         // one analytics top-list
+const _DB_PALETTE=["#8b7cf6","#c4b5fd","#6ee7b7","#e8a33d","#f472b6","#38bdf8","#a3e635","#fb7185"];
+const _DB_ROWH=40,_DB_GAP=12,_DB_COLS=12;                           // grid geometry (matches CSS)
 function _dbNum(v){ v=+v||0; return v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(1)+"k":String(v); }
+function _dbDefH(t){ return t==="logs"?6:(t==="stat"||t==="gauge"||t==="multistat")?3:(t==="heatmap")?4:5; }
+function _dbHHMM(ts){ const d=new Date((+ts||0)*1000); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
 function dbCur(){ return _db.list.find(d=>d.id===_db.curId)||_db.list[0]; }
+
 async function loadDashboards(){
   try{
     const d=await fetch("/api/dashboards").then(r=>r.json());
@@ -2159,82 +2199,251 @@ async function dbLoad(refetch){
   dbRender();
   clearTimeout(_dbTimer); if(_view==="dashboards"&&!_db.editing)_dbTimer=setTimeout(()=>dbLoad(true),30000);
 }
+
+// ── grid layout: normalize {gx,gy,w,h}, flow-pack legacy panels, compact ───────
+function _dbNormalize(dash){
+  let need=false;
+  dash.panels.forEach(p=>{
+    if(p.w==null)p.w=Math.min(12,Math.max(2,p.span||4));
+    if(p.h==null){p.h=_dbDefH(p.type);need=true;}
+    if(p.gx==null||p.gy==null)need=true;
+  });
+  if(need)_dbFlow(dash.panels);
+  return need;
+}
+function _dbFlow(panels){                   // greedy top-left packer into a 12-col grid
+  const bottom=new Array(_DB_COLS).fill(0);
+  panels.forEach(p=>{
+    const w=Math.min(_DB_COLS,Math.max(2,p.w||4)),h=Math.max(2,p.h||4);
+    let bx=0,by=Infinity;
+    for(let x=0;x+w<=_DB_COLS;x++){ let y=0; for(let i=x;i<x+w;i++)y=Math.max(y,bottom[i]); if(y<by){by=y;bx=x;} }
+    p.gx=bx;p.gy=by;p.w=w;p.h=h;
+    for(let i=bx;i<bx+w;i++)bottom[i]=by+h;
+  });
+}
+function _dbCollide(a,b){ return a.gx<b.gx+b.w && a.gx+a.w>b.gx && a.gy<b.gy+b.h && a.gy+a.h>b.gy; }
+function _dbCompact(panels){                // gravity-up compaction preserving order
+  const sorted=panels.slice().sort((a,b)=>(a.gy-b.gy)||(a.gx-b.gx));
+  const placed=[];
+  sorted.forEach(p=>{ let y=p.gy; while(y>0&&!placed.some(q=>_dbCollide({...p,gy:y-1},q)))y--; p.gy=y; placed.push(p); });
+}
+function _dbResolve(panels,active){         // push panels the active one overlaps downward, then compact
+  let guard=0,moved=true;
+  while(moved&&guard++<300){
+    moved=false;
+    for(const p of panels){
+      if(p===active)continue;
+      if(_dbCollide(p,active)){ p.gy=active.gy+active.h; moved=true; }
+    }
+    // cascade: anything now overlapping a pushed panel also drops
+    for(const p of panels)for(const q of panels){ if(p!==q&&_dbCollide(p,q)&&p.gy<q.gy){ /* keep order */ } }
+  }
+  _dbCompact(panels.filter(p=>p!==active).concat([active]).sort((a,b)=>a.gy-b.gy||a.gx-b.gx));
+}
+
 function dbRender(){
   const grid=document.getElementById("db-grid"),dash=dbCur(); if(!grid||!dash)return;
   grid.classList.toggle("db-editing",_db.editing);
-  if(!dash.panels.length){ grid.innerHTML=`<div class="text-slate-600 text-xs" style="grid-column:span 12">${_trText("пусто — добавь панель")}</div>`; return; }
-  grid.innerHTML=dash.panels.map(p=>`<div class="db-panel" style="grid-column:span ${Math.max(2,Math.min(12,p.span||4))}">
-    <div class="db-head"><span class="db-title">${esc(p.title||p.type)}</span>
+  if(_dbNormalize(dash))dbPersist();
+  if(!dash.panels.length){ grid.innerHTML=`<div class="text-slate-600 text-xs" style="grid-column:1 / span 12">${_trText("пусто — добавь панель")}</div>`; return; }
+  const maxRow=Math.max(6,...dash.panels.map(p=>p.gy+p.h));
+  grid.style.gridTemplateRows=`repeat(${maxRow},${_DB_ROWH}px)`;
+  grid.innerHTML=`<div class="db-ghost" id="db-ghost"></div>`+dash.panels.map(p=>`<div class="db-panel" data-pid="${esc(p.id)}"
+    style="grid-column:${(p.gx|0)+1} / span ${Math.max(2,Math.min(12,p.w||4))};grid-row:${(p.gy|0)+1} / span ${Math.max(2,p.h||4)}">
+    <div class="db-head" onpointerdown="dbDragStart(event,'${escJs(p.id)}')"><span class="db-title">${esc(p.title||p.type)}</span>
       <span class="db-tools">
-        <button onclick="dbMovePanel('${escJs(p.id)}',-1)" class="text-[11px] text-slate-400" title="←">◄</button>
-        <button onclick="dbMovePanel('${escJs(p.id)}',1)" class="text-[11px] text-slate-400" title="→">►</button>
-        <button onclick="dbDupPanel('${escJs(p.id)}')" class="text-[11px] text-slate-300" title="duplicate">⧉</button>
-        <button onclick="dbEditPanel('${escJs(p.id)}')" class="text-[11px] text-indigo-300">✎</button>
-        <button onclick="dbDelPanel('${escJs(p.id)}')" class="text-[11px] text-rose-300">✕</button></span></div>
-    <div class="db-body flex-1" id="dbp-${esc(p.id)}"></div></div>`).join("");
+        <button onpointerdown="event.stopPropagation()" onclick="dbDupPanel('${escJs(p.id)}')" class="text-[11px] text-slate-300" title="duplicate">⧉</button>
+        <button onpointerdown="event.stopPropagation()" onclick="dbEditPanel('${escJs(p.id)}')" class="text-[11px]" style="color:var(--accent2)" title="edit">✎</button>
+        <button onpointerdown="event.stopPropagation()" onclick="dbDelPanel('${escJs(p.id)}')" class="text-[11px] text-rose-300" title="remove">✕</button></span></div>
+    <div class="db-body" id="dbp-${esc(p.id)}"></div>
+    <div class="db-resize" onpointerdown="dbResizeStart(event,'${escJs(p.id)}')"></div></div>`).join("");
   dash.panels.forEach(dbFillPanel);
 }
 function dbFillPanel(p){
   const el=document.getElementById("dbp-"+p.id); if(!el)return;
   try{
     if(p.type==="stat")el.innerHTML=_dbStat(p);
-    else if(p.type==="timeseries")el.innerHTML=_dbTimeseries(p);
-    else if(p.type==="bar")el.innerHTML=_dbBar(p);
+    else if(p.type==="multistat")el.innerHTML=_dbMulti(p);
+    else if(p.type==="timeseries")el.innerHTML=_dbTimeseries(p,false);
+    else if(p.type==="stacked")el.innerHTML=_dbTimeseries(p,true);
+    else if(p.type==="heatmap")el.innerHTML=_dbHeatmap(p);
+    else if(p.type==="bar")el.innerHTML=_dbBar(p,false);
+    else if(p.type==="hbar")el.innerHTML=_dbBar(p,true);
     else if(p.type==="table")el.innerHTML=_dbTable(p);
-    else if(p.type==="pie")el.innerHTML=_dbPie(p);
+    else if(p.type==="pie")el.innerHTML=_dbPie(p,false);
+    else if(p.type==="donut")el.innerHTML=_dbPie(p,true);
     else if(p.type==="gauge")el.innerHTML=_dbGauge(p);
     else if(p.type==="geo")el.innerHTML=_dbGeo(p);
     else if(p.type==="logs"){ el.innerHTML=`<span class="text-slate-600 text-xs">…</span>`; _dbLogsPanel(p,el); }
     else el.innerHTML=`<span class="text-slate-600 text-xs">${esc(p.type)}?</span>`;
   }catch(e){ el.innerHTML=`<span class="text-rose-400 text-xs">${esc(e.message)}</span>`; }
 }
+
+// ── SVG helpers ────────────────────────────────────────────────────────────────
+function _smooth(pts){                       // Catmull-Rom → cubic Bézier path 'd'
+  if(pts.length<2)return pts.length?`M${pts[0][0]},${pts[0][1]}`:"";
+  let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
+    const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+function _niceMax(v){ if(v<=0)return 1; const p=Math.pow(10,Math.floor(Math.log10(v))); const n=v/p;
+  const s=n<=1?1:n<=2?2:n<=5?5:10; return s*p; }
+
+const _dbHov={};   // panel-id → {W,H,pl,pr,pt,pb,plotW,plotH,n,xs,series:[{color,pts,name}],fmt,tf}
+function _dbTimeseries(p,stacked){
+  const snaps=_dbData.history||[],metrics=(p.metrics&&p.metrics.length?p.metrics:[p.metric]).filter(Boolean);
+  if(snaps.length<2||!metrics.length)return `<div class="db-empty text-slate-600 text-xs">${_trText("мало точек")}</div>`;
+  const W=600,H=200,pl=42,pr=10,pt=10,pb=20,plotW=W-pl-pr,plotH=H-pt-pb;
+  const n=snaps.length, xs=snaps.map((s,i)=>pl+(n===1?0:i/(n-1)*plotW));
+  // series values
+  const vals=metrics.map(m=>snaps.map(s=>+s[m]||0));
+  let max=1;
+  if(stacked){ for(let i=0;i<n;i++){ let sum=0; vals.forEach(v=>sum+=v[i]); if(sum>max)max=sum; } }
+  else { vals.forEach(v=>v.forEach(x=>{ if(x>max)max=x; })); }
+  max=_niceMax(max);
+  const Y=v=>pt+plotH-(v/max)*plotH;
+  const defs=[],paths=[],dots=[];
+  const stackTop=new Array(n).fill(0); // running total for stacked
+  const seriesMeta=[];
+  metrics.forEach((m,mi)=>{
+    const col=_DB_PALETTE[mi%_DB_PALETTE.length];
+    let linePts,areaPts;
+    if(stacked){
+      const topY=[],botY=[];
+      for(let i=0;i<n;i++){ const base=stackTop[i]; stackTop[i]=base+vals[mi][i]; topY.push([xs[i],Y(stackTop[i])]); botY.push([xs[i],Y(base)]); }
+      linePts=topY;
+      const dTop=_smooth(topY), dBot=botY.slice().reverse().map(pt2=>`L${pt2[0].toFixed(1)},${pt2[1].toFixed(1)}`).join("");
+      paths.push(`<path d="${dTop} ${dBot} Z" fill="${col}" fill-opacity=".28"/>`);
+      paths.push(`<path d="${dTop}" fill="none" stroke="${col}" stroke-width="1.6"/>`);
+    } else {
+      linePts=vals[mi].map((v,i)=>[xs[i],Y(v)]);
+      const gid=`g-${p.id}-${mi}`;
+      defs.push(`<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity="${metrics.length>1?.18:.34}"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient>`);
+      const dLine=_smooth(linePts);
+      paths.push(`<path d="${dLine} L${xs[n-1].toFixed(1)},${(pt+plotH).toFixed(1)} L${xs[0].toFixed(1)},${(pt+plotH).toFixed(1)} Z" fill="url(#${gid})"/>`);
+      paths.push(`<path d="${dLine}" fill="none" stroke="${col}" stroke-width="1.8"/>`);
+    }
+    dots.push(`<circle cx="${linePts[n-1][0].toFixed(1)}" cy="${linePts[n-1][1].toFixed(1)}" r="2.6" fill="${col}"/>`);
+    seriesMeta.push({color:col,pts:linePts,name:(_DB_METRICS[m]||{l:m}).l,vals:vals[mi]});
+  });
+  // axes: y gridlines/labels + x time labels
+  let ax="";
+  for(let g=0;g<=2;g++){ const v=max*g/2,y=Y(v);
+    ax+=`<line x1="${pl}" y1="${y.toFixed(1)}" x2="${W-pr}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`+
+        `<text class="db-ax" x="${pl-5}" y="${(y+3).toFixed(1)}" text-anchor="end">${esc(_dbNum(v))}</text>`; }
+  const xticks=Math.min(4,n-1);
+  for(let t=0;t<=xticks;t++){ const i=Math.round(t/xticks*(n-1));
+    ax+=`<text class="db-ax" x="${xs[i].toFixed(1)}" y="${(H-6)}" text-anchor="middle">${esc(_dbHHMM(snaps[i].ts))}</text>`; }
+  _dbHov[p.id]={W,H,pl,plotW,n,xs,pt,plotH,series:seriesMeta,fmt:v=>_dbNum(v),snaps};
+  const legend=seriesMeta.map(s=>`<span style="color:${s.color}">● <span style="color:var(--muted)">${esc(s.name)}</span></span>`).join(" &nbsp; ");
+  return `<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:calc(100% - 16px)" onmousemove="dbTsMove(event,'${escJs(p.id)}')" onmouseleave="dbTsLeave('${escJs(p.id)}')">
+    <defs>${defs.join("")}</defs>${ax}${paths.join("")}${dots.join("")}
+    <g id="cx-${esc(p.id)}" style="display:none"><line class="db-crosshair" y1="${pt}" y2="${pt+plotH}"/></g></svg>`;
+}
+function dbTsMove(ev,id){
+  const H=_dbHov[id]; if(!H)return; const svg=ev.currentTarget,r=svg.getBoundingClientRect();
+  const vx=(ev.clientX-r.left)/r.width*H.W;
+  let i=Math.round((vx-H.pl)/H.plotW*(H.n-1)); i=Math.max(0,Math.min(H.n-1,i));
+  const g=document.getElementById("cx-"+id); if(!g)return;
+  const x=H.xs[i]; g.style.display="";
+  const ln=g.querySelector("line"); ln.setAttribute("x1",x); ln.setAttribute("x2",x);
+  [...g.querySelectorAll(".db-hd,.db-tip-g")].forEach(n=>n.remove());
+  let dots="";
+  H.series.forEach(s=>{ const py=s.pts[i][1]; dots+=`<circle class="db-hd" cx="${x.toFixed(1)}" cy="${py.toFixed(1)}" r="3.2" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5"/>`; });
+  // tooltip box
+  const lines=H.series.map(s=>`${s.name}: ${H.fmt(s.vals[i])}`);
+  const tw=Math.max(...lines.map(l=>l.length),8)*5.4+16, th=14+lines.length*13, tx=Math.min(H.W-tw-4,Math.max(4,x+8)), ty=H.pt+4;
+  let tip=`<g class="db-tip-g"><rect class="db-tip-box" x="${tx.toFixed(1)}" y="${ty}" width="${tw.toFixed(1)}" height="${th}" rx="6"/>`;
+  tip+=`<text class="db-ax" x="${(tx+8).toFixed(1)}" y="${ty+12}" style="fill:var(--faint)">${esc(_dbHHMM(H.snaps[i].ts))}</text>`;
+  H.series.forEach((s,k)=>{ tip+=`<text x="${(tx+8).toFixed(1)}" y="${ty+25+k*13}" font-size="10" fill="var(--text)"><tspan fill="${s.color}">●</tspan> ${esc(s.name)}: ${esc(String(H.fmt(s.vals[i])))}</text>`; });
+  tip+=`</g>`;
+  g.insertAdjacentHTML("beforeend",dots+tip);
+}
+function dbTsLeave(id){ const g=document.getElementById("cx-"+id); if(g){g.style.display="none";[...g.querySelectorAll(".db-hd,.db-tip-g")].forEach(n=>n.remove());} }
+
 function _dbStat(p){
   const m=p.metric,meta=_DB_METRICS[m]||{l:m,f:v=>v},v=(_dbData.summary||{})[m];
   const spark=(_dbData.history||[]).map(s=>+s[m]||0);
-  return `<div class="db-stat-val">${v==null?"—":esc(String(meta.f(v)))}</div><div class="db-stat-sub">${esc(meta.l)}</div>${spark.length>1?_dbSpark(spark):""}`;
+  let delta="";
+  if(spark.length>1){ const a=spark[0],b=spark[spark.length-1],d=b-a;
+    const cls=Math.abs(d)<1e-9?"flat":d>0?"up":"dn",arr=cls==="flat"?"→":d>0?"▲":"▼";
+    const pctd=a?Math.abs(d/a*100):0; delta=`<span class="db-delta ${cls}">${arr} ${pctd>=1?Math.round(pctd)+"%":_dbNum(Math.abs(d))}</span>`; }
+  return `<div class="db-stat-wrap"><div><span class="db-stat-val">${v==null?"—":esc(String(meta.f(v)))}</span>${delta}</div>
+    <div class="db-stat-sub">${esc(meta.l)}</div>${spark.length>1?_dbSpark(spark,p.id):""}</div>`;
 }
-function _dbSpark(vals){
-  const w=160,h=28,max=Math.max(...vals,1),min=Math.min(...vals,0),rng=(max-min)||1;
-  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-((v-min)/rng)*h).toFixed(1)}`).join(" ");
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:28px;margin-top:6px"><polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="1.5"/></svg>`;
+function _dbSpark(vals,id){
+  const w=200,h=34,max=Math.max(...vals,1),min=Math.min(...vals,0),rng=(max-min)||1;
+  const pts=vals.map((v,i)=>[i/(vals.length-1)*w,h-((v-min)/rng)*h]);
+  const gid="sp-"+id;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:34px;margin-top:8px">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".34"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${_smooth(pts)} L${w},${h} L0,${h} Z" fill="url(#${gid})"/>
+    <path d="${_smooth(pts)}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+    <circle cx="${pts[pts.length-1][0].toFixed(1)}" cy="${pts[pts.length-1][1].toFixed(1)}" r="2.4" fill="var(--accent2)"/></svg>`;
 }
-const _DB_COLORS=["#60a5fa","#34d399","#fbbf24","#f87171","#a78bfa","#22d3ee"];
-function _dbTimeseries(p){
-  const snaps=_dbData.history||[],metrics=p.metrics||[p.metric].filter(Boolean);
-  if(snaps.length<2)return `<span class="text-slate-600 text-xs">${_trText("мало точек")}</span>`;
-  const w=600,h=160,pad=4; let max=1; snaps.forEach(s=>metrics.forEach(m=>{max=Math.max(max,+s[m]||0);}));
-  const X=i=>(i/(snaps.length-1))*(w-pad*2)+pad,Y=v=>h-pad-((+v||0)/max)*(h-pad*2);
-  const lines=metrics.map((m,mi)=>`<polyline points="${snaps.map((s,i)=>X(i).toFixed(1)+","+Y(s[m]).toFixed(1)).join(" ")}" fill="none" stroke="${_DB_COLORS[mi%_DB_COLORS.length]}" stroke-width="1.5"/>`).join("");
-  const legend=metrics.map((m,mi)=>`<span style="color:${_DB_COLORS[mi%_DB_COLORS.length]}">● ${esc((_DB_METRICS[m]||{l:m}).l)}</span>`).join(" ");
-  return `<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:160px">${lines}</svg>`;
+function _dbMulti(p){
+  const ms=(p.metrics&&p.metrics.length?p.metrics:[p.metric||"requests_total"]).filter(Boolean);
+  const sum=_dbData.summary||{};
+  return `<div class="db-multi">`+ms.map(m=>{ const meta=_DB_METRICS[m]||{l:m,f:v=>v},v=sum[m];
+    return `<div class="m"><div class="mv">${v==null?"—":esc(String(meta.f(v)))}</div><div class="ml">${esc(meta.l)}</div></div>`;
+  }).join("")+`</div>`;
 }
 function _dbList(key){ let v=(_dbData.analytics||{})[key]; if(!Array.isArray(v))v=[];
   return v.map(it=>({k:it.key!=null?it.key:(it.name||it.label||it.uri||it.cc||"—"),n:+it.count||+it.n||+it.hits||0})); }
-function _dbBar(p){
+function _dbBar(p,pct){
   const rows=_dbList(p.key).slice(0,8); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
-  const max=Math.max(...rows.map(r=>r.n),1);
-  return rows.map(r=>`<div class="db-bar-row"><span class="db-bar-k" title="${esc(String(r.k))}">${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${Math.round(r.n/max*100)}%"></span></span><span class="db-bar-n">${_dbNum(r.n)}</span></div>`).join("");
+  const total=rows.reduce((s,r)=>s+r.n,0)||1,max=Math.max(...rows.map(r=>r.n),1);
+  return rows.map(r=>{ const w=pct?Math.round(r.n/total*100):Math.round(r.n/max*100);
+    const rt=pct?Math.round(r.n/total*100)+"%":_dbNum(r.n);
+    return `<div class="db-bar-row"><span class="db-bar-k" title="${esc(String(r.k))}">${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${w}%"></span></span><span class="db-bar-n">${rt}</span></div>`; }).join("");
 }
 function _dbTable(p){
-  const rows=_dbList(p.key).slice(0,12); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
-  return `<table class="db-tbl"><thead><tr><th>${esc(_DB_ANALYTICS[p.key]||p.key)}</th><th style="text-align:right">#</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(String(r.k))}</td><td style="text-align:right">${_dbNum(r.n)}</td></tr>`).join("")}</tbody></table>`;
+  const rows=_dbList(p.key).slice(0,20); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  return `<div style="overflow:auto;height:100%"><table class="db-tbl"><thead><tr><th>${esc(_DB_ANALYTICS[p.key]||p.key)}</th><th style="text-align:right">#</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(String(r.k))}</td><td style="text-align:right">${_dbNum(r.n)}</td></tr>`).join("")}</tbody></table></div>`;
 }
-function _dbPie(p){
-  const rows=_dbList(p.key).slice(0,6); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
-  const total=rows.reduce((s,r)=>s+r.n,0)||1; const R=52,C=2*Math.PI*R; let off=0;
-  const ring=rows.map((r,i)=>{const frac=r.n/total,len=frac*C,seg=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${_DB_COLORS[i%_DB_COLORS.length]}" stroke-width="16" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"/>`;off+=len;return seg;}).join("");
-  const legend=rows.map((r,i)=>`<div class="flex items-center gap-1.5 text-[11px]"><span style="color:${_DB_COLORS[i%_DB_COLORS.length]}">●</span><span class="truncate flex-1" style="color:#94a3b8">${esc(String(r.k))}</span><span style="color:#cbd5e1">${Math.round(r.n/total*100)}%</span></div>`).join("");
-  return `<div class="flex items-center gap-3"><svg viewBox="0 0 120 120" style="width:100px;height:100px;flex-shrink:0">${ring}</svg><div class="flex-1 min-w-0 space-y-0.5">${legend}</div></div>`;
+function _dbPie(p,donut){
+  const rows=_dbList(p.key).slice(0,7); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  const total=rows.reduce((s,r)=>s+r.n,0)||1; const R=52,sw=donut?15:26,C=2*Math.PI*R; let off=0;
+  const ring=rows.map((r,i)=>{const frac=r.n/total,len=frac*C,seg=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${_DB_PALETTE[i%_DB_PALETTE.length]}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"><title>${esc(String(r.k))}: ${_dbNum(r.n)} (${Math.round(frac*100)}%)</title></circle>`;off+=len;return seg;}).join("");
+  const center=donut?`<text x="60" y="56" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)">${_dbNum(total)}</text><text x="60" y="72" text-anchor="middle" font-size="9" fill="var(--faint)">total</text>`:"";
+  const legend=rows.map((r,i)=>`<div class="flex items-center gap-1.5 text-[11px]"><span style="color:${_DB_PALETTE[i%_DB_PALETTE.length]}">●</span><span class="truncate flex-1" style="color:var(--muted)">${esc(String(r.k))}</span><span style="color:var(--text)">${Math.round(r.n/total*100)}%</span></div>`).join("");
+  return `<div class="flex items-center gap-3 h-full"><svg viewBox="0 0 120 120" style="width:112px;height:112px;flex-shrink:0">${ring}${center}</svg><div class="flex-1 min-w-0 space-y-0.5" style="overflow:auto;max-height:100%">${legend}</div></div>`;
 }
 function _dbGauge(p){
   const m=p.metric,meta=_DB_METRICS[m]||{l:m},raw=(_dbData.summary||{})[m];
-  let frac=+raw||0; if(frac>1)frac=Math.min(1,frac/100);    // ratios are 0..1; pct-ish 0..100
+  let frac=+raw||0; if(frac>1)frac=Math.min(1,frac/100);
   const pct=Math.round(frac*100),R=46,C=Math.PI*R,len=frac*C;
-  const col=frac>=0.66?"#34d399":frac>=0.33?"#fbbf24":"#f87171";
-  return `<div class="flex flex-col items-center"><svg viewBox="0 0 120 70" style="width:140px;height:80px">
-    <path d="M14 60 A46 46 0 0 1 106 60" fill="none" stroke="#1e293b" stroke-width="12" stroke-linecap="round"/>
+  const col=frac>=0.66?"var(--ok)":frac>=0.33?"var(--warn)":"var(--crit)";
+  return `<div class="flex flex-col items-center justify-center h-full"><svg viewBox="0 0 120 70" style="width:150px;height:84px">
+    <path d="M14 60 A46 46 0 0 1 106 60" fill="none" stroke="var(--border)" stroke-width="12" stroke-linecap="round"/>
     <path d="M14 60 A46 46 0 0 1 106 60" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${len.toFixed(1)} ${C.toFixed(1)}"/></svg>
-    <div class="db-stat-val" style="font-size:22px;margin-top:-8px">${pct}%</div><div class="db-stat-sub">${esc(meta.l)}</div></div>`;
+    <div class="db-stat-val" style="font-size:24px;margin-top:-10px">${pct}%</div><div class="db-stat-sub">${esc(meta.l)}</div></div>`;
+}
+function _dbHeatmap(p){
+  const snaps=_dbData.history||[],metrics=(p.metrics&&p.metrics.length?p.metrics:[p.metric]).filter(Boolean);
+  if(snaps.length<2||!metrics.length)return `<div class="text-slate-600 text-xs">${_trText("мало точек")}</div>`;
+  const N=Math.min(snaps.length,60),step=Math.ceil(snaps.length/N);
+  const idx=[]; for(let i=0;i<snaps.length;i+=step)idx.push(i);
+  const rows=metrics.map(m=>{
+    const cells=idx.map(i=>+snaps[i][m]||0),mx=Math.max(...cells,1);
+    const html=idx.map((i,k)=>{ const v=cells[k],t=Math.log10(v+1)/Math.log10(mx+1);
+      return `<div class="db-hm-cell" style="background:${_hmColor(t)}" title="${esc(_dbHHMM(snaps[i].ts))} · ${esc((_DB_METRICS[m]||{l:m}).l)}: ${_dbNum(v)}"></div>`; }).join("");
+    return `<div class="db-hm-row"><span class="db-hm-lbl">${esc((_DB_METRICS[m]||{l:m}).l)}</span><span class="db-hm-cells">${html}</span></div>`;
+  }).join("");
+  const t0=_dbHHMM(snaps[idx[0]].ts),t1=_dbHHMM(snaps[idx[idx.length-1]].ts);
+  return rows+`<div class="flex justify-between mt-1" style="font-size:9px;color:var(--faint);padding-left:94px"><span>${esc(t0)}</span><span>${esc(t1)}</span></div>`;
+}
+function _hmColor(t){ // 0..1 → dark → accent ramp
+  t=Math.max(0,Math.min(1,t));
+  const a=[40,39,56],b=[139,124,246]; // --border-ish → --accent
+  const c=a.map((x,i)=>Math.round(x+(b[i]-x)*t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 function _dbGeo(p){
   const rows=_dbList("geo").slice(0,10); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
@@ -2243,87 +2452,144 @@ function _dbGeo(p){
 }
 async function _dbLogsPanel(p,el){
   try{
-    const body={search:p.search||"",chips:[],sources:{},minutes:p.minutes||15,limit:12,env:(dbCur().vars||{}).env||_env||""};
+    const body={search:p.search||"",chips:[],sources:{},minutes:p.minutes||15,limit:20,env:(dbCur().vars||{}).env||_env||""};
     const d=await fetch("/api/logs/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json());
     const rows=d.rows||[];
-    el.innerHTML=rows.length?`<table class="db-tbl"><tbody>${rows.map(r=>`<tr><td class="mono" style="color:#5b6577;width:54px">${esc(r.time)}</td><td class="mono" style="color:${_lgStatusColor(r.status)};width:30px">${esc(r.status||"")}</td><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(r.path||r.line||"")}</td></tr>`).join("")}</tbody></table>`
+    el.innerHTML=rows.length?`<div style="overflow:auto;height:100%"><table class="db-tbl"><tbody>${rows.map(r=>`<tr><td class="mono" style="color:var(--faint);width:54px">${esc(r.time)}</td><td class="mono" style="color:${_lgStatusColor(r.status)};width:30px">${esc(r.status||"")}</td><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(r.path||r.line||"")}</td></tr>`).join("")}</tbody></table></div>`
       :`<span class="text-slate-600 text-xs">${_trText("нет строк под фильтр")}</span>`;
   }catch(e){ el.innerHTML=`<span class="text-rose-400 text-xs">${esc(e.message)}</span>`; }
 }
+
+// ── edit-mode: toggle, drag-move, resize ───────────────────────────────────────
 function dbToggleEdit(){ _db.editing=!_db.editing; document.getElementById("db-editmode").classList.toggle("btn-primary",_db.editing); dbRender(); }
-function dbDelPanel(id){ const d=dbCur(); d.panels=d.panels.filter(p=>p.id!==id); dbPersist(); dbRender(); }
+function dbDelPanel(id){ const d=dbCur(); d.panels=d.panels.filter(p=>p.id!==id); _dbCompact(d.panels); dbPersist(); dbRender(); }
 function dbDupPanel(id){ const d=dbCur(),p=d.panels.find(x=>x.id===id); if(!p)return;
-  const c=JSON.parse(JSON.stringify(p)); c.id="p"+Date.now(); c.title=(p.title||"")+" copy";
-  const ix=d.panels.findIndex(x=>x.id===id); d.panels.splice(ix+1,0,c); dbPersist(); dbRender(); }
-function dbMovePanel(id,dir){ const d=dbCur(),ix=d.panels.findIndex(x=>x.id===id),j=ix+dir;
-  if(ix<0||j<0||j>=d.panels.length)return; const a=d.panels; [a[ix],a[j]]=[a[j],a[ix]]; dbPersist(); dbRender(); }
+  const c=JSON.parse(JSON.stringify(p)); c.id="p"+Date.now(); c.title=(p.title||"")+" copy"; c.gy=p.gy+p.h; c.gx=p.gx;
+  d.panels.push(c); _dbResolve(d.panels,c); dbPersist(); dbRender(); }
 function dbAddPanel(){ dbEditPanel(null); }
+
+let _dbDrag=null;
+function _dbGridMetrics(){ const g=document.getElementById("db-grid"),r=g.getBoundingClientRect();
+  const colW=(r.width-_DB_GAP*(_DB_COLS-1))/_DB_COLS; return {g,r,colW}; }
+function dbDragStart(ev,id){
+  if(!_db.editing)return; if(ev.target.closest(".db-tools"))return;
+  ev.preventDefault(); const d=dbCur(),p=d.panels.find(x=>x.id===id); if(!p)return;
+  const {colW}=_dbGridMetrics(),el=ev.currentTarget.closest(".db-panel");
+  _dbDrag={id,p,mode:"move",colW,sx:ev.clientX,sy:ev.clientY,gx0:p.gx,gy0:p.gy,el};
+  el.classList.add("db-dragging"); el.setPointerCapture&&el.setPointerCapture(ev.pointerId);
+  _dbShowGhost(p); window.addEventListener("pointermove",_dbDragMove); window.addEventListener("pointerup",_dbDragEnd);
+}
+function dbResizeStart(ev,id){
+  if(!_db.editing)return; ev.preventDefault(); ev.stopPropagation();
+  const d=dbCur(),p=d.panels.find(x=>x.id===id); if(!p)return;
+  const {colW}=_dbGridMetrics(),el=document.querySelector(`.db-panel[data-pid="${CSS.escape(id)}"]`);
+  _dbDrag={id,p,mode:"resize",colW,sx:ev.clientX,sy:ev.clientY,w0:p.w,h0:p.h,el};
+  _dbShowGhost(p); window.addEventListener("pointermove",_dbDragMove); window.addEventListener("pointerup",_dbDragEnd);
+}
+function _dbGhostPx(gx,gy,w,h){ const cw=_dbDrag.colW;
+  return {left:gx*(cw+_DB_GAP),top:gy*(_DB_ROWH+_DB_GAP),width:w*cw+(w-1)*_DB_GAP,height:h*_DB_ROWH+(h-1)*_DB_GAP}; }
+function _dbShowGhost(p){ const gh=document.getElementById("db-ghost"); if(!gh)return;
+  const b=_dbGhostPx(p.gx,p.gy,p.w,p.h); gh.style.display="block";
+  gh.style.left=b.left+"px"; gh.style.top=b.top+"px"; gh.style.width=b.width+"px"; gh.style.height=b.height+"px"; }
+function _dbDragMove(ev){
+  if(!_dbDrag)return; const p=_dbDrag.p,cw=_dbDrag.colW;
+  if(_dbDrag.mode==="move"){
+    const dcol=Math.round((ev.clientX-_dbDrag.sx)/(cw+_DB_GAP)),drow=Math.round((ev.clientY-_dbDrag.sy)/(_DB_ROWH+_DB_GAP));
+    p.gx=Math.max(0,Math.min(_DB_COLS-p.w,_dbDrag.gx0+dcol)); p.gy=Math.max(0,_dbDrag.gy0+drow);
+  } else {
+    const dcol=Math.round((ev.clientX-_dbDrag.sx)/(cw+_DB_GAP)),drow=Math.round((ev.clientY-_dbDrag.sy)/(_DB_ROWH+_DB_GAP));
+    p.w=Math.max(2,Math.min(_DB_COLS-p.gx,_dbDrag.w0+dcol)); p.h=Math.max(2,_dbDrag.h0+drow);
+    if(_dbDrag.el){ _dbDrag.el.style.gridColumn=`${p.gx+1} / span ${p.w}`; _dbDrag.el.style.gridRow=`${p.gy+1} / span ${p.h}`; }
+  }
+  _dbShowGhost(p);
+}
+function _dbDragEnd(){
+  window.removeEventListener("pointermove",_dbDragMove); window.removeEventListener("pointerup",_dbDragEnd);
+  const gh=document.getElementById("db-ghost"); if(gh)gh.style.display="none";
+  if(!_dbDrag)return; const d=dbCur();
+  _dbResolve(d.panels,_dbDrag.p);
+  _dbDrag=null; dbPersist(); dbRender();
+}
+
+// ── panel editor ───────────────────────────────────────────────────────────────
 async function dbEditPanel(id){
   const d=dbCur(),src=id?d.panels.find(x=>x.id===id):null;
-  _dbEdit=src?JSON.parse(JSON.stringify(src)):{id:"p"+Date.now(),type:"stat",span:4};
+  _dbEdit=src?JSON.parse(JSON.stringify(src)):{id:"p"+Date.now(),type:"stat",w:4,h:_dbDefH("stat")};
   if(!_dbEdit.metric)_dbEdit.metric="requests_total"; if(!_dbEdit.key)_dbEdit.key="top_paths";
+  if(!_dbEdit.metrics)_dbEdit.metrics=[_dbEdit.metric];
   const mo=Object.keys(_DB_METRICS).map(k=>`<option value="${k}" ${_dbEdit.metric===k?"selected":""}>${esc(_DB_METRICS[k].l)}</option>`).join("");
   const ao=Object.keys(_DB_ANALYTICS).map(k=>`<option value="${k}" ${_dbEdit.key===k?"selected":""}>${esc(_DB_ANALYTICS[k])}</option>`).join("");
-  const to=t=>`<option value="${t}" ${_dbEdit.type===t?"selected":""}>${t==="timeseries"?"time-series":t}</option>`;
+  const to=_DB_TYPES.map(([t,l])=>`<option value="${t}" ${_dbEdit.type===t?"selected":""}>${esc(l)}</option>`).join("");
+  const mp=Object.keys(_DB_METRICS).map(k=>`<label><input type="checkbox" value="${k}" ${(_dbEdit.metrics||[]).includes(k)?"checked":""} onchange="dbeMetricsToggle(this)"> ${esc(_DB_METRICS[k].l)}</label>`).join("");
   const body=`<div class="space-y-2 text-[12px]" style="color:var(--muted)">
     <label class="block">${_trText("Заголовок")}<input class="input mt-1" oninput="_dbEdit.title=this.value" value="${esc(_dbEdit.title||"")}"></label>
-    <label class="block">${_trText("Тип")}<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${["stat","timeseries","bar","table","pie","gauge","geo","logs"].map(to).join("")}</select></label>
+    <label class="block">${_trText("Тип")}<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${to}</select></label>
     <label class="block" id="dbe-metric-wrap">${_trText("Метрика")}<select class="input mt-1" onchange="_dbEdit.metric=this.value">${mo}</select></label>
+    <div class="block" id="dbe-metrics-wrap">${_trText("Метрики")}<div class="db-mp mt-1">${mp}</div></div>
     <label class="block" id="dbe-ana-wrap">${_trText("Источник (топ)")}<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
     <label class="block hidden" id="dbe-logs-wrap">${_trText("Поиск в логах")}<input class="input mono mt-1" oninput="_dbEdit.search=this.value" value="${esc(_dbEdit.search||"")}" placeholder="/wp-login"></label>
-    <label class="block">${_trText("Ширина")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.span=+this.value" value="${_dbEdit.span||4}"></label></div>`;
+    <label class="flex items-center gap-2 hidden" id="dbe-area-wrap"><input type="checkbox" ${_dbEdit.area!==false?"checked":""} onchange="_dbEdit.area=this.checked"> ${_trText("Заливка area")}</label>
+    <div class="flex gap-2"><label class="flex-1">${_trText("Ширина")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.w=+this.value" value="${_dbEdit.w||4}"></label>
+    <label class="flex-1">${_trText("Высота")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.h=+this.value" value="${_dbEdit.h||_dbDefH(_dbEdit.type)}"></label></div></div>`;
   setTimeout(dbeTypeChange,0);
   const r=await _showModal({title:_trText(id?"Панель":"Новая панель"),body,
     buttons:[{label:_CANCEL(),value:null,esc:true},{label:_trText("Сохранить"),kind:"primary",value:"save",enter:true}]});
   if(r==="save")dbSavePanel(id);
 }
+function dbeMetricsToggle(cb){ const s=new Set(_dbEdit.metrics||[]); cb.checked?s.add(cb.value):s.delete(cb.value); _dbEdit.metrics=[...s]; }
 function dbeTypeChange(){
-  const t=_dbEdit.type,mw=document.getElementById("dbe-metric-wrap"),aw=document.getElementById("dbe-ana-wrap"),lw=document.getElementById("dbe-logs-wrap");
-  if(mw)mw.classList.toggle("hidden",!(t==="stat"||t==="timeseries"||t==="gauge"));
-  if(aw)aw.classList.toggle("hidden",!(t==="bar"||t==="table"||t==="pie"));   // geo fixed to "geo"
-  if(lw)lw.classList.toggle("hidden",t!=="logs");
+  const t=_dbEdit.type;
+  const show=(elid,on)=>{const e=document.getElementById(elid);if(e)e.classList.toggle("hidden",!on);};
+  show("dbe-metric-wrap",_DB_T_METRIC.includes(t));
+  show("dbe-metrics-wrap",_DB_T_METRICS.includes(t));
+  show("dbe-ana-wrap",_DB_T_ANALYTICS.includes(t));
+  show("dbe-logs-wrap",t==="logs");
+  show("dbe-area-wrap",t==="timeseries");
 }
 function dbSavePanel(id){
   const d=dbCur(),e=_dbEdit,t=e.type;
-  const p={id:e.id,type:t,title:(e.title||"").trim(),span:Math.max(2,Math.min(12,+e.span||4))};
-  if(t==="stat"||t==="gauge"){p.source="summary";p.metric=e.metric;}
-  else if(t==="timeseries"){p.source="history";p.metrics=[e.metric];}
-  else if(t==="bar"||t==="table"||t==="pie"){p.source="analytics";p.key=e.key;}
+  const p={id:e.id,type:t,title:(e.title||"").trim(),w:Math.max(2,Math.min(12,+e.w||4)),h:Math.max(2,Math.min(12,+e.h||_dbDefH(t))),gx:e.gx,gy:e.gy};
+  p.span=p.w;
+  if(_DB_T_METRIC.includes(t)){p.source="summary";p.metric=e.metric;}
+  else if(_DB_T_METRICS.includes(t)){p.source=(t==="multistat")?"summary":"history";p.metrics=(e.metrics&&e.metrics.length?e.metrics:[e.metric]); if(t==="timeseries")p.area=e.area!==false;}
+  else if(_DB_T_ANALYTICS.includes(t)){p.source="analytics";p.key=e.key;}
   else if(t==="geo"){p.source="analytics";p.key="geo";}
   else if(t==="logs"){p.source="logs";p.search=e.search||"";p.minutes=15;}
   if(!p.title){
-    if(t==="bar"||t==="table"||t==="pie")p.title=_DB_ANALYTICS[p.key]||p.key;
+    if(_DB_T_ANALYTICS.includes(t))p.title=_DB_ANALYTICS[p.key]||p.key;
     else if(t==="geo")p.title="Countries";
     else if(t==="logs")p.title="Logs";
+    else if(_DB_T_METRICS.includes(t))p.title=(p.metrics||[]).map(m=>(_DB_METRICS[m]||{l:m}).l).join(" · ")||t;
     else p.title=(_DB_METRICS[p.metric]||{l:p.metric}).l;
   }
-  const ix=id?d.panels.findIndex(x=>x.id===id):-1; if(ix>=0)d.panels[ix]=p; else d.panels.push(p);
-  dbPersist(); dbRender();
+  const ix=id?d.panels.findIndex(x=>x.id===id):-1;
+  if(ix>=0){ d.panels[ix]=p; }
+  else { p.gx=0;p.gy=Math.max(0,...d.panels.map(x=>x.gy+x.h),0); d.panels.push(p); }
+  _dbNormalize(d); if(ix>=0)_dbResolve(d.panels,p); dbPersist(); dbRender();
 }
 const _DB_PRESETS={
   attacks:{name:"Attacks",panels:[
-    {type:"stat",metric:"crs_detections",span:3,title:"CRS payloads"},
-    {type:"stat",metric:"distinct_attacker_ips",span:3,title:"Attacker IPs"},
-    {type:"gauge",metric:"malicious_ratio",span:3,title:"Malicious %"},
-    {type:"stat",metric:"forbidden_new",span:3,title:"New blocks"},
-    {type:"timeseries",metrics:["forbidden_new","crs_detections"],span:8,title:"Blocks over time"},
-    {type:"pie",key:"attack_types",span:4,title:"Attack types"},
-    {type:"table",key:"top_talkers",span:6,title:"Top talkers (IPs)"},
-    {type:"geo",key:"geo",span:6,title:"Countries"}]},
+    {type:"multistat",metrics:["crs_detections","distinct_attacker_ips","forbidden_new"],w:6,h:3,title:"Threat overview"},
+    {type:"gauge",metric:"malicious_ratio",w:3,h:3,title:"Malicious %"},
+    {type:"stat",metric:"forbidden_new",w:3,h:3,title:"New blocks"},
+    {type:"timeseries",metrics:["forbidden_new","crs_detections"],w:8,h:5,title:"Blocks over time"},
+    {type:"donut",key:"attack_types",w:4,h:5,title:"Attack types"},
+    {type:"table",key:"top_talkers",w:6,h:5,title:"Top talkers (IPs)"},
+    {type:"geo",key:"geo",w:6,h:5,title:"Countries"}]},
   performance:{name:"Performance",panels:[
-    {type:"stat",metric:"latency_p95",span:3,title:"Latency p95"},
-    {type:"gauge",metric:"availability",span:3,title:"Availability"},
-    {type:"stat",metric:"requests_total",span:3,title:"Requests"},
-    {type:"stat",metric:"bytes_mb",span:3,title:"Traffic MB"},
-    {type:"timeseries",metrics:["requests_total","requests_real"],span:8,title:"Traffic over time"},
-    {type:"bar",key:"slow_endpoints",span:4,title:"Slow endpoints"},
-    {type:"table",key:"top_paths",span:6,title:"Top paths"},
-    {type:"bar",key:"methods",span:6,title:"Methods"}]}};
+    {type:"multistat",metrics:["requests_total","latency_p95","bytes_mb"],w:6,h:3,title:"Traffic overview"},
+    {type:"gauge",metric:"availability",w:3,h:3,title:"Availability"},
+    {type:"stat",metric:"unique_visitors",w:3,h:3,title:"Unique IPs"},
+    {type:"stacked",metrics:["requests_real","forbidden_new"],w:8,h:5,title:"Traffic (stacked)"},
+    {type:"hbar",key:"methods",w:4,h:5,title:"Methods"},
+    {type:"table",key:"top_paths",w:6,h:5,title:"Top paths"},
+    {type:"bar",key:"slow_endpoints",w:6,h:5,title:"Slow endpoints"}]}};
 async function dbNewFromPreset(key){
   const pre=_DB_PRESETS[key]; if(!pre)return;
   const id="d"+Date.now();
-  const panels=pre.panels.map((p,i)=>Object.assign({id:"p"+Date.now()+i,source:p.metrics?"history":(p.metric?"summary":"analytics")},p));
-  _db.list.push({id,name:pre.name,panels,vars:{},range:""}); _db.curId=id;
+  const panels=pre.panels.map((p,i)=>Object.assign({id:"p"+Date.now()+i},p));
+  const dash={id,name:pre.name,panels,vars:{},range:""}; _dbFlow(dash.panels);
+  _db.list.push(dash); _db.curId=id;
   await dbPersist(); dbFillPicker(); dbSyncVars(); dbLoad(true);
 }
 async function dbNewDash(){
