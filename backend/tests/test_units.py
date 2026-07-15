@@ -236,6 +236,49 @@ def test_waves_digit_paths_cluster():
     assert len(waves) == 1 and waves[0]["ip_count"] == 5
 
 
+# ── S7: LogQL double-quote escaping (matcher/pipeline injection) ────────────────
+def test_re2_esc_neutralizes_quote():
+    # a value that tries to close the LogQL "..." string and inject a stage must not
+    # produce a bare closing quote; the injected " becomes \".
+    out = L._re2_esc('x" | line_format "{{.foo}}')
+    assert '\\"' in out and '"' in out
+    # no UNescaped quote: every " is preceded by a backslash
+    for i, ch in enumerate(out):
+        if ch == '"':
+            assert i > 0 and out[i - 1] == "\\", "unescaped quote at %d: %r" % (i, out)
+
+
+def test_re2_escape_matches_re2_esc_on_quote():
+    assert L._re2_escape('a"b').endswith('a\\"b') or '\\"' in L._re2_escape('a"b')
+
+
+def test_chip_clause_regex_value_escaped():
+    # op 're' (contains) with a hostile value stays inside one quoted matcher
+    clause = L._chip_clause("path", "re", 'a" | json evil="1')
+    assert clause.count('"') % 2 == 0                 # balanced → didn't break out
+    assert "| path=~" in clause
+
+
+# ── S8: SSRF connect-time address validation + scheme lockdown ──────────────────
+def test_addr_allowed_blocks_metadata_and_internal():
+    f = m._addr_allowed
+    assert f("8.8.8.8", allow_internal=False) is True
+    for bad in ("169.254.169.254", "127.0.0.1", "10.0.0.5", "::1",
+                "::ffff:169.254.169.254", "::ffff:127.0.0.1", "0.0.0.1"):
+        assert f(bad, allow_internal=False) is False, bad
+    # internal allowed when the caller opts in (blocklist/cluster backends)
+    assert m._addr_allowed("10.0.0.5", allow_internal=True) is True
+
+
+def test_safe_opener_only_http_https():
+    # P2-N2: ftp/file/data must not be served by default handlers through this opener
+    op = m._safe_opener(allow_internal=False)
+    schemes = {h.__class__.__name__ for h in op.handlers}
+    # our guarded + no-op scheme blockers are present
+    names = ",".join(sorted(schemes))
+    assert "_NoFTP" in names and "_NoFile" in names and "_NoData" in names
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

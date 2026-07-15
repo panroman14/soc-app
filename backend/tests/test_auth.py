@@ -111,6 +111,66 @@ def test_expired_session():
     assert auth.read_session(tok) is None
 
 
+def test_global_lockout_across_ips():
+    # S2 regression: a spoofed X-Forwarded-For rotates the per-(user,ip) bucket, so the
+    # GLOBAL per-username cap is what must still trip. 20 fails from 20 distinct ips lock.
+    _fresh()
+    auth.create_user("alice", "hunter2secret")
+    for i in range(auth._LOCKOUT_MAX_USER):
+        auth.authenticate("alice", "wrong", "", "10.0.0.%d" % i)   # each ip: 1 fail (< per-ip max)
+    p, err = auth.authenticate("alice", "hunter2secret", "", "10.0.0.250")  # fresh ip, correct pw
+    assert err == "locked"                                          # global cap held
+
+
+def test_unknown_user_returns_bad_and_dummy_hash_shape():
+    # S11: unknown user must still hit scrypt (via _dummy_hash) — verify the contract and
+    # that the dummy hash uses the same scrypt params as a real one (comparable cost).
+    _fresh()
+    p, err = auth.authenticate("ghost", "whatever", "", "1.2.3.4")
+    assert p is None and err == "bad"
+    assert auth._dummy_hash().startswith("scrypt$16384$8$1$")
+
+
+def test_totp_replay_blocked():
+    # P2-N7: a valid code works once; an immediate replay is rejected.
+    _fresh()
+    auth.create_user("alice", "hunter2secret")
+    secret = auth.totp_new_secret()
+    auth.set_totp("alice", secret)
+    code = auth._totp_at(secret, time.time())
+    _, err1 = auth.authenticate("alice", "hunter2secret", code, "1.2.3.4")
+    _, err2 = auth.authenticate("alice", "hunter2secret", code, "1.2.3.4")   # same code again
+    assert err1 == "ok"
+    assert err2 in ("totp_bad", "locked")
+
+
+def test_last_admin_cannot_be_demoted_or_deleted():
+    # S14 / P2-N6: the sole admin is protected on BOTH set_role and delete_user.
+    _fresh()
+    auth.create_user("root", "adminpass12", role="admin")
+    for fn in (lambda: auth.set_role("root", "viewer"), lambda: auth.delete_user("root")):
+        try:
+            fn(); assert False, "expected last-admin guard to raise"
+        except ValueError:
+            pass
+    assert auth.get_user("root")["role"] == "admin"       # unchanged
+    # with a second admin, demotion is allowed again
+    auth.create_user("root2", "adminpass12", role="admin")
+    auth.set_role("root", "viewer")
+    assert auth.get_user("root")["role"] == "viewer"
+
+
+def test_logout_epoch_bump_invalidates_cookie():
+    # P2-N5: real server-side revocation — a bumped epoch invalidates issued cookies.
+    _fresh()
+    auth.create_user("alice", "hunter2secret")
+    u = auth.get_user("alice")
+    tok = auth.make_session("alice", "viewer", u["epoch"])
+    assert auth.read_session(tok)
+    auth.bump_epoch("alice")                              # what /api/auth/logout now does
+    assert auth.read_session(tok) is None
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
