@@ -267,6 +267,14 @@
   .db-wf-meta{min-width:0}
   .db-wf-pct{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em}
   .ov-chart{position:relative;min-height:154px}
+  .ov-stat{display:flex;flex-direction:column}
+  .ov-stat-h{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:2px}
+  .ov-stat-l{font-size:10px;color:var(--faint)}
+  .ov-stat-v{font-size:20px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+  .ov-stat-spark{width:100%;height:18px;margin-top:5px;opacity:.8}
+  .ov-delta{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
+  .ov-delta.bad{color:var(--crit)} .ov-delta.good{color:var(--ok)} .ov-delta.neutral{color:var(--muted)} .ov-delta.flat{color:var(--faint)}
+  .ov-stat-hot{box-shadow:inset 0 0 0 1px #e8a33d55}
   /* command palette (Cmd/Ctrl-K) */
   .cmdk-ov{position:fixed;inset:0;z-index:120;background:#0a0912cc;backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
   .cmdk-box{width:min(560px,92vw);max-height:64vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border2);border-radius:14px;box-shadow:0 24px 60px -20px #000d,0 0 0 1px #ffffff08;overflow:hidden}
@@ -2785,14 +2793,14 @@ function countryLabel(cc){if(!cc)return"— не определено";return fl
 const STATS=[
   {k:"requests_total",l:"Запросов/5м",c:"text-slate-100"},
   {k:"requests_real",l:"Реальных",c:"text-slate-100"},
-  {k:"forbidden_new",l:"Новые блоки",c:"text-amber-300",hot:1},
-  {k:"crs_detections",l:"CRS payload",c:"text-red-300",hot:1},
-  {k:"distinct_attacker_ips",l:"Атак. IP",c:"text-orange-300",hot:1},
+  {k:"forbidden_new",l:"Новые блоки",c:"text-amber-300",hot:1,bad:"up"},
+  {k:"crs_detections",l:"CRS payload",c:"text-red-300",hot:1,bad:"up"},
+  {k:"distinct_attacker_ips",l:"Атак. IP",c:"text-orange-300",hot:1,bad:"up"},
   {k:"unique_visitors",l:"Уник. IP",c:"text-slate-100"},
-  {k:"latency_p95",l:"p95, c",c:"text-slate-100",fmt:v=>v==null?"—":v.toFixed(2)},
-  {k:"availability",l:"Доступность",c:"text-emerald-300",fmt:v=>v==null?"—":(v*100).toFixed(2)+"%"},
+  {k:"latency_p95",l:"p95, c",c:"text-slate-100",fmt:v=>v==null?"—":v.toFixed(2),bad:"up"},
+  {k:"availability",l:"Доступность",c:"text-emerald-300",fmt:v=>v==null?"—":(v*100).toFixed(2)+"%",bad:"dn"},
   {k:"bytes_mb",l:"Трафик, МБ",c:"text-slate-100",fmt:v=>v==null?"—":Math.round(v)},
-  {k:"malicious_ratio",l:"Вредного",c:"text-slate-100",fmt:pct,hotr:1},
+  {k:"malicious_ratio",l:"Вредного",c:"text-slate-100",fmt:pct,hotr:1,bad:"up"},
 ];
 let uniqueVisitors=null;
 const WINS=["5m","15m","1h","6h","8h"];
@@ -2816,11 +2824,29 @@ function renderStatusPct(s){
   el.innerHTML=parts.map(p=>`<div title="${p[0]}: ${fmt(p[1])} (${(p[1]/tot*100).toFixed(1)}%)" style="width:${(p[1]/tot*100).toFixed(1)}%;background:${p[2]}"></div>`).join("");
   lg.innerHTML=parts.map(p=>`<span style="color:${p[2]}">${p[0]} ${(p[1]/tot*100).toFixed(0)}%</span>`).join(" · ");
 }
+function _ovStatSpark(series,hot){
+  const mn=Math.min.apply(0,series),mx=Math.max.apply(0,series),rng=(mx-mn)||1;
+  const pts=series.map((v,i)=>[i/(series.length-1)*100, 20-((v-mn)/rng)*20]);
+  return `<svg viewBox="0 0 100 20" preserveAspectRatio="none" class="ov-stat-spark"><path d="${_smooth(pts)}" fill="none" stroke="${hot?'var(--crit)':'var(--accent)'}" stroke-width="1.6"/></svg>`;
+}
 function renderStats(s){
+  const snaps=(lastHist&&lastHist.snapshots)||[];
   document.getElementById("stats").innerHTML=STATS.map(d=>{
     let v=s?s[d.k]:null; const hot=(d.hot&&v>0)||(d.hotr&&v>=0.35);
     const disp=d.fmt?d.fmt(v):fmt(v);
-    return `<div class="card p-3 ${hot?'ring-1 ring-amber-500/40':''}"><div class="text-[10px] text-slate-500 mb-1">${d.l}</div><div class="text-xl font-semibold mono ${hot?'text-amber-300':d.c}">${disp}</div></div>`;
+    // trend from history: sparkline + delta vs window start (availability derived from status mix)
+    let series=snaps.map(x=>+x[d.k]||0);
+    if(d.k==="availability")series=snaps.map(x=>{const t=(x.status_2xx||0)+(x.status_3xx||0)+(x.status_4xx||0)+(x.status_5xx||0);return t?((x.status_2xx||0)+(x.status_3xx||0))/t:0;});
+    const vary=series.length>1 && Math.max.apply(0,series)>Math.min.apply(0,series);
+    let delta="",spark="";
+    if(vary){
+      const a=series[0],b=series[series.length-1],dd=b-a,dir=dd>0?"up":dd<0?"dn":"flat";
+      const cls=dir==="flat"?"flat":(!d.bad?"neutral":(dir===d.bad?"bad":"good"));
+      const arr=dir==="up"?"▲":dir==="dn"?"▼":"→",pd=a?Math.abs(dd/a*100):0;
+      delta=`<span class="ov-delta ${cls}">${arr}${pd>=1?Math.round(pd)+"%":""}</span>`;
+      spark=_ovStatSpark(series,hot);
+    }
+    return `<div class="card p-3 ov-stat ${hot?'ov-stat-hot':''}"><div class="ov-stat-h"><span class="ov-stat-l">${d.l}</span>${delta}</div><div class="ov-stat-v mono ${hot?'text-amber-300':d.c}">${disp}</div>${spark}</div>`;
   }).join("");
 }
 
