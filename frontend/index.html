@@ -30,7 +30,7 @@
     background:radial-gradient(900px 480px at 22% -8%, #8b7cf618, transparent 60%),
                radial-gradient(760px 420px at 100% 0%, #f472b60f, transparent 55%);}
   .app{position:relative;z-index:1}
-  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
   ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#2a3340;border-radius:6px}::-webkit-scrollbar-thumb:hover{background:#384357}
 
   /* layout shell */
@@ -275,6 +275,9 @@
   .ov-delta{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
   .ov-delta.bad{color:var(--crit)} .ov-delta.good{color:var(--ok)} .ov-delta.neutral{color:var(--muted)} .ov-delta.flat{color:var(--faint)}
   .ov-stat-hot{box-shadow:inset 0 0 0 1px #e8a33d55}
+  /* keyboard focus (a11y): visible high-contrast ring, non-violet so it survives on violet controls */
+  :focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+  .btn:focus-visible,.sw:focus-visible{outline:2px solid var(--ok);outline-offset:2px;box-shadow:none}
   /* command palette (Cmd/Ctrl-K) */
   .cmdk-ov{position:fixed;inset:0;z-index:120;background:#0a0912cc;backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
   .cmdk-box{width:min(560px,92vw);max-height:64vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border2);border-radius:14px;box-shadow:0 24px 60px -20px #000d,0 0 0 1px #ffffff08;overflow:hidden}
