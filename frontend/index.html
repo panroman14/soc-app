@@ -269,6 +269,11 @@
   .db-drill{cursor:pointer}
   .db-bar-row.db-drill:hover,.db-tbl tr.db-drill:hover{background:#ffffff0d}
   .db-bar-row.db-drill:hover .db-bar-k{color:var(--accent2)}
+  /* keyboard shortcuts cheatsheet (?) */
+  .kb-cheat{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;align-items:center;font-size:13px}
+  .kb-cheat .kb-row{display:contents}
+  .kb-cheat kbd{font-family:ui-monospace,monospace;font-size:11px;color:var(--text);border:1px solid var(--border2);border-bottom-width:2px;border-radius:5px;padding:2px 7px;background:#ffffff0d;white-space:nowrap;justify-self:start}
+  .kb-cheat span{color:var(--muted)}
   .ov-chart{position:relative;min-height:154px}
   .ov-stat{display:flex;flex-direction:column}
   .ov-stat-h{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:2px}
@@ -6022,6 +6027,29 @@ document.addEventListener('click',e=>{ if(!e.target||!e.target.closest)return;
   const p=dash&&(dash.panels||[]).find(x=>x.id===panel.getAttribute('data-pid'));
   if(!p||!p.key||!_dbDrillable(p.key))return;
   e.preventDefault(); _dbDrillGo(p.key,row.getAttribute('data-dk')); });
+
+// ── Keyboard shortcuts: g-then-key nav, / focus search, ? cheatsheet ──────────
+const _KB_NAV={o:'dash',l:'logs',d:'dashboards',j:'journal',a:'autoban',f:'p403',r:'targets',s:'settings'};
+let _kbG=false,_kbGT=null;
+function _kbCheat(){
+  const ru=(typeof _lang!=='undefined'&&_lang==='ru');
+  const rows=[['⌘K / Ctrl-K',ru?'командная палитра':'command palette'],['/',ru?'фокус в поиск':'focus search'],
+    ['g  o','Overview'],['g  l','Logs'],['g  d','Dashboards'],['g  j','Journal'],['g  a','Auto-ban'],
+    ['g  f','403 rules'],['g  r','Resources'],['g  s','Settings'],['?',ru?'эта шпаргалка':'this cheatsheet'],['Esc',ru?'закрыть':'close']];
+  const body=`<div class="kb-cheat">${rows.map(r=>`<div class="kb-row"><kbd>${esc(r[0])}</kbd><span>${esc(r[1])}</span></div>`).join('')}</div>`;
+  if(typeof _showModal==='function')_showModal({title:ru?'Горячие клавиши':'Keyboard shortcuts',body,buttons:[{label:'OK',kind:'primary',value:true,enter:true,esc:true}]});
+}
+document.addEventListener('keydown',e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const el=document.activeElement,tag=el&&el.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(el&&el.isContentEditable))return;   // never hijack while typing
+  const ov=document.getElementById('cmdk'); if(ov&&ov.style.display!=='none')return;         // palette open → let it handle keys
+  const k=e.key;
+  if(_kbG){ _kbG=false; clearTimeout(_kbGT); if(_KB_NAV[k]&&typeof showView==='function'){ e.preventDefault(); showView(_KB_NAV[k]); } return; }
+  if(k==='g'){ _kbG=true; clearTimeout(_kbGT); _kbGT=setTimeout(()=>{_kbG=false;},1200); return; }
+  if(k==='/'){ const t=document.getElementById('topsearch'); if(t){ e.preventDefault(); t.focus(); } return; }
+  if(k==='?'){ e.preventDefault(); _kbCheat(); return; }
+});
 
 // ── Density toggle (Compact / Comfortable), persisted per-user ─────────────────
 function _densityBtn(d){ const b=document.getElementById('density-btn'); if(!b)return;
