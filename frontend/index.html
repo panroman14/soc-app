@@ -251,12 +251,28 @@
   .db-mp{max-height:148px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:5px;background:#0b0f16}
   .db-mp label{display:flex;align-items:center;gap:7px;padding:3px 5px;font-size:12px;color:var(--muted);cursor:pointer;border-radius:6px}
   .db-mp label:hover{background:#ffffff08}
+  /* new panels: sparkline grid / treemap / waffle */
+  .db-sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:8px;height:100%;overflow:auto;align-content:start}
+  .db-sg-cell{background:#ffffff06;border:1px solid var(--border);border-radius:9px;padding:7px 9px}
+  .db-sg-h{display:flex;align-items:center;justify-content:space-between;gap:4px}
+  .db-sg-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .db-sg-v{font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1;margin-top:2px}
+  .db-tm{position:relative;width:100%;height:100%;overflow:hidden}
+  .db-tm-c{position:absolute;border-radius:3px;overflow:hidden;padding:3px 5px;box-shadow:inset 0 0 0 1.5px var(--surface);display:flex;flex-direction:column;justify-content:flex-start;transition:filter .15s var(--ease)}
+  .db-tm-c:hover{filter:brightness(1.12)}
+  .db-tm-k{font-size:10px;font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .db-tm-n{font-size:9px;opacity:.75;font-variant-numeric:tabular-nums;line-height:1.1}
+  .db-wf-wrap{display:flex;gap:14px;align-items:center;height:100%}
+  .db-wf{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;aspect-ratio:1;height:100%;max-height:132px;flex:none}
+  .db-wf-c{border-radius:2px;aspect-ratio:1}
+  .db-wf-meta{min-width:0}
+  .db-wf-pct{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em}
   .db-crosshair{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3}
   .db-tsi{position:absolute;z-index:8;pointer-events:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:6px 9px;font-size:11px;color:var(--text);box-shadow:var(--shadow-lg);white-space:nowrap;line-height:1.5}
   .db-tsi .db-tsi-t{color:var(--faint);font-size:10px;margin-bottom:2px}
   .db-ax{font-size:9px;fill:var(--faint);font-family:ui-monospace,monospace}
   .db-tip-box{fill:var(--surface2);stroke:var(--border2);stroke-width:1}
-  @media(max-width:760px){.db-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:auto}
+  @media(max-width:760px){.db-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:auto;grid-template-rows:none!important}
     .db-panel{grid-column:auto!important;grid-row:auto!important;min-height:120px}
     .db-resize{display:none!important}}
 </style>
@@ -1348,7 +1364,7 @@ async function loadBackendHealth(){
 // rendered content via a MutationObserver, so no need to refactor every string. ──
 const RU2EN={
   "нет лейблов":"no labels","строк":"rows","забанить IP":"ban IP","путь в 403":"path → 403","открой 403 и добавь путь":"open 403 and add the path","следим…":"following…","Название вида:":"View name:",
-  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Метрики":"Metrics","Источник (топ)":"Source (top-list)","Ширина":"Width","Высота":"Height","Заливка area":"Area fill","Цвета серий":"Series colors","Пороговые линии":"Thresholds","порог":"threshold","выберите метрики":"pick metrics","нет строк под фильтр":"no rows match","не удалось сохранить: ":"save failed: ","не похоже на дашборд":"not a dashboard file","не удалось импортировать: ":"import failed: ",
+  "нет дашбордов":"no dashboards","пусто — добавь панель":"empty — add a panel","мало точек":"not enough points","Поиск в логах":"Logs search","Имя дашборда:":"Dashboard name:","Удалить дашборд?":"Delete dashboard?","Новая панель":"New panel","Панель":"Panel","Заголовок":"Title","Тип":"Type","Метрика":"Metric","Метрики":"Metrics","Источник (топ)":"Source (top-list)","Ширина":"Width","Высота":"Height","Заливка area":"Area fill","Цвета серий":"Series colors","Пороговые линии":"Thresholds","порог":"threshold","выберите метрики":"pick metrics","Полоса аномалий":"Anomaly band","прочее":"other","нет строк под фильтр":"no rows match","не удалось сохранить: ":"save failed: ","не похоже на дашборд":"not a dashboard file","не удалось импортировать: ":"import failed: ",
   // _trText-consumed strings mistakenly added only to I18N (leaked Russian in EN) — now in RU2EN
   "Удалить это подключение?":"Delete this connection?","доступен, токен принят":"reachable, token accepted","нет ingress-таргетов":"no ingress targets","нет данных о хосте":"no host data","нет связи":"no connection","нет токена":"no token","пока нет — проверь соединение и нажми Save":"none yet — test the connection and click Save","проверяю":"checking","сделать активным":"make active","сохранено и активно":"saved and active","таргет":"target","токен задан":"token set","токен не принят":"token rejected","укажи hostname выше":"enter a hostname above",
   "нет связи: ":"no connection: ","пустой URL":"empty URL","токен не принят (HTTP ":"token rejected (HTTP ","не удалось определить id из URL":"couldn't determine id from the URL","подключение не найдено":"connection not found","ошибка запроса /targets: ":"/targets request error: ",
@@ -2153,15 +2169,15 @@ const _DB_ANALYTICS={top_paths:"Top paths",top_talkers:"Top talkers (IPs)",top_u
   geo:"Countries",slow_endpoints:"Slow endpoints"};
 // panel-type taxonomy: which input(s) each type consumes
 const _DB_TYPES=[["stat","Stat"],["multistat","Multi-stat"],["timeseries","Time series"],["stacked","Stacked area"],
-  ["heatmap","Heatmap"],["gauge","Gauge"],["bar","Bar"],["hbar","Bar %"],["table","Table"],["pie","Pie"],
-  ["donut","Donut"],["geo","Countries"],["logs","Logs"]];
-const _DB_T_METRIC=["stat","gauge"];                               // one summary metric
-const _DB_T_METRICS=["multistat","timeseries","stacked","heatmap"]; // many metrics / history series
-const _DB_T_ANALYTICS=["bar","hbar","table","pie","donut"];         // one analytics top-list
+  ["sparkgrid","Sparkline grid"],["heatmap","Heatmap"],["gauge","Gauge"],["waffle","Waffle %"],["bar","Bar"],["hbar","Bar %"],
+  ["table","Table"],["pie","Pie"],["donut","Donut"],["treemap","Treemap"],["geo","Countries"],["logs","Logs"]];
+const _DB_T_METRIC=["stat","gauge","waffle"];                              // one summary metric
+const _DB_T_METRICS=["multistat","timeseries","stacked","heatmap","sparkgrid"]; // many metrics / history series
+const _DB_T_ANALYTICS=["bar","hbar","table","pie","donut","treemap"];      // one analytics top-list
 const _DB_PALETTE=["#8b7cf6","#c4b5fd","#6ee7b7","#e8a33d","#f472b6","#38bdf8","#a3e635","#fb7185"];
 const _DB_ROWH=40,_DB_GAP=12,_DB_COLS=12;                           // grid geometry (matches CSS)
 function _dbNum(v){ v=+v||0; return v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(1)+"k":String(v); }
-function _dbDefH(t){ return t==="logs"?6:(t==="stat"||t==="gauge"||t==="multistat")?3:(t==="heatmap")?4:5; }
+function _dbDefH(t){ return t==="logs"?6:(t==="stat"||t==="gauge"||t==="multistat"||t==="waffle")?3:(t==="heatmap"||t==="sparkgrid")?4:5; }
 function _dbHHMM(ts){ const d=new Date((+ts||0)*1000); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
 function dbCur(){ return _db.list.find(d=>d.id===_db.curId)||_db.list[0]; }
 
@@ -2280,6 +2296,9 @@ function dbFillPanel(p){
     else if(p.type==="donut")el.innerHTML=_dbPie(p,true);
     else if(p.type==="gauge")el.innerHTML=_dbGauge(p);
     else if(p.type==="geo")el.innerHTML=_dbGeo(p);
+    else if(p.type==="sparkgrid")el.innerHTML=_dbSparkGrid(p);
+    else if(p.type==="treemap")el.innerHTML=_dbTreemap(p);
+    else if(p.type==="waffle")el.innerHTML=_dbWaffle(p);
     else if(p.type==="logs"){ el.innerHTML=`<span class="text-slate-600 text-xs">…</span>`; _dbLogsPanel(p,el); }
     else el.innerHTML=`<span class="text-slate-600 text-xs">${esc(p.type)}?</span>`;
   }catch(e){ el.innerHTML=`<span class="text-rose-400 text-xs">${esc(e.message)}</span>`; }
@@ -2299,6 +2318,20 @@ function _smooth(pts){                       // Catmull-Rom → cubic Bézier pa
 }
 function _niceMax(v){ if(v<=0)return 1; const p=Math.pow(10,Math.floor(Math.log10(v))); const n=v/p;
   const s=n<=1?1:n<=2?2:n<=5?5:10; return s*p; }
+function _median(a){ if(!a.length)return 0; const s=a.slice().sort((x,y)=>x-y),m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+// anomaly band: trailing rolling median ± 3·(1.4826·MAD); returns band-fill + breach-dot SVG for one series
+function _dbAnomaly(series,xs,Y,max){
+  const n=series.length; if(n<3)return {band:"",breach:""};
+  const WIN=8,up=[],lo=[],br=[];
+  for(let i=0;i<n;i++){ const a=Math.max(0,i-WIN+1),win=series.slice(a,i+1);
+    const med=_median(win),mad=_median(win.map(x=>Math.abs(x-med))),sd=mad*1.4826;
+    const b=Math.max(sd*3, med*0.2, 1);
+    up.push(Math.min(med+b,max)); lo.push(Math.max(0,med-b));
+    if(i>=2 && Math.abs(series[i]-med)>b) br.push(i); }
+  const upPts=up.map((v,i)=>[xs[i],Y(v)]), loPts=lo.map((v,i)=>[xs[i],Y(v)]);
+  const dUp=_smooth(upPts), dLo=loPts.slice().reverse().map(p=>`L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+  return { band:`<path d="${dUp} ${dLo} Z" fill="var(--accent)" fill-opacity=".12"/>`,
+           breach:br.map(i=>`<circle cx="${xs[i].toFixed(1)}" cy="${Y(series[i]).toFixed(1)}" r="3" fill="var(--crit)" stroke="var(--surface)" stroke-width="1.2"/>`).join("") }; }
 
 const _dbHov={};   // panel-id → {W,H,pl,pr,pt,pb,plotW,plotH,n,xs,series:[{color,pts,name}],fmt,tf}
 function _dbTimeseries(p,stacked){
@@ -2314,6 +2347,7 @@ function _dbTimeseries(p,stacked){
   const thr=(p.thresholds||[]).filter(t=>t&&isFinite(+t.v)); thr.forEach(t=>{ if(+t.v>max)max=+t.v; });  // keep thresholds on-chart
   max=_niceMax(max);
   const Y=v=>pt+plotH-(v/max)*plotH;
+  const _ano=(p.anomaly&&!stacked&&vals.length)?_dbAnomaly(vals[0],xs,Y,max):{band:"",breach:""};
   const defs=[],paths=[],dots=[];
   const stackTop=new Array(n).fill(0); // running total for stacked
   const seriesMeta=[];
@@ -2356,7 +2390,7 @@ function _dbTimeseries(p,stacked){
   const hdots=seriesMeta.map((s,k)=>`<circle class="db-hd" data-k="${k}" r="3.4" fill="${s.color}" stroke="var(--surface)" stroke-width="1.6" style="display:none"/>`).join("");
   return `<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:calc(100% - 16px)" onmousemove="dbTsMove(event,'${escJs(p.id)}')" onmouseleave="dbTsLeave('${escJs(p.id)}')">
-    <defs>${defs.join("")}</defs>${ax}${thrSvg}${paths.join("")}${dots.join("")}
+    <defs>${defs.join("")}</defs>${ax}${thrSvg}${_ano.band}${paths.join("")}${dots.join("")}${_ano.breach}
     <line id="cx-${esc(p.id)}" class="db-crosshair" y1="${pt}" y2="${pt+plotH}" style="display:none"/>${hdots}</svg>
     <div class="db-tsi" id="tip-${esc(p.id)}" style="display:none"></div>`;
 }
@@ -2464,6 +2498,65 @@ function _dbGeo(p){
   const max=Math.max(...rows.map(r=>r.n),1);
   return rows.map(r=>`<div class="db-bar-row"><span class="db-bar-k">${flag(String(r.k))} ${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${Math.round(r.n/max*100)}%"></span></span><span class="db-bar-n">${_dbNum(r.n)}</span></div>`).join("");
 }
+function _dbSparkGrid(p){                     // small multiples: one mini-trend per metric
+  const snaps=_dbData.history||[], sum=_dbData.summary||{};
+  const ms=(p.metrics&&p.metrics.length?p.metrics:[p.metric]).filter(Boolean);
+  if(!ms.length)return `<span class="text-slate-600 text-xs">${_trText("выберите метрики")}</span>`;
+  return `<div class="db-sg">`+ms.map((m,mi)=>{
+    const meta=_DB_METRICS[m]||{l:m,f:v=>v}, series=snaps.map(s=>+s[m]||0);
+    const cur=sum[m]!=null?sum[m]:(series.length?series[series.length-1]:null);
+    const col=(p.colors&&p.colors[m])||_DB_PALETTE[mi%_DB_PALETTE.length];
+    let delta="";
+    if(series.length>1){ const a=series[0],b=series[series.length-1],dd=b-a;
+      const cls=Math.abs(dd)<1e-9?"flat":dd>0?"up":"dn",arr=cls==="flat"?"→":dd>0?"▲":"▼",pd=a?Math.abs(dd/a*100):0;
+      delta=`<span class="db-delta ${cls}" style="font-size:10px;margin:0">${arr}${pd>=1?Math.round(pd)+"%":""}</span>`; }
+    let svg="";
+    if(series.length>1){ const w=120,h=26,mx=Math.max(...series,1),mn=Math.min(...series,0),rng=(mx-mn)||1;
+      const pts=series.map((v,i)=>[i/(series.length-1)*w, h-((v-mn)/rng)*h]);
+      svg=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><path d="${_smooth(pts)}" fill="none" stroke="${col}" stroke-width="1.6"/><circle cx="${pts[pts.length-1][0].toFixed(1)}" cy="${pts[pts.length-1][1].toFixed(1)}" r="2" fill="${col}"/></svg>`; }
+    return `<div class="db-sg-cell"><div class="db-sg-h"><span class="db-sg-l">${esc(meta.l)}</span>${delta}</div><div class="db-sg-v">${cur==null?"—":esc(String(meta.f(cur)))}</div>${svg}</div>`;
+  }).join("")+`</div>`;
+}
+function _dbWaffle(p){                        // one ratio metric → 10×10 unit grid
+  const m=p.metric,meta=_DB_METRICS[m]||{l:m,f:v=>v},raw=(_dbData.summary||{})[m];
+  if(raw==null)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  let frac=+raw||0; if(frac>1)frac=Math.min(1,frac/100);
+  const filled=Math.round(frac*100);
+  const hot=(m==="malicious_ratio"||m==="forbidden_new"||m==="crs_detections")?"var(--crit)":(m==="availability")?"var(--ok)":"var(--accent)";
+  let cells=""; for(let i=0;i<100;i++)cells+=`<span class="db-wf-c" style="background:${i<filled?hot:'#ffffff10'}"></span>`;
+  const pv=frac*100, pct=((pv>0&&pv<10)||pv>90)?pv.toFixed(1):String(Math.round(pv));
+  return `<div class="db-wf-wrap"><div class="db-wf">${cells}</div><div class="db-wf-meta"><div class="db-wf-pct" style="color:${hot}">${pct}%</div><div class="db-stat-sub">${esc(meta.l)}</div></div></div>`;
+}
+function _squarify(children,x,y,w,h){         // Bruls et al. squarified treemap layout
+  const out=[], nodes=children.map(c=>({item:c, area:Math.max(c.area,1e-6)}));
+  const total=nodes.reduce((s,n)=>s+n.area,0)||1, k=(w*h)/total; nodes.forEach(n=>n.area*=k);
+  const worst=(row,side)=>{ const sum=row.reduce((s,r)=>s+r.area,0),mx=Math.max(...row.map(r=>r.area)),mn=Math.min(...row.map(r=>r.area));
+    return Math.max((side*side*mx)/(sum*sum),(sum*sum)/(side*side*mn)); };
+  let rx=x,ry=y,rw=w,rh=h,i=0;
+  while(i<nodes.length){
+    const vertical=rw<rh, side=vertical?rw:rh; let row=[nodes[i]],j=i+1;
+    while(j<nodes.length){ const test=row.concat([nodes[j]]); if(worst(test,side)<=worst(row,side)){ row.push(nodes[j]); j++; } else break; }
+    const rowSum=row.reduce((s,r)=>s+r.area,0), thick=rowSum/side; let off=vertical?rx:ry;
+    row.forEach(n=>{ const len=n.area/thick;
+      if(vertical){ out.push({item:n.item,x:off,y:ry,w:len,h:thick}); off+=len; }
+      else { out.push({item:n.item,x:rx,y:off,w:thick,h:len}); off+=len; } });
+    if(vertical){ ry+=thick; rh-=thick; } else { rx+=thick; rw-=thick; }
+    i=j;
+  }
+  return out;
+}
+function _dbTreemap(p){                       // analytics top-list → treemap (area ∝ count)
+  let rows=_dbList(p.key).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+  if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
+  const top=rows.slice(0,14), restN=rows.slice(14).reduce((s,r)=>s+r.n,0);
+  if(restN>0)top.push({k:_trText("прочее"),n:restN,_o:1});
+  const total=top.reduce((s,r)=>s+r.n,0)||1;
+  const tiles=_squarify(top.map((r,i)=>({r,i,area:r.n})),0,0,100,100);
+  return `<div class="db-tm">`+tiles.map(t=>{
+    const r=t.item.r, col=r._o?"var(--faint)":_DB_PALETTE[t.item.i%_DB_PALETTE.length], pct=Math.round(r.n/total*100), lbl=t.w>16&&t.h>12;
+    return `<div class="db-tm-c" style="left:${t.x.toFixed(2)}%;top:${t.y.toFixed(2)}%;width:${t.w.toFixed(2)}%;height:${t.h.toFixed(2)}%;background:${col};color:${r._o?'#ECEAF6':'#0d0c14'}" title="${esc(String(r.k))}: ${_dbNum(r.n)} (${pct}%)">${lbl?`<span class="db-tm-k">${esc(String(r.k))}</span><span class="db-tm-n">${_dbNum(r.n)}</span>`:""}</div>`;
+  }).join("")+`</div>`;
+}
 async function _dbLogsPanel(p,el){
   try{
     const body={search:p.search||"",chips:[],sources:{},minutes:p.minutes||15,limit:20,env:(dbCur().vars||{}).env||_env||""};
@@ -2544,6 +2637,7 @@ async function dbEditPanel(id){
     <label class="block" id="dbe-ana-wrap">${_trText("Источник (топ)")}<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
     <label class="block hidden" id="dbe-logs-wrap">${_trText("Поиск в логах")}<input class="input mono mt-1" oninput="_dbEdit.search=this.value" value="${esc(_dbEdit.search||"")}" placeholder="/wp-login"></label>
     <label class="flex items-center gap-2 hidden" id="dbe-area-wrap"><input type="checkbox" ${_dbEdit.area!==false?"checked":""} onchange="_dbEdit.area=this.checked"> ${_trText("Заливка area")}</label>
+    <label class="flex items-center gap-2 hidden" id="dbe-anomaly-wrap"><input type="checkbox" ${_dbEdit.anomaly?"checked":""} onchange="_dbEdit.anomaly=this.checked"> ${_trText("Полоса аномалий")}</label>
     <div class="block hidden" id="dbe-colors-wrap">${_trText("Цвета серий")}<div class="mt-1 space-y-1" id="dbe-colors"></div></div>
     <div class="block hidden" id="dbe-thr-wrap">${_trText("Пороговые линии")}<div class="mt-1 space-y-1" id="dbe-thr"></div>
       <button type="button" class="btn btn-ghost btn-xs mt-1" onclick="dbeThrAdd()">＋ ${_trText("порог")}</button></div>
@@ -2564,6 +2658,7 @@ function dbeTypeChange(){
   show("dbe-ana-wrap",_DB_T_ANALYTICS.includes(t));
   show("dbe-logs-wrap",t==="logs");
   show("dbe-area-wrap",t==="timeseries");
+  show("dbe-anomaly-wrap",t==="timeseries");
   show("dbe-colors-wrap",_DB_T_COLORS.includes(t));
   show("dbe-thr-wrap",_DB_T_THR.includes(t));
   dbeRenderColors(); dbeRenderThr();
@@ -2591,7 +2686,7 @@ function dbSavePanel(id){
   const p={id:e.id,type:t,title:(e.title||"").trim(),w:Math.max(2,Math.min(12,+e.w||4)),h:Math.max(2,Math.min(12,+e.h||_dbDefH(t))),gx:e.gx,gy:e.gy};
   p.span=p.w;
   if(_DB_T_METRIC.includes(t)){p.source="summary";p.metric=e.metric;}
-  else if(_DB_T_METRICS.includes(t)){p.source=(t==="multistat")?"summary":"history";p.metrics=(e.metrics&&e.metrics.length?e.metrics:[e.metric]); if(t==="timeseries")p.area=e.area!==false;
+  else if(_DB_T_METRICS.includes(t)){p.source=(t==="multistat")?"summary":"history";p.metrics=(e.metrics&&e.metrics.length?e.metrics:[e.metric]); if(t==="timeseries"){p.area=e.area!==false;p.anomaly=!!e.anomaly;}
     if(_DB_T_COLORS.includes(t)){ const cs={}; (p.metrics||[]).forEach(m=>{ if(e.colors&&e.colors[m])cs[m]=e.colors[m]; }); if(Object.keys(cs).length)p.colors=cs; }
     if(_DB_T_THR.includes(t)){ const th=(e.thresholds||[]).map(x=>({v:+x.v,c:x.c||"#f472b6"})).filter(x=>isFinite(x.v)); if(th.length)p.thresholds=th; }}
   else if(_DB_T_ANALYTICS.includes(t)){p.source="analytics";p.key=e.key;}
