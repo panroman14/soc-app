@@ -267,6 +267,23 @@
   .db-wf-meta{min-width:0}
   .db-wf-pct{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em}
   .ov-chart{position:relative;min-height:154px}
+  /* command palette (Cmd/Ctrl-K) */
+  .cmdk-ov{position:fixed;inset:0;z-index:120;background:#0a0912cc;backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
+  .cmdk-box{width:min(560px,92vw);max-height:64vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border2);border-radius:14px;box-shadow:0 24px 60px -20px #000d,0 0 0 1px #ffffff08;overflow:hidden}
+  .cmdk-in{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
+  .cmdk-in .cmdk-ic{color:var(--faint);font-size:15px}
+  .cmdk-in input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:15px}
+  .cmdk-in input::placeholder{color:var(--faint)}
+  .cmdk-hint{font-family:ui-monospace,monospace;font-size:10px;color:var(--faint);border:1px solid var(--border2);border-radius:5px;padding:1px 6px}
+  .cmdk-list{overflow-y:auto;padding:6px}
+  .cmdk-grp{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:8px 10px 4px}
+  .cmdk-it{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;cursor:pointer;color:var(--muted);font-size:13.5px}
+  .cmdk-it .cmdk-i2{width:18px;text-align:center;flex:none;color:var(--faint)}
+  .cmdk-it .cmdk-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmdk-it .cmdk-k{font-family:ui-monospace,monospace;font-size:10px;color:var(--faint);border:1px solid var(--border2);border-radius:5px;padding:1px 6px}
+  .cmdk-it.sel{background:linear-gradient(90deg,var(--accent-weak),transparent);color:var(--text);box-shadow:inset 2px 0 var(--accent)}
+  .cmdk-it.sel .cmdk-i2{color:var(--accent2)}
+  .cmdk-empty{padding:22px;text-align:center;color:var(--faint);font-size:13px}
   .db-crosshair{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3}
   .db-tsi{position:absolute;z-index:8;pointer-events:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:6px 9px;font-size:11px;color:var(--text);box-shadow:var(--shadow-lg);white-space:nowrap;line-height:1.5}
   .db-tsi .db-tsi-t{color:var(--faint);font-size:10px;margin-bottom:2px}
@@ -5870,6 +5887,81 @@ authInit().then(ok=>{ if(!ok)return;                               // gate app d
 setInterval(()=>{if(_me&&isActive())refresh();},20000);setInterval(()=>{if(_me&&isActive())loadDigest();},300000);
 setInterval(()=>{if(_me&&isActive())renderBlocklist();},60000);
 setInterval(()=>{if(_me&&isActive()&&onDash()){renderBanCandidates();renderSuspects();}},180000);
+
+// ── Command palette (Cmd/Ctrl-K) ──────────────────────────────────────────────
+const _CMDK=[
+ {g:'nav',ic:'◧',en:'Overview',ru:'Обзор',kw:'overview dashboard home dash обзор главная',run:()=>showView('dash')},
+ {g:'nav',ic:'≣',en:'Logs',ru:'Логи',kw:'logs explore search логи поиск',run:()=>showView('logs')},
+ {g:'nav',ic:'▦',en:'Dashboards',ru:'Дашборды',kw:'dashboards panels charts графики дашборды панели',run:()=>showView('dashboards')},
+ {g:'nav',ic:'▤',en:'Journal',ru:'Журнал',kw:'journal audit журнал аудит',run:()=>showView('journal')},
+ {g:'nav',ic:'🛡',en:'Auto-ban',ru:'Авто-бан',kw:'autoban auto ban rules автобан правила',run:()=>showView('autoban')},
+ {g:'nav',ic:'⊘',en:'403 rules',ru:'403 правила',kw:'403 forbidden deny rules правила',run:()=>showView('p403')},
+ {g:'nav',ic:'⧉',en:'Resources',ru:'Ресурсы',kw:'resources targets nodes ingress ресурсы ноды',run:()=>showView('targets')},
+ {g:'nav',ic:'⚙',en:'Settings',ru:'Настройки',kw:'settings config настройки конфиг',run:()=>showView('settings')},
+ {g:'act',ic:'⛔',en:'Ban an IP / CIDR…',ru:'Забанить IP / CIDR…',kw:'ban block ip cidr бан заблокировать',run:()=>quickBan()},
+ {g:'act',ic:'⌕',en:'Open IP profile…',ru:'Профиль IP…',kw:'ip profile lookup search профиль поиск',run:()=>{const v=((document.getElementById('cmdk-q')||{}).value||'').trim();if(v)quickSearch(v);else{const t=document.getElementById('topsearch');if(t)t.focus();}}},
+ {g:'act',ic:'↻',en:'Refresh view',ru:'Обновить вид',kw:'refresh reload обновить перезагрузить',run:()=>{if(typeof _view!=='undefined')showView(_view);}},
+ {g:'act',ic:'🌐',en:'Toggle language (EN / RU)',ru:'Сменить язык (EN / RU)',kw:'language lang en ru locale язык',run:()=>toggleLang()},
+ {g:'act',ic:'◔',en:'Account & password',ru:'Аккаунт и пароль',kw:'account password 2fa totp аккаунт пароль',run:()=>{showView('settings');if(typeof setSub==='function')setSub('account');}},
+];
+const _CMDK_GRP={nav:{en:'Navigate',ru:'Навигация'},act:{en:'Actions',ru:'Действия'},ip:{en:'IP',ru:'IP'}};
+let _cmdkSel=0,_cmdkShown=[],_cmdkPrev=null;
+function _cmdkScore(text,q){ if(!q)return 0; text=text.toLowerCase();q=q.toLowerCase();
+  let ti=0,score=0,prev=-2,streak=0;
+  for(let qi=0;qi<q.length;qi++){ const c=q[qi]; let f=-1;
+    for(let k=ti;k<text.length;k++){ if(text[k]===c){f=k;break;} }
+    if(f<0)return null;
+    if(f===prev+1){streak++;score-=streak*2;}else streak=0;
+    if(f===0||/[\s\-_/.]/.test(text[f-1]||' '))score-=3;
+    score+=f; prev=f; ti=f+1; }
+  return score; }
+function _cmdkRu(){ return typeof _lang!=='undefined'&&_lang==='ru'; }
+function cmdkToggle(){ const o=document.getElementById('cmdk'); if(!o)return; (o.style.display==='none')?cmdkOpen():cmdkClose(); }
+function cmdkOpen(){ const o=document.getElementById('cmdk'); if(!o)return; _cmdkPrev=document.activeElement;
+  o.style.display='flex'; const q=document.getElementById('cmdk-q'); q.value=''; cmdkFilter(); q.focus(); }
+function cmdkClose(){ const o=document.getElementById('cmdk'); if(!o)return; o.style.display='none';
+  if(_cmdkPrev&&_cmdkPrev.focus)try{_cmdkPrev.focus();}catch(e){} }
+function _cmdkList(q){
+  const ru=_cmdkRu();
+  const items=_CMDK.map(it=>({it,label:ru?it.ru:it.en,score:_cmdkScore(it.en+' '+it.ru+' '+it.kw,q)})).filter(x=>x.score!==null);
+  const ip=(q||'').trim();
+  if(/^\d{1,3}(\.\d{1,3}){1,3}(\/\d{1,2})?$/.test(ip)){
+    items.unshift({it:{g:'ip',ic:'⌕',run:()=>quickSearch(ip)},label:(ru?'Профиль: ':'Profile: ')+ip,score:-1000});
+    items.push({it:{g:'ip',ic:'⛔',run:()=>_cmdkBan(ip)},label:(ru?'Забанить ':'Ban ')+ip+'…',score:-999});
+  }
+  items.sort((a,b)=>a.score-b.score);
+  return items;
+}
+function cmdkFilter(){
+  const qi=document.getElementById('cmdk-q'); if(!qi)return; const list=document.getElementById('cmdk-list');
+  _cmdkShown=_cmdkList(qi.value); _cmdkSel=0;
+  if(!_cmdkShown.length){ list.innerHTML=`<div class="cmdk-empty">${_cmdkRu()?'Ничего не найдено':'No matches'}</div>`; qi.setAttribute('aria-activedescendant',''); return; }
+  const ru=_cmdkRu(); let html='',lastG=null;
+  _cmdkShown.forEach((x,i)=>{ const g=x.it.g;
+    if(g!==lastG){ lastG=g; const gl=_CMDK_GRP[g]?(ru?_CMDK_GRP[g].ru:_CMDK_GRP[g].en):g; html+=`<div class="cmdk-grp">${esc(gl)}</div>`; }
+    html+=`<div class="cmdk-it${i===_cmdkSel?' sel':''}" id="cmdk-it-${i}" role="option" aria-selected="${i===_cmdkSel}" onmousemove="_cmdkHover(${i})" onclick="cmdkRun(${i})"><span class="cmdk-i2">${x.it.ic||'·'}</span><span class="cmdk-l">${esc(x.label)}</span></div>`; });
+  list.innerHTML=html; _cmdkAria();
+}
+function _cmdkAria(){ const qi=document.getElementById('cmdk-q'); if(qi)qi.setAttribute('aria-activedescendant',_cmdkShown.length?'cmdk-it-'+_cmdkSel:''); }
+function _cmdkHover(i){ if(i===_cmdkSel)return; _cmdkSel=i; _cmdkPaint(); }
+function _cmdkPaint(){ const list=document.getElementById('cmdk-list'); if(!list)return;
+  [...list.querySelectorAll('.cmdk-it')].forEach((el,i)=>{const on=i===_cmdkSel;el.classList.toggle('sel',on);el.setAttribute('aria-selected',on);});
+  const sel=document.getElementById('cmdk-it-'+_cmdkSel); if(sel)sel.scrollIntoView({block:'nearest'}); _cmdkAria(); }
+function cmdkKey(e){
+  if(e.key==='ArrowDown'){e.preventDefault(); _cmdkSel=Math.min(_cmdkShown.length-1,_cmdkSel+1); _cmdkPaint();}
+  else if(e.key==='ArrowUp'){e.preventDefault(); _cmdkSel=Math.max(0,_cmdkSel-1); _cmdkPaint();}
+  else if(e.key==='Enter'){e.preventDefault(); cmdkRun(_cmdkSel);}
+  else if(e.key==='Escape'){e.preventDefault(); cmdkClose();}
+}
+function cmdkRun(i){ const x=_cmdkShown[i]; if(!x)return; const fn=x.it.run; cmdkClose(); if(typeof fn==='function')setTimeout(fn,0); }
+async function _cmdkBan(ip){ cmdkClose(); if(await uiConfirm(_cmdkRu()?('Забанить '+ip+' на 30 дней?'):('Ban '+ip+' for 30 days?'))) blockIP(ip,'manual (cmd-k)',2592000); }
+document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); cmdkToggle(); } },true);
 </script>
+<div id="cmdk" class="cmdk-ov" style="display:none" role="dialog" aria-modal="true" aria-label="Command palette" onmousedown="if(event.target===this)cmdkClose()">
+  <div class="cmdk-box">
+    <div class="cmdk-in"><span class="cmdk-ic">⌕</span><input id="cmdk-q" role="combobox" aria-controls="cmdk-list" aria-expanded="true" autocomplete="off" spellcheck="false" placeholder="Команда или IP…" oninput="cmdkFilter()" onkeydown="cmdkKey(event)"><span class="cmdk-hint">esc</span></div>
+    <div id="cmdk-list" class="cmdk-list" role="listbox"></div>
+  </div>
+</div>
 </body>
 </html>
