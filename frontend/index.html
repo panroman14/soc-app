@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SOC Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   /* ── soc design system ─────────────────────────────────────────────────── */
   :root{
@@ -267,6 +266,7 @@
   .db-wf-c{border-radius:2px;aspect-ratio:1}
   .db-wf-meta{min-width:0}
   .db-wf-pct{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em}
+  .ov-chart{position:relative;min-height:154px}
   .db-crosshair{stroke:var(--border2);stroke-width:1;stroke-dasharray:3 3}
   .db-tsi{position:absolute;z-index:8;pointer-events:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:6px 9px;font-size:11px;color:var(--text);box-shadow:var(--shadow-lg);white-space:nowrap;line-height:1.5}
   .db-tsi .db-tsi-t{color:var(--faint);font-size:10px;margin-bottom:2px}
@@ -356,10 +356,10 @@
 
   <h2 class="sec">Динамика</h2>
   <section class="grid lg:grid-cols-2 gap-4">
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик / 5м</h3><canvas id="chartTraffic" height="140"></canvas></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Сигнатуры атак</h3><canvas id="chartThreats" height="140"></canvas></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Статусы ответов</h3><canvas id="chartStatus" height="140"></canvas></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Латентность p95, c</h3><canvas id="chartLatency" height="140"></canvas></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик / 5м</h3><div id="chartTraffic" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Сигнатуры атак</h3><div id="chartThreats" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Статусы ответов</h3><div id="chartStatus" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Латентность p95, c</h3><div id="chartLatency" class="ov-chart"></div></div>
   </section>
 
   <h2 class="sec" data-llm data-i18n="ai.title">AI analyst</h2>
@@ -2807,16 +2807,66 @@ function renderStats(s){
   }).join("");
 }
 
+// Overview charts — pure SVG (no chart CDN); same signatures as before so callers are unchanged.
 let charts={};
-function mkChart(id,datasets,stacked){
-  return new Chart(document.getElementById(id),{type:"line",data:{labels:[],datasets},
-    options:{responsive:true,animation:false,interaction:{mode:"index",intersect:false},
-      plugins:{legend:{labels:{color:"#94a3b8",boxWidth:9,font:{size:10}}}},
-      scales:{x:{ticks:{color:"#475569",maxTicksLimit:6,font:{size:9}},grid:{color:"#161c25"},stacked:!!stacked},
-              y:{ticks:{color:"#475569",font:{size:9}},grid:{color:"#161c25"},beginAtZero:true,stacked:!!stacked}}}});
+const _ovHov={};
+const ds=(l,c,fill)=>({label:(typeof _trText==="function"?_trText(l):l),color:c,fill:!!fill});
+function mkChart(id,datasets,stacked){ return {id,series:datasets,stacked:!!stacked}; }
+function setChart(cfg,snaps,arrs){ cfg.series.forEach((s,i)=>s.acc=arrs[i]); _ovRender(cfg,snaps); }
+function _ovRender(cfg,snaps){
+  const el=document.getElementById(cfg.id); if(!el)return;
+  const series=cfg.series.filter(s=>s.acc);
+  if(!snaps||snaps.length<2||!series.length){ el.innerHTML=`<div class="text-slate-600 text-xs" style="padding:16px 0">${_trText("мало точек")}</div>`; return; }
+  const W=600,H=150,pl=38,pr=10,pt=8,pb=18,plotW=W-pl-pr,plotH=H-pt-pb;
+  const n=snaps.length, xs=snaps.map((s,i)=>pl+(n===1?0:i/(n-1)*plotW));
+  const vals=series.map(s=>snaps.map(sn=>+s.acc(sn)||0));
+  let max=1;
+  if(cfg.stacked){ for(let i=0;i<n;i++){let sum=0;vals.forEach(v=>sum+=v[i]); if(sum>max)max=sum;} }
+  else vals.forEach(v=>v.forEach(x=>{if(x>max)max=x;}));
+  max=_niceMax(max);
+  const Y=v=>pt+plotH-(v/max)*plotH;
+  const defs=[],paths=[],dots=[],meta=[]; const stackTop=new Array(n).fill(0);
+  series.forEach((s,si)=>{ const col=s.color; let pts;
+    if(cfg.stacked){ const top=[],bot=[];
+      for(let i=0;i<n;i++){const base=stackTop[i];stackTop[i]=base+vals[si][i];top.push([xs[i],Y(stackTop[i])]);bot.push([xs[i],Y(base)]);}
+      pts=top; const dTop=_smooth(top),dBot=bot.slice().reverse().map(p=>`L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+      paths.push(`<path d="${dTop} ${dBot} Z" fill="${col}" fill-opacity=".26"/>`);
+      paths.push(`<path d="${dTop}" fill="none" stroke="${col}" stroke-width="1.6"/>`);
+    } else { pts=vals[si].map((v,i)=>[xs[i],Y(v)]); const gid=`ov-${cfg.id}-${si}`;
+      defs.push(`<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity="${series.length>1?.16:.30}"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient>`);
+      const dLine=_smooth(pts);
+      if(s.fill||series.length===1)paths.push(`<path d="${dLine} L${xs[n-1].toFixed(1)},${(pt+plotH).toFixed(1)} L${xs[0].toFixed(1)},${(pt+plotH).toFixed(1)} Z" fill="url(#${gid})"/>`);
+      paths.push(`<path d="${dLine}" fill="none" stroke="${col}" stroke-width="1.8"/>`); }
+    dots.push(`<circle cx="${pts[n-1][0].toFixed(1)}" cy="${pts[n-1][1].toFixed(1)}" r="2.4" fill="${col}"/>`);
+    meta.push({color:col,pts,name:s.label,vals:vals[si]}); });
+  let ax="";
+  for(let g=0;g<=2;g++){const v=max*g/2,y=Y(v);
+    ax+=`<line x1="${pl}" y1="${y.toFixed(1)}" x2="${W-pr}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`+
+        `<text class="db-ax" x="${pl-5}" y="${(y+3).toFixed(1)}" text-anchor="end">${esc(_dbNum(v))}</text>`;}
+  const xt=Math.min(5,n-1);
+  for(let t=0;t<=xt;t++){const i=Math.round(t/xt*(n-1));
+    ax+=`<text class="db-ax" x="${xs[i].toFixed(1)}" y="${H-5}" text-anchor="middle">${esc(_dbHHMM(snaps[i].ts))}</text>`;}
+  _ovHov[cfg.id]={W,pl,plotW,n,xs,pt,plotH,series:meta,snaps};
+  const legend=meta.map(s=>`<span style="color:${s.color}">● <span style="color:var(--muted)">${esc(s.name)}</span></span>`).join(" &nbsp; ");
+  const hd=meta.map((s,k)=>`<circle class="ov-hd" data-k="${k}" r="3.2" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5" style="display:none"/>`).join("");
+  el.innerHTML=`<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div>`+
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:140px" onmousemove="ovMove(event,'${escJs(cfg.id)}')" onmouseleave="ovLeave('${escJs(cfg.id)}')">`+
+    `<defs>${defs.join("")}</defs>${ax}${paths.join("")}${dots.join("")}`+
+    `<line id="ovcx-${esc(cfg.id)}" class="db-crosshair" y1="${pt}" y2="${pt+plotH}" style="display:none"/>${hd}</svg>`+
+    `<div class="db-tsi" id="ovtip-${esc(cfg.id)}" style="display:none"></div>`;
 }
-const ds=(l,c,fill)=>({label:(typeof _trText==="function"?_trText(l):l),data:[],borderColor:c,backgroundColor:c+(fill?"33":"22"),borderWidth:2,pointRadius:0,fill:!!fill,tension:.3});
-function setChart(c,snaps,arrs){c.data.labels=snaps.map(s=>{const d=new Date(s.ts*1000);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");});arrs.forEach((a,i)=>c.data.datasets[i].data=snaps.map(a));c.update();}
+function ovMove(ev,id){ const H=_ovHov[id]; if(!H)return; const svg=ev.currentTarget,r=svg.getBoundingClientRect(); if(!r.width)return;
+  const vx=(ev.clientX-r.left)/r.width*H.W; let i=Math.round((vx-H.pl)/H.plotW*(H.n-1)); i=Math.max(0,Math.min(H.n-1,i));
+  const ln=document.getElementById("ovcx-"+id); if(!ln)return; const x=H.xs[i]; ln.style.display="";ln.setAttribute("x1",x);ln.setAttribute("x2",x);
+  const dots=svg.querySelectorAll(".ov-hd");
+  H.series.forEach((s,k)=>{const c=dots[k]; if(c){c.setAttribute("cx",x.toFixed(1));c.setAttribute("cy",s.pts[i][1].toFixed(1));c.style.display="";}});
+  const tip=document.getElementById("ovtip-"+id); if(!tip)return;
+  tip.innerHTML=`<div class="db-tsi-t">${esc(_dbHHMM(H.snaps[i].ts))}</div>`+H.series.map(s=>`<div><span style="color:${s.color}">●</span> ${esc(s.name)}: <b>${esc(_dbNum(s.vals[i]))}</b></div>`).join("");
+  tip.style.display="block"; const frac=(x-H.pl)/H.plotW,right=frac>0.6;
+  tip.style.left=right?"auto":(frac*100+2)+"%"; tip.style.right=right?((1-frac)*100+2)+"%":"auto"; tip.style.top="20px";
+}
+function ovLeave(id){ const ln=document.getElementById("ovcx-"+id),tip=document.getElementById("ovtip-"+id),svg=ln&&ln.closest("svg");
+  if(ln)ln.style.display="none"; if(tip)tip.style.display="none"; if(svg)svg.querySelectorAll(".ov-hd").forEach(c=>c.style.display="none"); }
 
 const ATTACK_RE=/(\bunion\b.{0,20}\bselect\b|\bselect\b.{0,30}\bfrom\b|sleep\(\d|benchmark\(|waitfor\s+delay|\bor\s+\d+\s*[-*=]|information_schema|\/\*!|0x[0-9a-f]{8}|<script|onerror\s*=|javascript:|\.\.\/\.\.|etc\/passwd|\$\{(jndi|@?print)|\bmd5\(|;\s*print|\bxor\b)/i;
 function looksMalicious(s){return ATTACK_RE.test(String(s||""));}
@@ -3648,10 +3698,10 @@ document.getElementById("suggest-btn").onclick=async()=>{
   }catch(e){el.textContent="ошибка генерации";}
 };
 
-charts.traffic=mkChart("chartTraffic",[ds("всего","#6366f1"),ds("реальный","#22d3ee"),ds("denylist","#64748b")]);
-charts.threats=mkChart("chartThreats",[ds("новые блоки","#f59e0b"),ds("CRS","#ef4444"),ds("404","#a78bfa")]);
-charts.status=mkChart("chartStatus",[ds("2xx","#10b981",1),ds("3xx","#38bdf8",1),ds("4xx","#f59e0b",1),ds("5xx","#ef4444",1)],true);
-charts.latency=mkChart("chartLatency",[ds("p95","#a78bfa",1)]);
+charts.traffic=mkChart("chartTraffic",[ds("всего","var(--accent)"),ds("реальный","#38bdf8"),ds("denylist","var(--faint)")]);
+charts.threats=mkChart("chartThreats",[ds("новые блоки","var(--warn)"),ds("CRS","var(--crit)"),ds("404","var(--accent2)")]);
+charts.status=mkChart("chartStatus",[ds("2xx","var(--ok)",1),ds("3xx","#38bdf8",1),ds("4xx","var(--warn)",1),ds("5xx","var(--crit)",1)],true);
+charts.latency=mkChart("chartLatency",[ds("p95","var(--accent2)",1)]);
 let paused=false;
 function togglePause(){paused=!paused;const b=document.getElementById("pause-btn");b.textContent=paused?"▶":"⏸";b.title=paused?"возобновить":"пауза авто-обновления";if(!paused)refresh();}
 function setupCollapse(){
