@@ -266,6 +266,9 @@
   .db-wf-c{border-radius:2px;aspect-ratio:1}
   .db-wf-meta{min-width:0}
   .db-wf-pct{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em}
+  .db-drill{cursor:pointer}
+  .db-bar-row.db-drill:hover,.db-tbl tr.db-drill:hover{background:#ffffff0d}
+  .db-bar-row.db-drill:hover .db-bar-k{color:var(--accent2)}
   .ov-chart{position:relative;min-height:154px}
   .ov-stat{display:flex;flex-direction:column}
   .ov-stat-h{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:2px}
@@ -2205,6 +2208,21 @@ const _DB_METRICS={
 const _DB_ANALYTICS={top_paths:"Top paths",top_talkers:"Top talkers (IPs)",top_user_agents:"Top UA",
   top_domains:"Top domains",attack_types:"Attack types",methods:"Methods",crs_rules:"CRS rules",
   geo:"Countries",slow_endpoints:"Slow endpoints"};
+// drilldown: which analytics keys route a row-click to an existing view/handler
+const _DB_DRILL={top_talkers:1,geo:1,top_paths:1,slow_endpoints:1};
+function _dbDrillable(k){ return !!_DB_DRILL[k]; }
+function _dbDrillGo(key,value){
+  if(!value)return;
+  if(key==="top_talkers"){ if(typeof openProfile==="function")openProfile(value); return; }
+  if(key==="geo"){ if(typeof openIps==="function")openIps(value); return; }
+  if(key==="top_paths"||key==="slow_endpoints"){
+    if(typeof showView==="function")showView("dash");
+    ["ex_host","ex_status","ex_ip"].forEach(id=>{const e=document.getElementById(id); if(e)e.value="";});
+    const p=document.getElementById("ex_path"); if(p)p.value=value;
+    if(typeof runExplorer==="function")runExplorer();
+    const out=document.getElementById("ex_out"); if(out)setTimeout(()=>out.scrollIntoView({behavior:"smooth",block:"center"}),120);
+  }
+}
 // panel-type taxonomy: which input(s) each type consumes
 const _DB_TYPES=[["stat","Stat"],["multistat","Multi-stat"],["timeseries","Time series"],["stacked","Stacked area"],
   ["sparkgrid","Sparkline grid"],["heatmap","Heatmap"],["gauge","Gauge"],["waffle","Waffle %"],["bar","Bar"],["hbar","Bar %"],
@@ -2484,14 +2502,15 @@ function _dbList(key){ let v=(_dbData.analytics||{})[key]; if(!Array.isArray(v))
   return v.map(it=>({k:it.key!=null?it.key:(it.name||it.label||it.uri||it.cc||"—"),n:+it.count||+it.n||+it.hits||0})); }
 function _dbBar(p,pct){
   const rows=_dbList(p.key).slice(0,8); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
-  const total=rows.reduce((s,r)=>s+r.n,0)||1,max=Math.max(...rows.map(r=>r.n),1);
+  const total=rows.reduce((s,r)=>s+r.n,0)||1,max=Math.max(...rows.map(r=>r.n),1),dr=_dbDrillable(p.key);
   return rows.map(r=>{ const w=pct?Math.round(r.n/total*100):Math.round(r.n/max*100);
     const rt=pct?Math.round(r.n/total*100)+"%":_dbNum(r.n);
-    return `<div class="db-bar-row"><span class="db-bar-k" title="${esc(String(r.k))}">${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${w}%"></span></span><span class="db-bar-n">${rt}</span></div>`; }).join("");
+    return `<div class="db-bar-row${dr?' db-drill':''}" data-dk="${esc(String(r.k))}"><span class="db-bar-k" title="${esc(String(r.k))}">${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${w}%"></span></span><span class="db-bar-n">${rt}</span></div>`; }).join("");
 }
 function _dbTable(p){
   const rows=_dbList(p.key).slice(0,20); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
-  return `<div style="overflow:auto;height:100%"><table class="db-tbl"><thead><tr><th>${esc(_DB_ANALYTICS[p.key]||p.key)}</th><th style="text-align:right">#</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(String(r.k))}</td><td style="text-align:right">${_dbNum(r.n)}</td></tr>`).join("")}</tbody></table></div>`;
+  const dr=_dbDrillable(p.key);
+  return `<div style="overflow:auto;height:100%"><table class="db-tbl"><thead><tr><th>${esc(_DB_ANALYTICS[p.key]||p.key)}</th><th style="text-align:right">#</th></tr></thead><tbody>${rows.map(r=>`<tr${dr?' class="db-drill"':''} data-dk="${esc(String(r.k))}"><td class="mono" style="max-width:0;overflow:hidden;text-overflow:ellipsis">${esc(String(r.k))}</td><td style="text-align:right">${_dbNum(r.n)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function _dbPie(p,donut){
   const rows=_dbList(p.key).slice(0,7); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
@@ -2534,7 +2553,7 @@ function _hmColor(t){ // 0..1 → dark → accent ramp
 function _dbGeo(p){
   const rows=_dbList("geo").slice(0,10); if(!rows.length)return `<span class="text-slate-600 text-xs">${_trText("нет данных")}</span>`;
   const max=Math.max(...rows.map(r=>r.n),1);
-  return rows.map(r=>`<div class="db-bar-row"><span class="db-bar-k">${flag(String(r.k))} ${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${Math.round(r.n/max*100)}%"></span></span><span class="db-bar-n">${_dbNum(r.n)}</span></div>`).join("");
+  return rows.map(r=>`<div class="db-bar-row db-drill" data-dk="${esc(String(r.k))}"><span class="db-bar-k">${flag(String(r.k))} ${esc(String(r.k))}</span><span class="db-bar-track"><span class="db-bar-fill" style="width:${Math.round(r.n/max*100)}%"></span></span><span class="db-bar-n">${_dbNum(r.n)}</span></div>`).join("");
 }
 function _dbSparkGrid(p){                     // small multiples: one mini-trend per metric
   const snaps=_dbData.history||[], sum=_dbData.summary||{};
@@ -2591,8 +2610,8 @@ function _dbTreemap(p){                       // analytics top-list → treemap 
   const total=top.reduce((s,r)=>s+r.n,0)||1;
   const tiles=_squarify(top.map((r,i)=>({r,i,area:r.n})),0,0,100,100);
   return `<div class="db-tm">`+tiles.map(t=>{
-    const r=t.item.r, col=r._o?"var(--faint)":_DB_PALETTE[t.item.i%_DB_PALETTE.length], pct=Math.round(r.n/total*100), lbl=t.w>16&&t.h>12;
-    return `<div class="db-tm-c" style="left:${t.x.toFixed(2)}%;top:${t.y.toFixed(2)}%;width:${t.w.toFixed(2)}%;height:${t.h.toFixed(2)}%;background:${col};color:${r._o?'#ECEAF6':'#0d0c14'}" title="${esc(String(r.k))}: ${_dbNum(r.n)} (${pct}%)">${lbl?`<span class="db-tm-k">${esc(String(r.k))}</span><span class="db-tm-n">${_dbNum(r.n)}</span>`:""}</div>`;
+    const r=t.item.r, col=r._o?"var(--faint)":_DB_PALETTE[t.item.i%_DB_PALETTE.length], pct=Math.round(r.n/total*100), lbl=t.w>16&&t.h>12, dr=_dbDrillable(p.key)&&!r._o;
+    return `<div class="db-tm-c${dr?' db-drill':''}"${dr?` data-dk="${esc(String(r.k))}"`:''} style="left:${t.x.toFixed(2)}%;top:${t.y.toFixed(2)}%;width:${t.w.toFixed(2)}%;height:${t.h.toFixed(2)}%;background:${col};color:${r._o?'#ECEAF6':'#0d0c14'}" title="${esc(String(r.k))}: ${_dbNum(r.n)} (${pct}%)">${lbl?`<span class="db-tm-k">${esc(String(r.k))}</span><span class="db-tm-n">${_dbNum(r.n)}</span>`:""}</div>`;
   }).join("")+`</div>`;
 }
 async function _dbLogsPanel(p,el){
@@ -5995,6 +6014,14 @@ function cmdkKey(e){
 function cmdkRun(i){ const x=_cmdkShown[i]; if(!x)return; const fn=x.it.run; cmdkClose(); if(typeof fn==='function')setTimeout(fn,0); }
 async function _cmdkBan(ip){ cmdkClose(); if(await uiConfirm(_cmdkRu()?('Забанить '+ip+' на 30 дней?'):('Ban '+ip+' for 30 days?'))) blockIP(ip,'manual (cmd-k)',2592000); }
 document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); cmdkToggle(); } },true);
+// dashboard panel drilldown: delegated row-click → existing view/handler
+document.addEventListener('click',e=>{ if(!e.target||!e.target.closest)return;
+  const row=e.target.closest('#db-grid [data-dk]'); if(!row)return;
+  const panel=row.closest('.db-panel'); if(!panel)return;
+  const dash=(typeof dbCur==='function')?dbCur():null;
+  const p=dash&&(dash.panels||[]).find(x=>x.id===panel.getAttribute('data-pid'));
+  if(!p||!p.key||!_dbDrillable(p.key))return;
+  e.preventDefault(); _dbDrillGo(p.key,row.getAttribute('data-dk')); });
 
 // ── Density toggle (Compact / Comfortable), persisted per-user ─────────────────
 function _densityBtn(d){ const b=document.getElementById('density-btn'); if(!b)return;
