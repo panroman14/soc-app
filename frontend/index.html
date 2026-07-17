@@ -278,6 +278,15 @@
   /* keyboard focus (a11y): visible high-contrast ring, non-violet so it survives on violet controls */
   :focus-visible{outline:2px solid var(--ok);outline-offset:2px}
   .btn:focus-visible,.sw:focus-visible{outline:2px solid var(--ok);outline-offset:2px;box-shadow:none}
+  /* density: Compact tightens data-dense surfaces (Comfortable = default, no overrides) */
+  :root[data-density="compact"] .card{padding:10px}
+  :root[data-density="compact"] #stats{gap:8px}
+  :root[data-density="compact"] .ov-stat-v{font-size:17px}
+  :root[data-density="compact"] .ov-stat-spark{height:14px}
+  :root[data-density="compact"] .db-grid{gap:8px}
+  :root[data-density="compact"] .db-panel{padding:9px}
+  :root[data-density="compact"] .lg-row{padding-top:1px;padding-bottom:1px}
+  :root[data-density="compact"] .lg-table{font-size:11px}
   /* command palette (Cmd/Ctrl-K) */
   .cmdk-ov{position:fixed;inset:0;z-index:120;background:#0a0912cc;backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
   .cmdk-box{width:min(560px,92vw);max-height:64vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border2);border-radius:14px;box-shadow:0 24px 60px -20px #000d,0 0 0 1px #ffffff08;overflow:hidden}
@@ -359,6 +368,7 @@
     </div>
     <span id="updated" class="hidden"></span>
     <span id="be-health" class="hidden mono cursor-default" title="backend health"></span>
+    <button id="density-btn" onclick="toggleDensity()" class="btn btn-ghost btn-xs" title="density">≡</button>
     <button id="lang-btn" onclick="toggleLang()" class="iconbtn-x btn btn-ghost btn-xs" title="language">EN</button>
     <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">🤖 —</button>
     <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
@@ -5908,7 +5918,7 @@ const onDash=()=>_view==="dash";
 // вернулись на вкладку → сразу обновляем (а не ждём следующий тик)
 document.addEventListener("visibilitychange",()=>{if(isActive()){refresh();if(onDash())renderBlocklist();}});
 
-applyI18n();initCards();startTranslator();                         // pure-UI, safe before auth
+applyI18n();initCards();startTranslator();_densityInit();           // pure-UI, safe before auth
 authInit().then(ok=>{ if(!ok)return;                               // gate app data on login
   parseHash();renderWinSel();renderStats(null);refresh();loadDigest();
   renderBlocklist();renderBanCandidates();renderSuspects();loadBranding();loadScope();
@@ -5985,6 +5995,15 @@ function cmdkKey(e){
 function cmdkRun(i){ const x=_cmdkShown[i]; if(!x)return; const fn=x.it.run; cmdkClose(); if(typeof fn==='function')setTimeout(fn,0); }
 async function _cmdkBan(ip){ cmdkClose(); if(await uiConfirm(_cmdkRu()?('Забанить '+ip+' на 30 дней?'):('Ban '+ip+' for 30 days?'))) blockIP(ip,'manual (cmd-k)',2592000); }
 document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); cmdkToggle(); } },true);
+
+// ── Density toggle (Compact / Comfortable), persisted per-user ─────────────────
+function _densityBtn(d){ const b=document.getElementById('density-btn'); if(!b)return;
+  b.textContent=d==='compact'?'≣':'☰';
+  b.title=(typeof _lang!=='undefined'&&_lang==='ru')?(d==='compact'?'Плотность: компактно':'Плотность: свободно'):(d==='compact'?'Density: compact':'Density: comfortable'); }
+function _densityInit(){ let d='comfortable'; try{d=localStorage.getItem('soc_density')||'comfortable';}catch(e){}
+  document.documentElement.setAttribute('data-density',d); _densityBtn(d); }
+function toggleDensity(){ const cur=document.documentElement.getAttribute('data-density')==='compact'?'comfortable':'compact';
+  document.documentElement.setAttribute('data-density',cur); try{localStorage.setItem('soc_density',cur);}catch(e){} _densityBtn(cur); }
 </script>
 <div id="cmdk" class="cmdk-ov" style="display:none" role="dialog" aria-modal="true" aria-label="Command palette" onmousedown="if(event.target===this)cmdkClose()">
   <div class="cmdk-box">
