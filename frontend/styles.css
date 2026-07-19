@@ -297,8 +297,8 @@
   .ov-delta.bad{color:var(--crit)} .ov-delta.good{color:var(--ok)} .ov-delta.neutral{color:var(--muted)} .ov-delta.flat{color:var(--faint)}
   .ov-stat-hot{box-shadow:inset 0 0 0 1px #ff983055}
   /* keyboard focus (a11y): visible high-contrast ring, non-violet so it survives on violet controls */
-  :focus-visible{outline:2px solid var(--ok);outline-offset:2px}
-  .btn:focus-visible,.sw:focus-visible{outline:2px solid var(--ok);outline-offset:2px;box-shadow:none}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn:focus-visible,.sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px;box-shadow:none}
   /* density: Compact tightens data-dense surfaces (Comfortable = default, no overrides) */
   :root[data-density="compact"] .card{padding:10px}
   :root[data-density="compact"] #stats{gap:8px}
