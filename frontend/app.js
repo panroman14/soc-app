@@ -360,7 +360,7 @@ const RU2EN={
   "не удалось загрузить:":"failed to load:","🛡️ защищённые (в 403 добавить нельзя, общий список с автобаном):":"🛡️ protected (can't add to 403, shared list with auto-ban):","— меняются в":"— managed in",
   ": 403 выключен — включить":": 403 off — enable",": нет связи с бэкендом":": no connection to the backend","дрейф":"drift",
   ": дрейф рендера — нажми ↻ ресинк в Денлисте":": render drift — hit ↻ resync in Denylist",": 403 активен — выключить":": 403 active — disable",
-  "· найдено":"· found","ничего не найдено по «":"nothing found for “","симв.":"chars","(без имени)":"(no name)",
+  "· найдено":"· found","ничего не найдено по «":"nothing found for “","chars":"chars","(без имени)":"(no name)",
   "добавить путь (как «Путь содержит», напр. /.env)":"add a path (like “Path contains”, e.g. /.env)","» уже есть — пропущено":"” already exists — skipped",
   "в правиле не осталось ни одного пути — тогда удали правило целиком.":"no paths left in the rule — then delete the rule entirely.","Точный URI":"Exact URI",
   "Wildcard (* = что угодно)":"Wildcard (* = anything)","/admin/*  или  *.sql":"/admin/*  or  *.sql","Regex (как nginx ~*)":"Regex (like nginx ~*)",
@@ -3554,32 +3554,32 @@ function _p403RenderList(){
   const q=(document.getElementById("p403-search").value||"").toLowerCase().trim();
   const filt=q?groups.filter(g=>((g.rep.name||"")+" "+(g.rep.pattern||"")).toLowerCase().includes(q)):groups;
   const enN=groups.filter(g=>g.rep.enabled!==false).length;
-  document.getElementById("p403-count").textContent="· "+groups.length+" ("+enN+" вкл)"+(q?(" · найдено "+filt.length):"");
+  document.getElementById("p403-count").textContent="· "+groups.length+" ("+enN+" on)"+(q?(" · "+filt.length+" found"):"");
   const list=document.getElementById("p403-list");
-  if(!groups.length){list.innerHTML='<div class="text-slate-600 text-xs">пусто — добавь правило, засей из автобана или базовый набор.</div>';return;}
-  if(!filt.length){list.innerHTML='<div class="text-slate-600 text-xs">ничего не найдено по «'+esc(q)+'».</div>';return;}
+  if(!groups.length){list.innerHTML='<div class="text-xs" style="color:var(--faint);padding:12px 2px">No rules yet — add one, seed from auto-ban, or use the basic scanner set.</div>';return;}
+  if(!filt.length){list.innerHTML='<div class="text-xs" style="color:var(--faint);padding:12px 2px">Nothing matches “'+esc(q)+'”.</div>';return;}
   list.innerHTML=filt.map(g=>{const r=g.rep; const en=r.enabled!==false;
     const _backends=[...new Set(g.backends.filter(Boolean))];
     const by=r.added_by?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">${esc(r.added_by)}</span>`:"";
     const dt=r.ts?`<span class="text-[10px] text-slate-600 shrink-0">${_p403fmtDate(r.ts)}</span>`:"";
     const plen=(r.pattern||"").length;
     const isMain=String(_mainRules.path_id)===String(r.id);
-    const meta=[r.added_by?esc(r.added_by):"",r.ts?_p403fmtDate(r.ts):"",plen+" симв."].filter(Boolean).join(" · ");
-    return `<div class="bg-slate-900/40 border ${isMain?'border-amber-500/40':'border-slate-800'} rounded-lg px-3.5 py-3 ${en?'':'opacity-60'}">
+    const meta=[r.added_by?esc(r.added_by):"",r.ts?_p403fmtDate(r.ts):"",plen+" chars"].filter(Boolean).join(" · ");
+    return `<div class="px-1 py-3 ${en?'':'opacity-60'}" style="border-bottom:1px solid var(--border)">
       <div class="flex items-start gap-2.5">
-        <button onclick="p403Toggle('${escJs(r.id)}',${!en})" title="${en?'выключить':'включить'}" class="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border ${en?'bg-emerald-600/25 border-emerald-500/50 text-emerald-300':'bg-slate-800 border-slate-700 text-slate-500'}">${en?'on':'off'}</button>
+        <button onclick="p403Toggle('${escJs(r.id)}',${!en})" title="${en?'disable':'enable'}" class="st-pill ${en?'st-on':'st-off'} shrink-0" style="margin-top:1px">${en?'on':'off'}</button>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <button onclick="setMainRule('path','${escJs(r.id)}')" title="${isMain?'основное 403-правило':'сделать основным'}" class="text-sm shrink-0 leading-none ${isMain?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>
-            <span class="text-[13px] text-slate-100 font-semibold truncate">${esc(r.name||'(без имени)')}</span>
-            ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">основное</span>':''}
+            <button onclick="setMainRule('path','${escJs(r.id)}')" title="${isMain?'primary 403 rule':'make primary'}" class="star-btn ${isMain?'on':''} shrink-0">★</button>
+            <span class="lrow-name truncate">${esc(r.name||'(unnamed)')}</span>
+            ${isMain?'<span class="text-[10px] px-1.5 py-0.5 rounded" style="background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)">primary</span>':''}
           </div>
           <div class="text-[10px] text-slate-500 mt-0.5">${meta}</div>
         </div>
         <div class="flex items-center gap-1 shrink-0">
-          <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="btn btn-xs">паттерн&nbsp;▾</button>
-          <button onclick="p403EditOpen('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
-          <button onclick="p403Delete('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
+          <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="btn btn-xs">pattern&nbsp;▾</button>
+          <button onclick="p403EditOpen('${escJs(r.id)}')" title="edit" class="ibtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+          <button onclick="p403Delete('${escJs(r.id)}')" title="delete" class="ibtn danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
         </div>
       </div>
       <div class="mt-2 pt-2 border-t border-slate-800/60">
