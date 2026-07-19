@@ -531,7 +531,12 @@ function _lgChips(){
   const out=[];
   if(_lg.cls)out.push({field:"status",op:"class",value:_lg.cls});
   if(_lg.pathQ)out.push({field:"path",op:"re",value:_lg.pathQ});
-  _lg.chips.forEach(c=>out.push({field:c.field,op:"eq",value:c.value}));
+  // group chips by field: same field + multiple values => OR (regex alternation),
+  // different fields stay separate (AND). Prevents "path=A AND path=B" => 0 rows.
+  const byF={}; _lg.chips.forEach(c=>{ (byF[c.field]=byF[c.field]||[]).push(c.value); });
+  Object.keys(byF).forEach(f=>{ const vs=byF[f];
+    if(vs.length===1) out.push({field:f,op:"eq",value:vs[0]});
+    else out.push({field:f,op:"re",value:vs.map(v=>String(v).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")}); });
   return out;
 }
 function _lgBody(extra){
