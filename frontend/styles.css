@@ -43,6 +43,8 @@
     border-radius:var(--radius);box-shadow:var(--shadow);transition:box-shadow .2s var(--ease),border-color .2s var(--ease),transform .2s var(--ease)}
   /* opt-in elevation for interactive cards (hover lift) */
   .card-lift:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--border2)}
+  /* Phase 3: unified Grafana-style panel title for every card heading */
+  .card h3{font-size:13px;font-weight:500;letter-spacing:.01em;color:var(--text)}
   .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--radius-sm);font-size:12.5px;
     font-weight:600;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer;transition:.14s var(--ease);white-space:nowrap}
   .btn:hover{background:#23282e;border-color:var(--border2)}
