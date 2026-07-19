@@ -267,6 +267,13 @@
   .kb-cheat kbd{font-family:ui-monospace,monospace;font-size:11px;color:var(--text);border:1px solid var(--border2);border-bottom-width:2px;border-radius:5px;padding:2px 7px;background:#ffffff0d;white-space:nowrap;justify-self:start}
   .kb-cheat span{color:var(--muted)}
   .ov-chart{position:relative;min-height:154px}
+  /* Phase 5: Grafana-style Last/Max/Mean legend table under time-series */
+  .ov-leg{width:100%;margin-top:6px;border-collapse:collapse;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:10.5px}
+  .ov-leg th{text-align:right;color:var(--faint);font-weight:400;padding:1px 0 3px;border-bottom:1px solid var(--border)}
+  .ov-leg th:first-child{text-align:left}
+  .ov-leg td{color:var(--muted);text-align:right;padding:2px 0}
+  .ov-leg td.ovl-n{text-align:left;color:var(--text)}
+  .ov-leg .ovl-sw{width:10px;height:3px;border-radius:2px;display:inline-block;vertical-align:middle;margin-right:6px}
   .ov-stat{display:flex;flex-direction:column}
   .ov-stat-h{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:2px}
   .ov-stat-l{font-size:10px;color:var(--faint)}

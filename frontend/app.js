@@ -1688,13 +1688,17 @@ function _ovRender(cfg,snaps){
   for(let t=0;t<=xt;t++){const i=Math.round(t/xt*(n-1));
     ax+=`<text class="db-ax" x="${xs[i].toFixed(1)}" y="${H-5}" text-anchor="middle">${esc(_dbHHMM(snaps[i].ts))}</text>`;}
   _ovHov[cfg.id]={W,pl,plotW,n,xs,pt,plotH,series:meta,snaps};
-  const legend=meta.map(s=>`<span style="color:${s.color}">● <span style="color:var(--muted)">${esc(s.name)}</span></span>`).join(" &nbsp; ");
+  const _ovStat=a=>{if(!a||!a.length)return{last:0,max:0,mean:0};let mx=-Infinity,sm=0;for(const x of a){if(x>mx)mx=x;sm+=x;}return{last:a[a.length-1],max:mx,mean:sm/a.length};};
+  const _ovFmt=v=>{const n=Math.abs(v);if(n>=1000)return _dbNum(Math.round(v));if(Number.isInteger(v))return String(v);if(n>=10)return String(Math.round(v));if(n>=1)return v.toFixed(1);return v.toFixed(2);};
+  const legend=`<table class="ov-leg"><thead><tr><th></th><th>Last</th><th>Max</th><th>Mean</th></tr></thead><tbody>`+
+    meta.map(s=>{const t=_ovStat(s.vals);return `<tr><td class="ovl-n"><span class="ovl-sw" style="background:${s.color}"></span>${esc(s.name)}</td><td>${esc(_ovFmt(t.last))}</td><td>${esc(_ovFmt(t.max))}</td><td>${esc(_ovFmt(t.mean))}</td></tr>`;}).join("")+
+    `</tbody></table>`;
   const hd=meta.map((s,k)=>`<circle class="ov-hd" data-k="${k}" r="3.2" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5" style="display:none"/>`).join("");
-  el.innerHTML=`<div class="text-[10px] mb-1" style="color:var(--faint)">${legend}</div>`+
-    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:140px" onmousemove="ovMove(event,'${escJs(cfg.id)}')" onmouseleave="ovLeave('${escJs(cfg.id)}')">`+
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:140px" onmousemove="ovMove(event,'${escJs(cfg.id)}')" onmouseleave="ovLeave('${escJs(cfg.id)}')">`+
     `<defs>${defs.join("")}</defs>${ax}${paths.join("")}${dots.join("")}`+
     `<line id="ovcx-${esc(cfg.id)}" class="db-crosshair" y1="${pt}" y2="${pt+plotH}" style="display:none"/>${hd}</svg>`+
-    `<div class="db-tsi" id="ovtip-${esc(cfg.id)}" style="display:none"></div>`;
+    `<div class="db-tsi" id="ovtip-${esc(cfg.id)}" style="display:none"></div>`+
+    legend;
 }
 function ovMove(ev,id){ const H=_ovHov[id]; if(!H)return; const svg=ev.currentTarget,r=svg.getBoundingClientRect(); if(!r.width)return;
   const vx=(ev.clientX-r.left)/r.width*H.W; let i=Math.round((vx-H.pl)/H.plotW*(H.n-1)); i=Math.max(0,Math.min(H.n-1,i));
