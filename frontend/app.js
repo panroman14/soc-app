@@ -3574,7 +3574,7 @@ function _p403RenderList(){
           <div class="text-[10px] text-slate-500 mt-0.5">${meta}</div>
         </div>
         <div class="flex items-center gap-1 shrink-0">
-          <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">паттерн&nbsp;▾</button>
+          <button onclick="document.getElementById('pat-${esc(r.id)}').classList.toggle('hidden')" class="btn btn-xs">паттерн&nbsp;▾</button>
           <button onclick="p403EditOpen('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-indigo-500/20">✎</button>
           <button onclick="p403Delete('${escJs(r.id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-rose-300 hover:bg-rose-500/20">🗑</button>
         </div>
@@ -3635,14 +3635,14 @@ function _p403RenderEditor(id){
   panel.innerHTML=`
     <div class="flex items-center gap-2 mb-2">
       <span class="text-[11px] text-slate-500 shrink-0">имя:</span>
-      <input value="${esc(st.name)}" oninput="_p403EditState['${escJs(id)}'].name=this.value" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 flex-1"/>
+      <input value="${esc(st.name)}" oninput="_p403EditState['${escJs(id)}'].name=this.value" class="input text-xs flex-1"/>
     </div>
     <div class="text-[11px] text-slate-500 mb-1">путей: ${st.parts.length} — × чтобы убрать <span class="text-slate-600">(ⓡ = регэксп, наведи — увидишь точный паттерн)</span></div>
     <div class="flex flex-wrap gap-1 mb-2">
       ${st.parts.map((p,i)=>{const h=_p403Humanize(p);return `<span class="inline-flex items-center gap-1 bg-slate-800 rounded px-1.5 py-0.5 text-[11px]"><span class="mono truncate max-w-[280px] ${h.regex?'text-amber-300':'text-slate-300'}" title="${esc(p)}">${esc(h.text)}${h.regex?' <span class="text-[9px] text-amber-500">ⓡ</span>':''}</span><button onclick="p403EditDel('${escJs(id)}',${i})" title="убрать" class="text-rose-400 hover:text-rose-300 font-bold">×</button></span>`}).join("")||'<span class="text-slate-600 text-[11px]">пусто</span>'}
     </div>
     <div class="flex items-center gap-2 mb-2">
-      <input id="ed-add-${esc(id)}" onkeydown="if(event.key==='Enter')p403EditAdd('${escJs(id)}')" placeholder="добавить путь (как «Путь содержит», напр. /.env)" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 mono flex-1"/>
+      <input id="ed-add-${esc(id)}" onkeydown="if(event.key==='Enter')p403EditAdd('${escJs(id)}')" placeholder="добавить путь (как «Путь содержит», напр. /.env)" class="input text-xs mono flex-1"/>
       <button onclick="p403EditAdd('${escJs(id)}')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700 shrink-0">+ путь</button>
     </div>
     <div class="flex items-center gap-2">
@@ -3848,7 +3848,7 @@ function abMtypeChange(){
 }
 function abPathRow(value){
   const wrap=document.createElement("div");wrap.className="flex gap-1.5 ab-path-row";
-  wrap.innerHTML=`<input class="ab-path-inp flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mono" placeholder="/wp-login.php">
+  wrap.innerHTML=`<input class="ab-path-inp flex-1 input mono" placeholder="/wp-login.php">
     <button type="button" onclick="this.parentElement.remove();abFixOr()" class="ab-path-del px-2 rounded bg-slate-800 text-slate-500 hover:text-red-300 hover:bg-slate-700 text-xs" title="убрать">✕</button>`;
   wrap.querySelector("input").value=value||"";
   return wrap;
