@@ -1606,8 +1606,8 @@ let WIN="5m", HOST="";
 let lastAn={analytics:{}}, lastAnKey="", lastAnAt=0;
 let lastHist={snapshots:[]}, lastIns={current:null,history:[]}, lastHistKey="", lastHistAt=0;
 function renderWinSel(){
-  document.getElementById("winsel").innerHTML=WINS.map(w=>
-    `<button onclick="setWin('${w}')" class="text-[11px] px-2 py-1 rounded ${w===WIN?'bg-indigo-500/25 text-indigo-200 border border-indigo-500/40':'bg-slate-800 text-slate-400 hover:bg-slate-700'}">${w}</button>`).join("");
+  document.getElementById("winsel").innerHTML=`<div class="seg">`+WINS.map(w=>
+    `<button onclick="setWin('${w}')" class="${w===WIN?"on":""}">${w}</button>`).join("")+`</div>`;
 }
 function setWin(w){WIN=w;renderWinSel();updateHash();refresh();}
 function setHost(v){HOST=(v||"").trim();updateHash();refresh();}
@@ -2403,9 +2403,8 @@ function renderHistory(list){
 }
 
 function chip(label,ok,detail){
-  const c=ok===null?"bg-slate-700/30 text-slate-400 border-slate-600/40":ok?"bg-emerald-500/10 text-emerald-300 border-emerald-500/30":"bg-red-500/10 text-red-300 border-red-500/40";
-  const dot=ok===null?"#64748b":ok?"#73bf69":"#f2495c";
-  return `<span class="px-2.5 py-1 rounded-md text-xs font-medium border ${c} flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full" style="background:${dot}"></span>${label}${detail?`<span class="text-slate-500">· ${detail}</span>`:""}</span>`;
+  const col=ok===null?"var(--muted)":ok?"var(--ok)":"var(--crit)";
+  return `<span class="hchip" title="${esc(detail||"")}"><span class="hd" style="background:${col}"></span><b style="color:${col}">${esc(label)}</b>${detail?` <span class="hchip-d">· ${esc(detail)}</span>`:""}</span>`;
 }
 function renderLLMToggle(enabled){
   const sb=document.getElementById("llm-toggle");
