@@ -142,29 +142,32 @@ tailwind.config={theme:{extend:{colors:{
     <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик по доменам <span class="text-slate-500 font-normal">/ МБ</span></h3><div id="bytes_by_domain" class="space-y-1.5"></div></div>
   </section>
 
-  <h2 class="sec">Обзор запросов <span class="text-slate-600 normal-case font-normal">— клик по путям/IP/UA выше тоже открывает запросы</span></h2>
+  <h2 class="sec">Requests overview <span class="font-normal normal-case tracking-normal" style="color:var(--faint)">— clicking a path / IP / UA above also opens requests</span></h2>
   <section class="card p-4 mb-2">
     <div class="flex gap-2 mb-3">
       <input id="nl_q" data-llm placeholder="Ask in words: “404 on /admin in the last 30 min”" class="input flex-1 text-xs" onkeydown="if(event.key==='Enter')runNL()">
       <button data-llm onclick="runNL()" class="btn btn-primary btn-xs">Ask</button>
     </div>
-    <div class="flex flex-wrap gap-2 mb-3">
-      <input id="ex_host" placeholder="хост (example.com)" class="input text-xs w-40">
-      <input id="ex_path" placeholder="путь (/admin)" class="input text-xs w-40">
-      <input id="ex_status" placeholder="код (404)" class="input text-xs w-24">
-      <input id="ex_ip" placeholder="IP (203.0.113.)" class="input text-xs w-36">
-      <select id="ex_minutes" onchange="runExplorer()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="за какое время">
-        <option value="15">15 мин</option><option value="30">30 мин</option>
-        <option value="60" selected>1 час</option><option value="180">3 часа</option>
-        <option value="480">8 часов</option>
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <input id="ex_host" placeholder="host" class="input text-xs w-36">
+      <input id="ex_path" placeholder="path" class="input text-xs w-36">
+      <input id="ex_status" placeholder="status" class="input text-xs w-20">
+      <input id="ex_ip" placeholder="IP" class="input text-xs w-32">
+      <select id="ex_minutes" onchange="runExplorer()" class="input text-xs" style="width:auto" title="time range">
+        <option value="15">15 min</option><option value="30">30 min</option>
+        <option value="60" selected>1 hour</option><option value="180">3 hours</option>
+        <option value="480">8 hours</option>
       </select>
-      <button onclick="runExplorer()" class="px-3 py-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs hover:bg-indigo-500/30">Найти</button>
-      <span class="text-[11px] text-slate-600 self-center">до 80 строк · пресеты:</span>
-      <button onclick="preset('scanners')" class="btn btn-xs">сканеры</button>
+      <button onclick="runExplorer()" class="btn btn-primary btn-xs">Find</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-[11px]" style="color:var(--faint)">Presets:</span>
+      <button onclick="preset('scanners')" class="btn btn-xs">scanners</button>
       <button onclick="preset('auth')" class="btn btn-xs">401/403 auth</button>
       <button onclick="preset('5xx')" class="btn btn-xs">5xx</button>
+      <span class="text-[11px] ml-auto" style="color:var(--faint)">up to 80 rows</span>
     </div>
-    <div id="ex_out" class="overflow-auto max-h-96"><div class="text-slate-600 text-xs">Задай фильтр и нажми «Найти» — увидишь сырые запросы.</div></div>
+    <div id="ex_out" class="overflow-auto max-h-96 mt-3"><div class="text-xs" style="color:var(--faint)">Set a filter and hit Find to see raw requests.</div></div>
   </section>
 
   <h2 class="sec">Денлист <span class="text-slate-500 font-normal">/ блокировки на ingress</span></h2>
