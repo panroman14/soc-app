@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SOC Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+/* remap Tailwind color ramps → Grafana palette so hardcoded utilities match the design tokens */
+tailwind.config={theme:{extend:{colors:{
+  slate:{50:'#f0f1f3',100:'#e4e6ea',200:'#d5d8dd',300:'#ccccdc',400:'#b0b6bd',500:'#9fa7b3',600:'#7b8087',700:'#343741',800:'#262b31',900:'#181b1f',950:'#111217'},
+  gray:{50:'#f0f1f3',100:'#e4e6ea',200:'#d5d8dd',300:'#ccccdc',400:'#b0b6bd',500:'#9fa7b3',600:'#7b8087',700:'#343741',800:'#262b31',900:'#181b1f',950:'#111217'},
+  indigo:{50:'#e9f0fe',100:'#cfe0fc',200:'#a9c6f7',300:'#84aef0',400:'#6b9ff0',500:'#5794f2',600:'#3d71d9',700:'#3159ad',800:'#274785',900:'#1f3a6b',950:'#14264a'},
+  sky:{50:'#e9f2fe',100:'#cfe4fd',200:'#a6ccf7',300:'#8ab8ff',400:'#38bdf8',500:'#38a0f0',600:'#2f7cd6',700:'#2a63a8',800:'#264f82',900:'#203f68',950:'#14273f'},
+  red:{50:'#fdecee',100:'#fbd2d6',200:'#f7abb2',300:'#f38089',400:'#f2626c',500:'#f2495c',600:'#e0313f',700:'#bd2531',800:'#8f1d27',900:'#5f151b',950:'#3a0d10'},
+  rose:{50:'#fdecee',100:'#fbd2d6',200:'#f7abb2',300:'#f38089',400:'#f2626c',500:'#f2495c',600:'#e0313f',700:'#bd2531',800:'#8f1d27',900:'#5f151b',950:'#3a0d10'},
+  emerald:{50:'#eef8ec',100:'#d4edce',200:'#b1dfa8',300:'#96d98d',400:'#84cc78',500:'#73bf69',600:'#56a24c',700:'#3f7d38',800:'#2c5a28',900:'#1c3a1a',950:'#0e230d'},
+  amber:{50:'#fff3e2',100:'#ffe1bd',200:'#ffca8a',300:'#ffbf73',400:'#ffab4d',500:'#ff9830',600:'#e07c14',700:'#b6620f',800:'#8a4b0c',900:'#5c3208',950:'#361d04'},
+  orange:{50:'#fff3e2',100:'#ffe1bd',200:'#ffca8a',300:'#ffbf73',400:'#ffab4d',500:'#ff9830',600:'#e07c14',700:'#b6620f',800:'#8a4b0c',900:'#5c3208',950:'#361d04'}
+}}}};
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* ── soc design system ─────────────────────────────────────────────────── */
