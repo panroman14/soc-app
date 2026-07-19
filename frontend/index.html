@@ -5887,7 +5887,10 @@ async function abDelete(id){
 }
 // Only treat the hash as a view name for known views — the dashboard uses the hash
 // for its own win/host params (parseHash below), which showView('dash') would wipe.
-{const _h=location.hash.slice(1); if(["autoban","p403","targets","journal","logs","settings"].includes(_h))showView(_h);}
+// URL is the source of truth for the current view: restore on load + follow back/forward
+function _viewFromHash(){ const h=location.hash.replace(/^#/,''); const first=(h.split(/[=&]/)[0]||''); return _VIEWS.includes(first)?first:'dash'; }
+{ const _v=_viewFromHash(); if(_v!=="dash")showView(_v); }               // restore view from URL (incl. dashboards)
+window.addEventListener('hashchange',()=>{ const _v=_viewFromHash(); if(_v!==_view)showView(_v); });   // browser back/forward
 
 // активна ли вкладка: не на паузе И страница на экране (скрытая вкладка не грузит Loki)
 // ── кастомный брендинг (заголовок / подпись / иконка), хранится на бэке ──────────
