@@ -112,7 +112,7 @@ const I18N={en:{
   "crs.h":"WAF / CRS срабатывания","crs.sub":"/ OWASP ModSecurity — превышен anomaly score",
   "esc.h":"Лестница эскалации","esc.sub":"Повторные нарушители (забанены снова после истечения прошлого бана) получают всё более длинный бан. Выкл = у каждого правила свой фиксированный TTL.","esc.ladder":"Лестница TTL (1-е, 2-е, 3-е… нарушение)","esc.memory":"Прощать через (дней)",
 }};
-let _lang=localStorage.getItem("soc_lang")||"en";
+let _lang="en"; try{localStorage.removeItem("soc_lang");}catch(e){}  /* English-only: RU removed */
 function t(k){ return (I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k; }
 function applyI18n(){
   document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent=t(el.getAttribute("data-i18n")); });
