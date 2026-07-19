@@ -1644,7 +1644,7 @@ function renderStats(s){
       spark=_ovStatSpark(series,hot);
     }
     let _vc=d.c; if(d.k==='availability'&&v!=null){_vc=v>=0.995?'text-emerald-300':v>=0.97?'text-amber-300':'text-red-300';}
-    return `<div class="card p-3 ov-stat ${hot?'ov-stat-hot':''}"><div class="ov-stat-h"><span class="ov-stat-l">${d.l}</span>${delta}</div><div class="ov-stat-v mono ${hot?'text-amber-300':_vc}">${disp}</div>${spark}</div>`;
+    return `<div class="card ov-stat ${hot?'ov-stat-hot':''}"><div class="ov-stat-h"><span class="ov-stat-l">${d.l}</span>${delta}</div><div class="ov-stat-v mono ${hot?'text-amber-300':_vc}">${disp}</div>${spark}</div>`;
   }).join("");
 }
 
