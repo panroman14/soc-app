@@ -2677,7 +2677,7 @@ function authApply(){
   const tb=document.getElementById("topban"); if(tb)tb.classList.toggle("hidden",_me.role!=="admin");
   const chip=document.getElementById("user-chip"); chip.classList.remove("hidden"); chip.classList.add("flex");
   document.getElementById("user-name").textContent=_me.username;
-  const rb=document.getElementById("user-role"); rb.textContent=_me.role;
+  const rb=document.getElementById("user-role"); if(_me.role&&_me.role!==_me.username){rb.textContent=_me.role;rb.style.display="";}else{rb.style.display="none";}
   rb.style.background=_me.role==="admin"?"#5794f222":"#33415522"; rb.style.color=_me.role==="admin"?"#84aef0":"#94a3b8";
   const admin=_me.role==="admin";
   document.getElementById("ssub-users").classList.toggle("hidden",!admin);
@@ -2701,8 +2701,8 @@ async function authLogout(){ try{ await _post("/api/auth/logout",{}); }catch(e){
 
 async function loadAccount(){
   try{ const d=await fetch("/api/auth/me").then(r=>r.json()); _me=d;
-    document.getElementById("acc-who").textContent=d.username+" · "+d.role;
-    document.getElementById("acc-2fa-state").textContent=d.totp?("✓ "+_trText("включено")):_trText("выключено");
+    document.getElementById("acc-who").textContent=d.username+(d.role&&d.role!==d.username?" · "+d.role:"");
+    document.getElementById("acc-2fa-state").textContent=d.totp?"✓ enabled":"disabled";
     document.getElementById("acc-2fa-setup").classList.toggle("hidden",!!d.totp);
     document.getElementById("acc-2fa-off").classList.toggle("hidden",!d.totp);
     document.getElementById("acc-2fa-body").classList.add("hidden");
