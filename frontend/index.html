@@ -145,8 +145,8 @@ tailwind.config={theme:{extend:{colors:{
   <h2 class="sec">Обзор запросов <span class="text-slate-600 normal-case font-normal">— клик по путям/IP/UA выше тоже открывает запросы</span></h2>
   <section class="card p-4 mb-2">
     <div class="flex gap-2 mb-3">
-      <input id="nl_q" placeholder="Спросить словами: «404 на /admin за 30 минут»" class="flex-1 bg-slate-900 border border-indigo-700/50 rounded px-3 py-1.5 text-xs text-slate-200" onkeydown="if(event.key==='Enter')runNL()">
-      <button onclick="runNL()" class="px-3 py-1.5 rounded bg-indigo-500/25 text-indigo-200 border border-indigo-500/40 text-xs hover:bg-indigo-500/35">Спросить</button>
+      <input id="nl_q" data-llm placeholder="Ask in words: “404 on /admin in the last 30 min”" class="input flex-1 text-xs" onkeydown="if(event.key==='Enter')runNL()">
+      <button data-llm onclick="runNL()" class="btn btn-primary btn-xs">Ask</button>
     </div>
     <div class="flex flex-wrap gap-2 mb-3">
       <input id="ex_host" placeholder="хост (example.com)" class="input text-xs w-40">
@@ -211,8 +211,8 @@ tailwind.config={theme:{extend:{colors:{
         <select id="sc_win" onchange="renderSuspects()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно анализа">
           <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
         </select>
-        <button id="sc_judge" onclick="judgeSuspects()" class="text-sm px-3 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-600 font-medium">Оценить ИИ</button>
-        <button id="sc_recheck" onclick="judgeSuspects(true)" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700" title="форс-перепроверка ИИ (игнор кэша)">↻ Переоценить</button>
+        <button id="sc_judge" data-llm onclick="judgeSuspects()" class="btn btn-primary btn-xs">Assess with AI</button>
+        <button id="sc_recheck" data-llm onclick="judgeSuspects(true)" class="btn btn-xs" title="force AI re-check (ignore cache)">Re-assess</button>
         <button onclick="banAllSuspects()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">Забанить всех</button>
       </div>
     </div>
@@ -823,7 +823,7 @@ tailwind.config={theme:{extend:{colors:{
     <div class="card p-3 mb-2">
       <div class="flex items-center gap-1.5" style="flex-wrap:wrap">
         <div id="lg-src-tabs" class="flex items-center gap-1.5"></div>
-        <button onclick="lgSourcesOpen()" class="btn btn-ghost btn-xs" title="manage log sources">⚙</button>
+        <button onclick="lgSourcesOpen()" class="btn btn-ghost" title="manage log sources"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
         <span class="lg-sep"></span>
         <span class="lg-pill" data-c="" onclick="lgClsSet('')">all</span>
         <span class="lg-pill" data-c="2" onclick="lgClsSet('2')" style="color:#6fcf97">2xx</span>
