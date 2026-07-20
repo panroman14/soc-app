@@ -4385,7 +4385,7 @@ const _SMP_TYPE={"nginx-file":"nginx","cloudflare":"Cloudflare","ingress-cm":"in
 function _smpColor(t){return _SMP_COLOR[t]||"#64748b";}
 function _smpList(resp){return Array.isArray(resp)?resp:(resp&&(resp.list||resp.blocked||resp.rows||resp.blocks))||[];}
 function _smpSpark(counts,color){
-  if(!counts||!counts.some(v=>v>0))return `<div class="text-[11px] text-slate-600">активности нет</div>`;
+  if(!counts||!counts.some(v=>v>0))return `<div class="text-[11px] text-slate-600">no activity</div>`;
   const n=counts.length, max=Math.max(...counts,1);
   const pts=counts.map((v,i)=>`${(i/(n-1)*120).toFixed(1)},${(28-v/max*24).toFixed(1)}`).join(" ");
   return `<svg viewBox="0 0 120 30" width="100%" height="34" preserveAspectRatio="none" style="display:block" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
@@ -4412,32 +4412,32 @@ function _smpRender(){
     const bar=st==="active"?"#73bf69":st==="warn"?"#ff9830":st==="unconf"?"#64748b":"#334155";
     const brd=st==="warn"?"border-amber-600/40":st==="unconf"?"border-slate-700/60 border-dashed":"border-slate-800";
     const dim=((st==="idle"||st==="unconf")&&_smpOpen!==t.id)?"opacity:.6;":"";
-    const stLine=st==="active"?`<span class="inline-flex items-center gap-1.5 text-[12px] text-emerald-400"><span class="smp-live w-1.5 h-1.5 rounded-full bg-emerald-400"></span>баны идут</span>`
+    const stLine=st==="active"?`<span class="inline-flex items-center gap-1.5 text-[12px] text-emerald-400"><span class="smp-live w-1.5 h-1.5 rounded-full bg-emerald-400"></span>banning</span>`
       :st==="warn"?`<span class="inline-flex items-center gap-1.5 text-[12px] text-amber-400">⚠ ${esc(err)}</span>`
-      :st==="unconf"?`<span class="inline-flex items-center gap-1.5 text-[12px] text-slate-400">⚙ ${_trText("нет токена — не банит")}</span>`
-      :st==="ready"?`<span class="text-[12px] text-slate-400">готов · банов нет</span>`
-      :`<span class="inline-flex items-center gap-1.5 text-[12px] text-slate-500">⏸ простаивает</span>`;
+      :st==="unconf"?`<span class="inline-flex items-center gap-1.5 text-[12px] text-slate-400">no token — not enforcing</span>`
+      :st==="ready"?`<span class="text-[12px] text-slate-400">ready · no bans</span>`
+      :`<span class="inline-flex items-center gap-1.5 text-[12px] text-slate-500">idle</span>`;
     const chips=[];
     if(my.length)chips.push(`<span class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/40 text-indigo-300/90">403 · ${my.length}</span>`);
-    chips.push(armed?`<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90">автобан</span>`
-                    :`<span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">автобан выкл</span>`);
-    const chipsHtml=(!my.length&&!armed)?`<span class="text-[11px] text-slate-600">ничего не приатачено</span>`:chips.join(" ");
+    chips.push(armed?`<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300/90">auto-ban</span>`
+                    :`<span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">auto-ban off</span>`);
+    const chipsHtml=(!my.length&&!armed)?`<span class="text-[11px] text-slate-600">nothing attached</span>`:chips.join(" ");
     const open=_smpOpen===t.id;
     let detail="";
     if(open){
       const rulesHtml=my.length?my.map(r=>`<div class="flex items-center gap-2 px-2 py-1 rounded border border-slate-800 bg-slate-900/50 min-w-0">
-          <span class="mono text-[12px] text-slate-200 truncate min-w-0" title="${escAttr(r.pattern||r.name||"")}">${esc(r.pattern||r.name||"(правило)")}</span>
-          <span class="ml-auto shrink-0 text-[11px] text-emerald-400">✓</span></div>`).join(""):`<div class="text-[12px] text-slate-500">403-правил нет</div>`;
+          <span class="mono text-[12px] text-slate-200 truncate min-w-0" title="${escAttr(r.pattern||r.name||"")}">${esc(r.pattern||r.name||"(rule)")}</span>
+          <span class="ml-auto shrink-0 text-[11px] text-emerald-400">✓</span></div>`).join(""):`<div class="text-[12px] text-slate-500">no 403 rules</div>`;
       const rec=(recentByBe[be]||[]).slice(0,6);
       const recHtml=rec.length?rec.map(c=>`<span class="mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">${esc(c)}</span>`).join(" "):`<span class="text-[12px] text-slate-500">—</span>`;
       detail=`<div class="mt-3 pt-3 border-t border-slate-800 grid gap-3">
-        <div><div class="text-[11px] text-slate-500 mb-1">активность банов · 24ч</div>${_smpSpark(sparkByBe[be],_smpColor(t.type))}</div>
+        <div><div class="text-[11px] text-slate-500 mb-1">ban activity · 24h</div>${_smpSpark(sparkByBe[be],_smpColor(t.type))}</div>
         <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
-          <div class="min-w-0"><div class="text-[11px] text-slate-500 mb-1.5">приатаченные 403-правила</div><div class="grid gap-1.5 min-w-0">${rulesHtml}</div></div>
-          <div class="min-w-0"><div class="text-[11px] text-slate-500 mb-1.5">автобан</div><div class="text-[12px] ${armed?'text-emerald-400':'text-amber-400'}">${armed?'включён · банит по IP':'выключен · баны не добавляются'}</div>
-            <div class="text-[11px] text-slate-500 mt-2.5 mb-1.5">способ применения</div><div class="text-[12px] text-slate-300">${_trText(blocksPath?'IP + 403-пути':'только IP')}</div></div>
+          <div class="min-w-0"><div class="text-[11px] text-slate-500 mb-1.5">attached 403 rules</div><div class="grid gap-1.5 min-w-0">${rulesHtml}</div></div>
+          <div class="min-w-0"><div class="text-[11px] text-slate-500 mb-1.5">auto-ban</div><div class="text-[12px] ${armed?'text-emerald-400':'text-amber-400'}">${armed?'on · bans by IP':'off · no bans added'}</div>
+            <div class="text-[11px] text-slate-500 mt-2.5 mb-1.5">enforcement</div><div class="text-[12px] text-slate-300">${blocksPath?'IP + 403 paths':'IP only'}</div></div>
         </div>
-        <div><div class="text-[11px] text-slate-500 mb-1.5">последние баны</div><div class="flex flex-wrap gap-1.5">${recHtml}</div></div>
+        <div><div class="text-[11px] text-slate-500 mb-1.5">recent bans</div><div class="flex flex-wrap gap-1.5">${recHtml}</div></div>
       </div>`;
     }
     return `<div class="smp-tile border ${brd} rounded-xl bg-slate-950/40 overflow-hidden cursor-pointer ${open?'smp-open':''}" style="${dim}" onclick="_smpToggle('${escJs(t.id)}')">
@@ -4451,7 +4451,7 @@ function _smpRender(){
         </div>
         <div class="flex items-baseline gap-1.5 mt-2 mb-1">
           <span class="text-[24px] font-medium leading-none ${banned?'text-slate-100':'text-slate-500'}">${banned}</span>
-          <span class="text-[11px] text-slate-500">IP в бане</span>
+          <span class="text-[11px] text-slate-500">IP banned</span>
         </div>
         <div class="mb-2">${stLine}</div>
         <div class="flex flex-wrap gap-1.5">${chipsHtml}</div>
@@ -4461,10 +4461,10 @@ function _smpRender(){
   }).join("");
   el.innerHTML=`<div class="smp-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.6rem">${tiles}</div>`;
   const sumEl=document.getElementById("smp-summary");
-  if(sumEl)sumEl.innerHTML=`<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400"><span class="smp-live w-1.5 h-1.5 rounded-full bg-emerald-400"></span>${active}/${tg.length} активны</span>`;
+  if(sumEl)sumEl.innerHTML=`<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400"><span class="smp-live w-1.5 h-1.5 rounded-full bg-emerald-400"></span>${active}/${tg.length} active</span>`;
   const bnEl=document.getElementById("smp-banned");
   const total=Object.values(bansByBe).reduce((a,b)=>a+b,0);
-  if(bnEl)bnEl.innerHTML=`в бане <span class="text-slate-200 font-medium">${total}</span> IP`;
+  if(bnEl)bnEl.innerHTML=`<span class="text-slate-200 font-medium">${total}</span> IP banned`;
 }
 async function loadBanTargets(){
   const el=document.getElementById("ban-targets");if(!el)return;
