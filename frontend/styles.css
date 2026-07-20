@@ -150,8 +150,19 @@
   .kpi .v{font-size:23px;font-weight:680;margin-top:5px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
   .kpi.alert{border-color:#f0556a55}
   .kpi.alert::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--crit);box-shadow:0 0 12px #f0556a88}
-  /* view enter motion (replays when a view un-hides) */
-  [id^="view-"]:not(.hidden){animation:viewin .28s var(--ease) both}
+  /* view enter motion — orchestrated page load: parent fades, top-level sections cascade up.
+     Only the static section containers stagger (their inner content re-renders on 15s refresh,
+     so animating children would re-fire the cascade on every poll). */
+  [id^="view-"]:not(.hidden){animation:vfade .18s var(--ease) both}
+  [id^="view-"]:not(.hidden) > *{animation:rise .42s var(--ease) both;animation-delay:.16s}
+  [id^="view-"]:not(.hidden) > *:nth-child(1){animation-delay:0s}
+  [id^="view-"]:not(.hidden) > *:nth-child(2){animation-delay:.05s}
+  [id^="view-"]:not(.hidden) > *:nth-child(3){animation-delay:.10s}
+  [id^="view-"]:not(.hidden) > *:nth-child(4){animation-delay:.15s}
+  [id^="view-"]:not(.hidden) > *:nth-child(5){animation-delay:.19s}
+  [id^="view-"]:not(.hidden) > *:nth-child(6){animation-delay:.22s}
+  @keyframes vfade{from{opacity:0}to{opacity:1}}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
   @keyframes viewin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   .num{font-variant-numeric:tabular-nums}
