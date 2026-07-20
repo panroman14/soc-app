@@ -413,41 +413,41 @@ tailwind.config={theme:{extend:{colors:{
       </div>
       <div id="p403-form-body" class="hidden mt-3">
       <div class="flex flex-wrap items-end gap-2">
-        <div><label class="text-[11px] text-slate-500 block mb-1">Имя</label>
-          <input id="p403-name" placeholder="напр. env-файлы" class="input w-44"/></div>
-        <div><label class="text-[11px] text-slate-500 block mb-1">Тип</label>
+        <div><label class="text-[11px] text-slate-500 block mb-1">Name</label>
+          <input id="p403-name" placeholder="e.g. env files" class="input w-44"/></div>
+        <div><label class="text-[11px] text-slate-500 block mb-1">Type</label>
           <select id="p403-mode" onchange="p403ModeChange()" class="input">
-            <option value="path" selected>Путь содержит</option>
-            <option value="exact">Точный URI</option>
+            <option value="path" selected>Path contains</option>
+            <option value="exact">Exact URI</option>
             <option value="wildcard">Wildcard (*)</option>
-            <option value="regex">Regex (вручную)</option>
+            <option value="regex">Regex (manual)</option>
           </select></div>
-        <div class="flex-1 min-w-[200px]"><label id="p403-raw-lbl" class="text-[11px] text-slate-500 block mb-1">Путь</label>
+        <div class="flex-1 min-w-[200px]"><label id="p403-raw-lbl" class="text-[11px] text-slate-500 block mb-1">Path</label>
           <input id="p403-raw" oninput="p403Preview()" placeholder="/.env" class="input mono w-full"/></div>
-        <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="добавить, даже если апка считает паттерн слишком широким"><input type="checkbox" id="p403-force"/> force</label>
-        <button id="p403-add-btn" onclick="p403Save()" class="px-3 py-1.5 rounded bg-rose-600/80 text-white text-sm hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed">Добавить</button>
+        <label class="flex items-center gap-1.5 text-[12px] text-slate-400 pb-1.5" title="add even if the app thinks the pattern is too broad"><input type="checkbox" id="p403-force"/> force</label>
+        <button id="p403-add-btn" onclick="p403Save()" class="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed">Add</button>
         <span id="p403-msg" class="text-xs"></span>
       </div>
       <!-- продвинутое: вместо нового правила дописать паттерн в существующее (группировка путей) -->
       <div class="mt-1.5 text-[11px]">
-        <button type="button" onclick="document.getElementById('p403-adv').classList.toggle('hidden')" class="text-slate-500 hover:text-slate-300">⚙ дополнительно ▾</button>
+        <button type="button" onclick="document.getElementById('p403-adv').classList.toggle('hidden')" class="text-slate-500 hover:text-slate-300">advanced ▾</button>
         <div id="p403-adv" class="hidden mt-1.5 flex items-center gap-2">
-          <label class="text-slate-500" title="Вместо создания нового правила дописать паттерн в существующее (одно правило = пачка путей)">дописать в правило:</label>
-          <select id="p403-target" onchange="p403TargetChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[12px] text-slate-200 max-w-[200px]"></select>
+          <label class="text-slate-500" title="Append the pattern to an existing rule instead of creating a new one (one rule = a bundle of paths)">append to rule:</label>
+          <select id="p403-target" onchange="p403TargetChange()" class="input text-[12px] max-w-[200px]"></select>
         </div>
       </div>
       <div class="mt-2 grid md:grid-cols-2 gap-2 text-[11px]">
         <div class="bg-slate-900/40 border border-slate-800 rounded px-2 py-1.5">
-          <div class="text-slate-500">сгенерится regex:</div>
-          <div id="p403-gen" class="mono text-indigo-300 break-all">—</div>
+          <div class="text-slate-500">generated regex:</div>
+          <div id="p403-gen" class="mono break-all" style="color:var(--accent)">—</div>
           <div id="p403-warn" class="text-amber-300 mt-1"></div>
         </div>
         <div class="bg-slate-900/40 border border-slate-800 rounded px-2 py-1.5">
-          <div class="text-slate-500 mb-1">проверь на примере — забанит или нет:</div>
-          <div class="flex items-center gap-2"><input id="p403-test" oninput="p403Preview()" placeholder="/docs/.env" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[12px] text-slate-200 mono flex-1"/><span id="p403-test-res" class="shrink-0">—</span></div>
+          <div class="text-slate-500 mb-1">test on an example — blocked or not:</div>
+          <div class="flex items-center gap-2"><input id="p403-test" oninput="p403Preview()" placeholder="/docs/.env" class="input mono flex-1 text-[12px]"/><span id="p403-test-res" class="shrink-0">—</span></div>
         </div>
       </div>
-      <div class="mt-2 text-[11px] text-slate-500"><button onclick="p403SeedAutoban(this)" class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">засеять из правил автобана ▾</button><button onclick="p403Seed()" class="ml-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">базовый набор сканеров</button></div>
+      <div class="mt-2 text-[11px] text-slate-500"><button onclick="p403SeedAutoban(this)" class="btn btn-xs">seed from auto-ban rules ▾</button><button onclick="p403Seed()" class="btn btn-xs ml-1">basic scanner set</button></div>
       <div id="p403-protected" class="mt-2 text-[11px] text-slate-500"></div>
       </div><!-- /p403-form-body -->
     </section>
