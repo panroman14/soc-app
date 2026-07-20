@@ -70,14 +70,12 @@ tailwind.config={theme:{extend:{colors:{
     <div style="flex:1"></div>
     <button id="topban" class="btn btn-primary" onclick="quickBan()" title="Ban an IP / CIDR"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="ban.quick">Ban IP</span></button>
     <span class="tb-div"></span>
-    <div class="tb-status">
+    <div class="tb-status" title="Threat level · Loki connection">
+      <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
       <div id="status-badge" class="chip">—</div>
-      <div class="hidden sm:flex items-center gap-1.5 text-xs" title="data freshness">
-        <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
-        <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
-      </div>
+      <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
       <span id="updated" class="hidden"></span>
-      <span id="be-health" class="hidden mono cursor-default" title="backend health"></span>
+      <span id="be-health" class="mono cursor-default" title="backend health"></span>
     </div>
     <span class="tb-div"></span>
     <details class="tb-more" id="tb-more">
@@ -90,9 +88,16 @@ tailwind.config={theme:{extend:{colors:{
     </details>
     <span class="tb-div"></span>
     <div id="user-chip" class="hidden items-center gap-1.5">
-      <button onclick="showView('settings');setSub('account')" class="btn btn-ghost btn-xs" title="account">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span id="user-name" class="mono"></span><span id="user-role" class="text-[9px] px-1 rounded ml-1"></span></button>
-      <button onclick="authLogout()" class="btn btn-ghost btn-xs" title="log out"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button>
+      <details class="tb-user">
+        <summary class="btn btn-ghost btn-xs" title="account">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span id="user-name" class="mono"></span><span id="user-role" class="text-[9px] px-1 rounded ml-1"></span>
+          <svg class="tb-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </summary>
+        <div class="tb-user-menu">
+          <button onclick="showView('settings');setSub('account')" class="tb-menu-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Account settings</button>
+          <button onclick="authLogout()" class="tb-menu-it tb-menu-danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Log out</button>
+        </div>
+      </details>
     </div>
     <h1 id="view-title" class="hidden" data-i18n="title">SOC Dashboard</h1>
   </header>
