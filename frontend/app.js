@@ -4624,25 +4624,25 @@ async function abPreview(rule){
 }
 function renderAbRules(rules){
   const el=document.getElementById("ab-rules");
-  if(!rules.length){el.innerHTML='<div class="text-slate-500 text-xs">Правил пока нет. Создай первое слева.</div>';return;}
-  const cond=r=>r.match_type==="rate"?"частота: любой путь"
-    :r.match_type==="family"?("семейство: "+((_abFamilies.find(f=>f.key===r.path)||{}).label||r.path))
-    :(r.match_type==="regex"?"regex ":"путь ⊃ ")+(r.path||"").split("\n").filter(Boolean).join(" ИЛИ ");
+  if(!rules.length){el.innerHTML='<div class="text-xs" style="color:var(--faint);padding:12px 2px">No rules yet. Create your first on the left.</div>';return;}
+  const cond=r=>r.match_type==="rate"?"rate: any path"
+    :r.match_type==="family"?("family: "+((_abFamilies.find(f=>f.key===r.path)||{}).label||r.path))
+    :(r.match_type==="regex"?"regex ":"path ⊃ ")+(r.path||"").split("\n").filter(Boolean).join(" OR ");
   const ccBadge=r=>{const cs=(r.country||"").split(/[,\s]+/).filter(Boolean);return cs.length?" · "+cs.map(c=>flag(c)).join(""):"";};
-  const ttlL=t=>!t?"навсегда":(t>=86400?(t/86400)+"д":(t>=3600?(t/3600)+"ч":t+"с"));
+  const ttlL=t=>!t?"forever":(t>=86400?(t/86400)+"d":(t>=3600?(t/3600)+"h":t+"s"));
   el.innerHTML=rules.map(r=>`<div class="flex items-center gap-3 py-2 border-b border-slate-800/60 flex-wrap">
-    <button onclick="abToggle(${r.id},${r.enabled?0:1})" title="${r.enabled?"выключить":"включить"}" class="shrink-0 w-11 h-6 rounded-full relative transition ${r.enabled?"bg-emerald-600/70":"bg-slate-700"}">
+    <button onclick="abToggle(${r.id},${r.enabled?0:1})" title="${r.enabled?"disable":"enable"}" class="shrink-0 w-11 h-6 rounded-full relative transition ${r.enabled?"bg-emerald-600/70":"bg-slate-700"}">
       <span class="absolute top-0.5 ${r.enabled?"left-6":"left-0.5"} w-5 h-5 rounded-full bg-white transition-all"></span></button>
-    ${r.match_type!=="family"?`<button onclick="setMainRule('autoban',${r.id})" title="${String(_mainRules.autoban_id)===String(r.id)?'основное автобан-правило':'сделать основным'}" class="text-base shrink-0 ${String(_mainRules.autoban_id)===String(r.id)?'text-amber-400':'text-slate-600 hover:text-amber-300'}">★</button>`:''}
+    ${r.match_type!=="family"?`<button onclick="setMainRule('autoban',${r.id})" title="${String(_mainRules.autoban_id)===String(r.id)?'primary auto-ban rule':'make primary'}" class="star-btn shrink-0 ${String(_mainRules.autoban_id)===String(r.id)?'on':''}" style="font-size:15px">★</button>`:''}
     <div class="flex-1 min-w-[200px]">
-      <div class="text-sm text-slate-200 font-medium">${esc(r.name)} ${String(_mainRules.autoban_id)===String(r.id)?'<span class="text-[10px] text-amber-400">основное</span>':''} ${r.enabled?'<span class="text-[10px] text-emerald-400">активно</span>':'<span class="text-[10px] text-slate-600">выкл</span>'}</div>
-      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} за ${r.window}${(r.match_type==="family"||r.match_type==="rate")?"":(r.combine===0?" (по 1 пути)":" (∑ путей)")}${r.status?" · код "+esc(r.status):""}${ccBadge(r)} · бан ${ttlL(r.ttl)}</div>
+      <div class="text-sm text-slate-200 font-medium">${esc(r.name)} ${String(_mainRules.autoban_id)===String(r.id)?'<span class="text-[10px] text-amber-400">primary</span>':''} ${r.enabled?'<span class="text-[10px] text-emerald-400">on</span>':'<span class="text-[10px] text-slate-600">off</span>'}</div>
+      <div class="text-[11px] text-slate-500 mono truncate">${esc(cond(r))} · ≥${r.threshold} over ${r.window}${(r.match_type==="family"||r.match_type==="rate")?"":(r.combine===0?" (per path)":" (Σ paths)")}${r.status?" · status "+esc(r.status):""}${ccBadge(r)} · ban ${ttlL(r.ttl)}</div>
       ${_attachUI(r,'autoban')}
       ${_appliesLineRule(r, false)}
     </div>
-    <button onclick='abPreview(${JSON.stringify({id:r.id})})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">🔍 превью</button>
-    <button onclick='abEditRule(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="text-[11px] px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-700">ред.</button>
-    <button onclick="abDelete(${r.id})" class="text-[11px] px-2 py-1 rounded bg-red-600/40 text-red-200 hover:bg-red-600/60">удалить</button>
+    <button onclick='abPreview(${JSON.stringify({id:r.id})})' class="btn btn-xs">preview</button>
+    <button onclick='abEditRule(${JSON.stringify(r).replace(/'/g,"&#39;")})' class="btn btn-xs">edit</button>
+    <button onclick="abDelete(${r.id})" class="btn btn-xs" style="color:var(--crit);border-color:color-mix(in srgb,var(--crit) 40%,transparent)">delete</button>
   </div>`).join("");
 }
 async function abToggle(id,enabled){
