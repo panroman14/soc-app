@@ -3247,22 +3247,22 @@ function _nodeCard(n){
           <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
           ${isDash?"":_NGINX_ICON}
           <span class="text-sm font-medium text-slate-200 truncate">${esc(n.label||n.id)}</span>
-          ${isDash?"":`<button onclick="renameNode('${escJs(n.id)}','${escJs(n.label||'')}')" title="${_trText('переименовать')}" class="text-slate-600 hover:text-indigo-300 text-[11px] shrink-0">✎</button>`}
-          ${isDash?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300">${_trText("дашборд")}</span>`:""}
-          ${n.group?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">🎯 ${esc(n.group)}</span>`:""}
+          ${isDash?"":`<button onclick="renameNode('${escJs(n.id)}','${escJs(n.label||'')}')" title="rename" class="ibtn shrink-0" style="width:22px;height:22px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>`}
+          ${isDash?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300">dashboard</span>`:""}
+          ${n.group?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${esc(n.group)}</span>`:""}
           ${isDash?"":_beBadge(n.backend)}
           ${nginxBad?`<span class="text-[10px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-300">nginx -t ✗</span>`:""}
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?_trText("онлайн"):"offline"} · ${_ago(n.last_seen)}</span>
-          ${isDash?"":`<button onclick="deleteNode('${escJs(n.id)}','${escJs(n.backend||'')}')" class="text-[11px] text-red-400/80 hover:text-red-300" title="Отозвать токен и удалить ноду">${_trText("отозвать")}</button>`}
+          <span class="text-[11px] ${online?'text-emerald-400':'text-slate-500'}">${online?"online":"offline"} · ${_ago(n.last_seen)}</span>
+          ${isDash?"":`<button onclick="deleteNode('${escJs(n.id)}','${escJs(n.backend||'')}')" class="btn btn-xs" style="color:var(--crit);border-color:color-mix(in srgb,var(--crit) 40%,transparent)" title="Revoke token and remove node">revoke</button>`}
         </div>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-[11px]">
         <div><div class="text-slate-500 mb-0.5">CPU load</div><div class="text-slate-300 mb-1">${esc(load)}</div>${loadPct!=null?_bar(loadPct,70,90):""}</div>
         <div><div class="text-slate-500 mb-0.5">RAM</div><div class="text-slate-300 mb-1">${m.mem_used_pct!=null?(m.mem_used_pct+"%"+(m.mem_total_mb?(" / "+(m.mem_total_mb/1024).toFixed(1)+"G"):"")):"—"}</div>${m.mem_used_pct!=null?_bar(m.mem_used_pct,75,90):""}</div>
         <div><div class="text-slate-500 mb-0.5">uptime</div><div class="text-slate-300">${_uptime(m.uptime_s)}</div></div>
-        ${isDash?`<div><div class="text-slate-500 mb-0.5">${_trText("роль")}</div><div class="text-slate-300">SOC dashboard</div></div>`:`<div><div class="text-slate-500 mb-0.5">${_trText("баны на ноде")}</div><div class="text-slate-300">${m.applied_cidrs!=null?m.applied_cidrs:"—"} CIDR</div></div>`}
+        ${isDash?`<div><div class="text-slate-500 mb-0.5">role</div><div class="text-slate-300">SOC dashboard</div></div>`:`<div><div class="text-slate-500 mb-0.5">bans on node</div><div class="text-slate-300">${m.applied_cidrs!=null?m.applied_cidrs:"—"} CIDR</div></div>`}
       </div>
       <div class="text-[10px] text-slate-600 mt-2 mono">${esc(n.hostname||"")}${n.ip?(" · "+esc(n.ip)):""}${n.agent_version?(" · "+esc(n.agent_version)):""}</div>
     </div>`;
