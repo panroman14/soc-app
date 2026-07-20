@@ -1457,22 +1457,22 @@ async function dbEditPanel(id){
   const to=_DB_TYPES.map(([t,l])=>`<option value="${t}" ${_dbEdit.type===t?"selected":""}>${esc(l)}</option>`).join("");
   const mp=Object.keys(_DB_METRICS).map(k=>`<label><input type="checkbox" value="${k}" ${(_dbEdit.metrics||[]).includes(k)?"checked":""} onchange="dbeMetricsToggle(this)"> ${esc(_DB_METRICS[k].l)}</label>`).join("");
   const body=`<div class="space-y-2 text-[12px]" style="color:var(--muted)">
-    <label class="block">${_trText("Заголовок")}<input class="input mt-1" oninput="_dbEdit.title=this.value" value="${esc(_dbEdit.title||"")}"></label>
-    <label class="block">${_trText("Тип")}<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${to}</select></label>
-    <label class="block" id="dbe-metric-wrap">${_trText("Метрика")}<select class="input mt-1" onchange="_dbEdit.metric=this.value">${mo}</select></label>
-    <div class="block" id="dbe-metrics-wrap">${_trText("Метрики")}<div class="db-mp mt-1">${mp}</div></div>
-    <label class="block" id="dbe-ana-wrap">${_trText("Источник (топ)")}<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
-    <label class="block hidden" id="dbe-logs-wrap">${_trText("Поиск в логах")}<input class="input mono mt-1" oninput="_dbEdit.search=this.value" value="${esc(_dbEdit.search||"")}" placeholder="/wp-login"></label>
-    <label class="flex items-center gap-2 hidden" id="dbe-area-wrap"><input type="checkbox" ${_dbEdit.area!==false?"checked":""} onchange="_dbEdit.area=this.checked"> ${_trText("Заливка area")}</label>
-    <label class="flex items-center gap-2 hidden" id="dbe-anomaly-wrap"><input type="checkbox" ${_dbEdit.anomaly?"checked":""} onchange="_dbEdit.anomaly=this.checked"> ${_trText("Полоса аномалий")}</label>
-    <div class="block hidden" id="dbe-colors-wrap">${_trText("Цвета серий")}<div class="mt-1 space-y-1" id="dbe-colors"></div></div>
-    <div class="block hidden" id="dbe-thr-wrap">${_trText("Пороговые линии")}<div class="mt-1 space-y-1" id="dbe-thr"></div>
-      <button type="button" class="btn btn-ghost btn-xs mt-1" onclick="dbeThrAdd()">＋ ${_trText("порог")}</button></div>
-    <div class="flex gap-2"><label class="flex-1">${_trText("Ширина")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.w=+this.value" value="${_dbEdit.w||4}"></label>
-    <label class="flex-1">${_trText("Высота")} (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.h=+this.value" value="${_dbEdit.h||_dbDefH(_dbEdit.type)}"></label></div></div>`;
+    <label class="block">Title<input class="input mt-1" oninput="_dbEdit.title=this.value" value="${esc(_dbEdit.title||"")}"></label>
+    <label class="block">Type<select class="input mt-1" onchange="_dbEdit.type=this.value;dbeTypeChange()">${to}</select></label>
+    <label class="block" id="dbe-metric-wrap">Metric<select class="input mt-1" onchange="_dbEdit.metric=this.value">${mo}</select></label>
+    <div class="block" id="dbe-metrics-wrap">Metrics<div class="db-mp mt-1">${mp}</div></div>
+    <label class="block" id="dbe-ana-wrap">Source (top)<select class="input mt-1" onchange="_dbEdit.key=this.value">${ao}</select></label>
+    <label class="block hidden" id="dbe-logs-wrap">Log search<input class="input mono mt-1" oninput="_dbEdit.search=this.value" value="${esc(_dbEdit.search||"")}" placeholder="/wp-login"></label>
+    <label class="flex items-center gap-2 hidden" id="dbe-area-wrap"><input type="checkbox" ${_dbEdit.area!==false?"checked":""} onchange="_dbEdit.area=this.checked"> Area fill</label>
+    <label class="flex items-center gap-2 hidden" id="dbe-anomaly-wrap"><input type="checkbox" ${_dbEdit.anomaly?"checked":""} onchange="_dbEdit.anomaly=this.checked"> Anomaly band</label>
+    <div class="block hidden" id="dbe-colors-wrap">Series colors<div class="mt-1 space-y-1" id="dbe-colors"></div></div>
+    <div class="block hidden" id="dbe-thr-wrap">Threshold lines<div class="mt-1 space-y-1" id="dbe-thr"></div>
+      <button type="button" class="btn btn-ghost btn-xs mt-1" onclick="dbeThrAdd()">+ threshold</button></div>
+    <div class="flex gap-2"><label class="flex-1">Width (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.w=+this.value" value="${_dbEdit.w||4}"></label>
+    <label class="flex-1">Height (2–12)<input type="number" min="2" max="12" class="input mt-1" oninput="_dbEdit.h=+this.value" value="${_dbEdit.h||_dbDefH(_dbEdit.type)}"></label></div></div>`;
   setTimeout(dbeTypeChange,0);
-  const r=await _showModal({title:_trText(id?"Панель":"Новая панель"),body,
-    buttons:[{label:_CANCEL(),value:null,esc:true},{label:_trText("Сохранить"),kind:"primary",value:"save",enter:true}]});
+  const r=await _showModal({title:id?"Panel":"New panel",body,
+    buttons:[{label:"Cancel",value:null,esc:true},{label:"Save",kind:"primary",value:"save",enter:true}]});
   if(r==="save")dbSavePanel(id);
 }
 function dbeMetricsToggle(cb){ const s=new Set(_dbEdit.metrics||[]); cb.checked?s.add(cb.value):s.delete(cb.value); _dbEdit.metrics=[...s]; dbeRenderColors(); }
