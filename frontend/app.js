@@ -2595,14 +2595,14 @@ function showView(name){
 
 // ── Журнал действий (audit blocklist-api + исход применения) ───────────────────
 let _journal=[], _jrTimer=null;
-const _JR_ACT={block:{i:"🚫",t:"бан"},unblock:{i:"✅",t:"разбан"},expire:{i:"⏱",t:"истёк TTL"},
-  path_rule:{i:"🛂",t:"правило 403"},path_rule_del:{i:"🗑",t:"удалено правило 403"},
-  path_master:{i:"🔁",t:"переключатель 403"}};
-const _JR_BY={dashboard:"оператор",autoban:"автобан",ttl:"система"};
+const _JR_ACT={block:{i:"",t:"ban"},unblock:{i:"",t:"unban"},expire:{i:"",t:"TTL expired"},
+  path_rule:{i:"",t:"403 rule"},path_rule_del:{i:"",t:"403 rule removed"},
+  path_master:{i:"",t:"403 toggle"}};
+const _JR_BY={dashboard:"operator",autoban:"auto-ban",ttl:"system"};
 async function loadJournal(){
   try{
     const d=await (await fetch("/api/blocklist_audit?limit=300")).json();
-    if(d.enabled===false){ document.getElementById("jr-list").innerHTML=`<div class="text-slate-500 text-xs">blocklist-api не настроен.</div>`; _journal=[]; return; }
+    if(d.enabled===false){ document.getElementById("jr-list").innerHTML=`<div class="text-xs" style="color:var(--faint);padding:12px 2px">blocklist-api not configured.</div>`; _journal=[]; return; }
     _journal=d.audit||[];
     renderJournal();
   }catch(e){ document.getElementById("jr-list").innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
@@ -2610,14 +2610,14 @@ async function loadJournal(){
 }
 function _jrOutcome(a){
   const r=a.result;
-  if(!r) return `<span class="text-slate-600">— нет данных о применении</span>`;
+  if(!r) return `<span class="text-slate-600">— no apply info</span>`;
   if(r.ok){
     const n=(r.targets||[]).length;
-    return `<span class="text-emerald-400">✓ применено${n?` · ${n} таргет(ов)`:""}</span>`;
+    return `<span class="text-emerald-400">✓ applied${n?` · ${n} target(s)`:""}</span>`;
   }
   const f=r.failed||{};
   const parts=Object.keys(f).map(t=>`${esc(t)}: ${esc(f[t])}`).join("; ");
-  return `<span class="text-red-400" title="${esc(parts)}">⚠ ошибка → ${esc(parts).slice(0,120)}</span>`;
+  return `<span class="text-red-400" title="${esc(parts)}">⚠ error → ${esc(parts).slice(0,120)}</span>`;
 }
 function renderJournal(){
   const el=document.getElementById("jr-list");
@@ -2628,7 +2628,7 @@ function renderJournal(){
     if(f==="path") return (a.action||"").startsWith("path");
     return a.action===f;
   });
-  if(!rows.length){ el.innerHTML=`<div class="text-slate-500 text-xs">нет записей под фильтр.</div>`; return; }
+  if(!rows.length){ el.innerHTML=`<div class="text-xs" style="color:var(--faint);padding:12px 2px">No entries match the filter.</div>`; return; }
   el.innerHTML=rows.map(a=>{
     const m=_JR_ACT[a.action]||{i:"•",t:a.action};
     const by=_JR_BY[a.by]||esc(a.by||"");
