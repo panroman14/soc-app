@@ -2955,18 +2955,18 @@ async function loadCfTargets(){
 }
 function renderCfTargets(){
   const el=document.getElementById("cf-list");
-  el.innerHTML=_cfTargets.map(cfCard).join("")||'<div class="text-slate-500 text-xs">пока нет CF-таргетов. Нажми «+ CF target».</div>';
+  el.innerHTML=_cfTargets.map(cfCard).join("")||'<div class="text-xs" style="color:var(--faint);padding:12px 2px">No Cloudflare targets yet — click “New CF target”.</div>';
   if(typeof applyI18n==="function")applyI18n();
 }
 function cfCard(t){
-  const id=esc(t.id), open=_cfOpen.has(t.id), migr=t.env?`<span class="chip" title="мигрирован из окружения ${esc(t.env)}">env: ${esc(t.env)}</span>`:"";
-  const chips=[t.token_set?`<span class="chip">🔑 ${_trText('токен задан')}</span>`:`<span class="chip" style="opacity:.5">${_trText('нет токена')}</span>`,
+  const id=esc(t.id), open=_cfOpen.has(t.id), migr=t.env?`<span class="chip" title="migrated from environment ${esc(t.env)}">env: ${esc(t.env)}</span>`:"";
+  const chips=[t.token_set?`<span class="chip" style="color:var(--ok)">token set</span>`:`<span class="chip" style="opacity:.6">no token</span>`,
                `<span class="chip">${esc(t.mode||"ip-list")}</span>`, migr].filter(Boolean).join(" ");
   return `<div class="card p-3" data-cf="${id}">
     <div class="env-row" style="cursor:pointer" onclick="cfToggle('${id}')">
       <div class="flex items-center gap-2 min-w-0 flex-wrap">
         <span id="cfchev-${id}" style="color:var(--faint)">${open?'▾':'▸'}</span>
-        <span class="text-sm font-medium">☁️ ${esc(t.name||t.id)}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg><span class="text-sm font-medium">${esc(t.name||t.id)}</span>
         <span class="mono text-[11px]" style="color:var(--faint)">${id}</span>${_beBadge(t.backend)}
         <span class="flex gap-1">${chips}</span>
       </div>
@@ -2974,18 +2974,18 @@ function cfCard(t){
     </div>
     <div id="cfbody-${id}" class="${open?'':'hidden'} mt-3">
       <div class="grid sm:grid-cols-2 gap-3 text-[11px]" style="color:var(--muted)">
-        <label class="block">Имя<input data-f="name" value="${esc(t.name||'')}" class="input mt-1"></label>
-        <label class="block">Режим<select data-f="mode" class="input mt-1"><option ${t.mode==='ip-list'?'selected':''}>ip-list</option><option ${t.mode==='access-rules'?'selected':''}>access-rules</option></select></label>
-        <label class="block">API token <span style="color:var(--faint)">${t.token_set?'(задан — введи для замены)':'(обязательно)'}</span><input data-f="token" type="password" placeholder="${t.token_set?'•••• token set':'CF API token'}" class="input mono mt-1"></label>
-        <label class="block">Zone ID <span style="color:var(--faint)">(или имя ниже)</span><input data-f="zone_id" value="${esc(t.zone_id||'')}" class="input mono mt-1"></label>
+        <label class="block">Name<input data-f="name" value="${esc(t.name||'')}" class="input mt-1"></label>
+        <label class="block">Mode<select data-f="mode" class="input mt-1"><option ${t.mode==='ip-list'?'selected':''}>ip-list</option><option ${t.mode==='access-rules'?'selected':''}>access-rules</option></select></label>
+        <label class="block">API token <span style="color:var(--faint)">${t.token_set?'(set — enter to replace)':'(required)'}</span><input data-f="token" type="password" placeholder="${t.token_set?'•••• token set':'CF API token'}" class="input mono mt-1"></label>
+        <label class="block">Zone ID <span style="color:var(--faint)">(or name below)</span><input data-f="zone_id" value="${esc(t.zone_id||'')}" class="input mono mt-1"></label>
         <label class="block">Zone name<input data-f="zone_name" value="${esc(t.zone_name||'')}" placeholder="example.com" class="input mono mt-1"></label>
-        <label class="block">Account ID <span style="color:var(--faint)">(опц.)</span><input data-f="account_id" value="${esc(t.account_id||'')}" class="input mono mt-1"></label>
+        <label class="block">Account ID <span style="color:var(--faint)">(optional)</span><input data-f="account_id" value="${esc(t.account_id||'')}" class="input mono mt-1"></label>
         <label class="block">IP List name <span style="color:var(--faint)">(ip-list)</span><input data-f="list_name" value="${esc(t.list_name||'')}" placeholder="soc_blocklist" class="input mono mt-1"></label>
-        <label class="block">Rule desc <span style="color:var(--faint)">(опц.)</span><input data-f="rule_desc" value="${esc(t.rule_desc||'')}" class="input mono mt-1"></label>
+        <label class="block">Rule desc <span style="color:var(--faint)">(optional)</span><input data-f="rule_desc" value="${esc(t.rule_desc||'')}" class="input mono mt-1"></label>
       </div>
       <div id="cfcheck-${id}" class="text-[11px] mt-2"></div>
       <div class="env-row mt-3 pt-3" style="border-top:1px solid var(--border)">
-        <button onclick="cfCheck('${id}')" class="btn btn-ghost btn-xs">Проверить подключение</button>
+        <button onclick="cfCheck('${id}')" class="btn btn-ghost btn-xs">Test connection</button>
         <div class="flex gap-1">
           <button onclick="cfSave('${id}')" class="btn btn-primary btn-xs" data-i18n="save">Save</button>
           <button onclick="cfDelete('${id}')" class="btn btn-danger btn-xs" data-i18n="delete">Delete</button></div>
