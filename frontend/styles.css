@@ -85,6 +85,16 @@
   .topbar .btn{height:28px;padding:0 10px}
   .topbar .btn-xs{height:28px;padding:0 8px;font-size:12px}
   .topbar .chip,#status-badge,#be-health{height:28px;display:inline-flex;align-items:center}
+  /* topbar decluttered into groups: primary | status | overflow | user */
+  .tb-div{width:1px;height:18px;background:var(--glass-border);flex:0 0 auto}
+  .tb-status{display:flex;align-items:center;gap:8px}
+  .tb-more{position:relative}
+  .tb-more>summary{list-style:none}
+  .tb-more>summary::-webkit-details-marker{display:none}
+  .tb-more[open]>summary{background:var(--glass-hover);color:var(--text)}
+  .tb-more-menu{position:absolute;right:0;top:calc(100% + 7px);z-index:60;display:flex;gap:4px;padding:6px;
+    border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-panel);
+    -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:0 14px 34px -14px #000d}
   #status-badge{padding:0 11px;border-radius:var(--radius-btn)}
   .seg{display:inline-flex;border:1px solid var(--glass-border);border-radius:var(--radius-btn);overflow:hidden;height:28px;
     background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}

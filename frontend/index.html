@@ -69,16 +69,26 @@ tailwind.config={theme:{extend:{colors:{
     <label class="search"><span style="color:var(--faint);display:inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></span><input id="topsearch" onkeydown="if(event.key==='Enter')quickSearch(this.value)" placeholder="Search IP → profile" data-i18n-ph="search.ph"></label>
     <div style="flex:1"></div>
     <button id="topban" class="btn btn-primary" onclick="quickBan()" title="Ban an IP / CIDR"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="ban.quick">Ban IP</span></button>
-    <div id="status-badge" class="chip">—</div>
-    <div class="hidden sm:flex items-center gap-1.5 text-xs" title="data freshness">
-      <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
-      <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
+    <span class="tb-div"></span>
+    <div class="tb-status">
+      <div id="status-badge" class="chip">—</div>
+      <div class="hidden sm:flex items-center gap-1.5 text-xs" title="data freshness">
+        <span id="live-dot" class="w-2 h-2 rounded-full" style="background:var(--faint)"></span>
+        <span id="live-text" style="color:var(--muted)" data-i18n="connecting">connecting…</span>
+      </div>
+      <span id="updated" class="hidden"></span>
+      <span id="be-health" class="hidden mono cursor-default" title="backend health"></span>
     </div>
-    <span id="updated" class="hidden"></span>
-    <span id="be-health" class="hidden mono cursor-default" title="backend health"></span>
-    <button id="density-btn" onclick="toggleDensity()" class="btn btn-ghost btn-xs" title="density"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1"/><rect x="3" y="13" width="18" height="7" rx="1"/></svg></button>
-    <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">—</button>
-    <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
+    <span class="tb-div"></span>
+    <details class="tb-more" id="tb-more">
+      <summary class="btn btn-ghost btn-xs" title="more"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></summary>
+      <div class="tb-more-menu">
+        <button id="density-btn" onclick="toggleDensity()" class="btn btn-ghost btn-xs" title="density"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1"/><rect x="3" y="13" width="18" height="7" rx="1"/></svg></button>
+        <button id="llm-toggle" data-llm onclick="toggleLLM()" class="btn btn-ghost btn-xs" title="LLM on/off">—</button>
+        <button id="pause-btn" onclick="togglePause()" class="btn btn-ghost btn-xs" title="pause">⏸</button>
+      </div>
+    </details>
+    <span class="tb-div"></span>
     <div id="user-chip" class="hidden items-center gap-1.5">
       <button onclick="showView('settings');setSub('account')" class="btn btn-ghost btn-xs" title="account">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span id="user-name" class="mono"></span><span id="user-role" class="text-[9px] px-1 rounded ml-1"></span></button>
