@@ -128,7 +128,7 @@ tailwind.config={theme:{extend:{colors:{
       <div id="insight-current" class="lg:col-span-2 card p-5"></div>
       <div class="card p-5">
         <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-medium text-slate-300">Defense suggestions</h3>
-          <button id="suggest-btn" class="text-[11px] px-2 py-1 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25">generate</button></div>
+          <button id="suggest-btn" class="btn btn-xs">generate</button></div>
         <div id="suggest" class="text-sm text-slate-400">Click “generate” — the LLM proposes deny/WAF rules for the current attack.</div>
       </div>
     </div>
@@ -191,15 +191,15 @@ tailwind.config={theme:{extend:{colors:{
     <div class="flex items-center gap-2 mb-2 flex-wrap">
       <input id="bl_cidr" placeholder="IP or CIDR (e.g. 203.0.113.0/24)" class="input flex-1 min-w-[180px] max-w-xs" />
       <input id="bl_reason" placeholder="reason" class="input w-40" />
-      <select id="bl_ttl" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-300 shrink-0">
+      <select id="bl_ttl" class="input shrink-0">
         <option value="2592000" selected>30d</option><option value="0">forever</option><option value="3600">1h</option><option value="86400">24h</option><option value="604800">7d</option>
       </select>
       <button onclick="blockManual()" class="text-sm px-3 py-1 rounded bg-red-600/80 text-white hover:bg-red-600 shrink-0">Block</button>
     </div>
     <!-- ряд 2: операции над списком + фильтр -->
     <div class="flex items-center gap-2 mb-3 flex-wrap border-t border-slate-800/60 pt-2.5">
-      <button onclick="unbanAll()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0">↩ Unban all</button>
-      <button onclick="resyncNow()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0" title="re-read denylist into ingress (after kubectl apply)">↻ Resync</button>
+      <button onclick="unbanAll()" class="btn shrink-0">↩ Unban all</button>
+      <button onclick="resyncNow()" class="btn shrink-0" title="re-read denylist into ingress (after kubectl apply)">↻ Resync</button>
       <div id="bl_mode" class="flex gap-1 shrink-0"></div>
       <input id="bl_search" oninput="_blPage=0;_renderBlPage()" placeholder="search by IP / reason…" class="input flex-1 min-w-[160px] max-w-xs ml-auto" />
       <span id="bl_msg" class="text-xs shrink-0"></span>
@@ -212,7 +212,7 @@ tailwind.config={theme:{extend:{colors:{
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <div id="bc_summary" class="text-xs text-slate-400">loading…</div>
       <div class="flex items-center gap-2">
-        <select id="bc_win" onchange="renderBanCandidates()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="analysis window">
+        <select id="bc_win" onchange="renderBanCandidates()" class="input" title="analysis window">
           <option value="1h" selected>1h</option><option value="6h">6h</option><option value="8h">8h</option>
         </select>
         <button onclick="banAllCandidates()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">Ban all</button>
@@ -226,7 +226,7 @@ tailwind.config={theme:{extend:{colors:{
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <div id="sc_summary" class="text-xs text-slate-400">loading…</div>
       <div class="flex items-center gap-2">
-        <select id="sc_win" onchange="renderSuspects()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="analysis window">
+        <select id="sc_win" onchange="renderSuspects()" class="input" title="analysis window">
           <option value="1h" selected>1h</option><option value="6h">6h</option><option value="8h">8h</option>
         </select>
         <button id="sc_judge" data-llm onclick="judgeSuspects()" class="btn btn-primary btn-xs">Assess with AI</button>
@@ -241,7 +241,7 @@ tailwind.config={theme:{extend:{colors:{
   <section class="card p-4 mb-8">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <div id="crs_summary" class="text-xs text-slate-400">…</div>
-      <select id="crs_win" onchange="renderCrs()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="window">
+      <select id="crs_win" onchange="renderCrs()" class="input" title="window">
         <option value="1h" selected>1h</option><option value="6h">6h</option><option value="8h">8h</option>
       </select>
     </div>
@@ -259,7 +259,7 @@ tailwind.config={theme:{extend:{colors:{
           <div class="text-sm font-semibold text-amber-200">Auto-ban engine</div>
           <div id="ab-killswitch-note" class="text-[12px] text-slate-400 mt-0.5">loading…</div>
         </div>
-        <button id="ab-arm-btn" onclick="toggleArm()" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">—</button>
+        <button id="ab-arm-btn" onclick="toggleArm()" class="btn">—</button>
       </div>
     </div>
 
@@ -278,14 +278,14 @@ tailwind.config={theme:{extend:{colors:{
         <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="abCardToggle('ab-form-body','ab-form-chev')">
           <h3 class="text-sm font-medium text-slate-200"><span id="ab-form-chev" class="text-slate-600 mr-1">▸</span><span id="ab-form-title">Create new rule</span></h3>
           <div class="flex gap-1" onclick="event.stopPropagation()">
-            <button id="ab-tab-form" onclick="abMode('form')" class="text-[11px] px-2 py-1 rounded bg-indigo-500/25 text-indigo-200 border border-indigo-500/40">Form</button>
-            <button id="ab-tab-json" onclick="abMode('json')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">JSON</button>
+            <button id="ab-tab-form" onclick="abMode('form')" class="btn btn-primary btn-xs">Form</button>
+            <button id="ab-tab-json" onclick="abMode('json')" class="btn btn-xs">JSON</button>
           </div>
         </div>
         <div id="ab-form-body" class="hidden">
         <div id="ab-json-panel" class="hidden space-y-2">
           <p class="text-[11px] text-slate-500">Paste a ready rule (or several — as an array) as JSON, then click “Load into form” or “Save from JSON”.</p>
-          <textarea id="ab-json" rows="12" spellcheck="false" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs text-slate-200 mono" placeholder='{
+          <textarea id="ab-json" rows="12" spellcheck="false" class="input mono" placeholder='{
   "name": "WP-login brute",
   "match_type": "substring",
   "paths": ["/wp-login.php", "/xmlrpc.php"],
@@ -297,9 +297,9 @@ tailwind.config={theme:{extend:{colors:{
   "enabled": false
 }'></textarea>
           <div class="flex items-center gap-2 flex-wrap">
-            <button onclick="abJsonToForm()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700">↧ Load into form</button>
+            <button onclick="abJsonToForm()" class="btn">↧ Load into form</button>
             <button onclick="abSaveFromJson()" class="btn btn-primary">Save from JSON</button>
-            <button onclick="abFormToJson()" class="px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700" title="export current form as JSON">⤓ form → JSON</button>
+            <button onclick="abFormToJson()" class="btn" title="export current form as JSON">⤓ form → JSON</button>
             <span id="ab-json-msg" class="text-[12px] text-slate-500"></span>
           </div>
         </div>
@@ -319,7 +319,7 @@ tailwind.config={theme:{extend:{colors:{
             <p id="ab-rate-hint" class="hidden text-[11px] text-slate-500 leading-snug mb-1.5">Bans an IP by request count over the window — path-agnostic (flood / probing / scraping). The status code below can be left empty or narrowed, e.g. 404.</p>
             <select id="ab-family" class="hidden w-full input"></select>
             <div id="ab-paths" class="space-y-1.5"></div>
-            <button id="ab-add-or" type="button" onclick="abAddPath()" class="mt-1.5 text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ OR another path</button>
+            <button id="ab-add-or" type="button" onclick="abAddPath()" class="btn btn-xs mt-1.5">+ OR another path</button>
             <label id="ab-combine-wrap" class="flex items-start gap-2 mt-2 cursor-pointer">
               <input id="ab-combine" type="checkbox" checked class="mt-0.5 accent-indigo-500">
               <span class="text-[11px] text-slate-400 leading-snug">sum requests across all paths<br><span class="text-slate-600">on: 1×/.git + 1×/.env = 2 → fires · off: one path must reach the threshold</span></span>
@@ -360,8 +360,8 @@ tailwind.config={theme:{extend:{colors:{
           </div>
           <div class="flex items-center gap-2 pt-1">
             <button onclick="abSaveRule()" class="btn btn-primary">Save rule</button>
-            <button onclick="abPreview()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700" title="who would be banned (dry-run, no ban)">Preview</button>
-            <button id="ab-cancel" onclick="abResetForm()" class="hidden px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700">Cancel</button>
+            <button onclick="abPreview()" class="btn" title="who would be banned (dry-run, no ban)">Preview</button>
+            <button id="ab-cancel" onclick="abResetForm()" class="hidden btn">Cancel</button>
             <span id="ab-form-msg" class="text-[12px] text-slate-500"></span>
           </div>
         </div>
@@ -488,7 +488,7 @@ tailwind.config={theme:{extend:{colors:{
           <h2 class="text-sm font-medium text-slate-200">Connected nodes (nginx)</h2>
           <p class="text-[11px] text-slate-500 mt-0.5">nginx VMs running soc-nginx-agent — where traffic is collected and bans are applied.</p>
         </div>
-        <button onclick="showAddNode()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">+ Add node</button>
+        <button onclick="showAddNode()" class="btn btn-primary btn-xs">+ Add node</button>
       </div>
       <div id="nodes-add" class="hidden mb-3 card p-3">
         <div class="flex items-center justify-between mb-2">
@@ -498,7 +498,7 @@ tailwind.config={theme:{extend:{colors:{
         <p class="text-[11px] text-slate-500 mb-2">Run on the VM (Linux, root). The node appears in the list after its first heartbeat:</p>
         <div class="flex items-stretch gap-2">
           <pre id="nodes-install-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300">loading…</pre>
-          <button onclick="copyInstallCmd()" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+          <button onclick="copyInstallCmd()" class="btn btn-xs shrink-0">copy</button>
         </div>
         <p id="nodes-install-hint" class="text-[11px] text-amber-400/80 mt-2 hidden"></p>
       </div>
@@ -543,7 +543,7 @@ tailwind.config={theme:{extend:{colors:{
           <h2 class="text-sm font-medium text-slate-200">☸️ <span data-i18n="ing.h">Ingress</span></h2>
           <p class="text-[11px] text-slate-500 mt-0.5" data-i18n="ing.sub">ingress-nginx (k8s) targets — defined in blocklist-api BAN_TARGETS (in-cluster). Shown here read-only.</p>
         </div>
-        <button onclick="ingSetupToggle()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium shrink-0">⎈ <span data-i18n="ing.setup">Setup cluster</span></button>
+        <button onclick="ingSetupToggle()" class="btn btn-primary btn-xs shrink-0">⎈ <span data-i18n="ing.setup">Setup cluster</span></button>
       </div>
 
       <div id="ing-setup" class="hidden mb-4 card p-4" style="background:#0e1424">
@@ -564,16 +564,16 @@ tailwind.config={theme:{extend:{colors:{
           <label class="block"><span data-i18n="ing.f.ccm">Controller ConfigMap</span><input id="ing-ccm" value="ingress-nginx-controller" oninput="ingCmd()" class="input mono mt-1"></label>
           <label class="block"><span data-i18n="ing.f.ip">Dashboard IP (whitelist)</span><input id="ing-ip" placeholder="203.0.113.10" oninput="ingCmd()" class="input mono mt-1"></label>
           <label class="block"><span data-i18n="ing.f.token">Token</span>
-            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="text-[11px] px-2 rounded bg-slate-700 text-slate-200 shrink-0" data-i18n="ing.gen">generate</button></span></label>
+            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="btn btn-xs shrink-0" data-i18n="ing.gen">generate</button></span></label>
         </div>
         <div class="ml-7 flex items-stretch gap-2 mt-3">
           <pre id="ing-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300"></pre>
-          <button onclick="ingCopyCmd('ing-cmd')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+          <button onclick="ingCopyCmd('ing-cmd')" class="btn btn-xs shrink-0">copy</button>
         </div>
         <div class="ml-7 mt-3 p-2.5 rounded-lg" style="background:#0f1420;border:1px solid #1e293b">
           <div class="text-[11px] font-medium text-slate-300 mb-2" data-i18n="ing.connect">After install — verify the dashboard can reach this API:</div>
           <div class="flex flex-wrap items-center gap-2">
-            <button onclick="bcTest()" class="text-[11px] px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 shrink-0">🔌 <span data-i18n="ing.test">Check connection</span></button>
+            <button onclick="bcTest()" class="btn btn-xs shrink-0">🔌 <span data-i18n="ing.test">Check connection</span></button>
             <span id="bc-result" class="text-[11px]"></span>
             <button id="bc-save-btn" onclick="bcSave()" class="hidden text-[11px] px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium shrink-0">💾 <span data-i18n="save">Save</span></button>
           </div>
@@ -593,7 +593,7 @@ tailwind.config={theme:{extend:{colors:{
           <label class="block text-[11px]" style="color:var(--muted)"><span data-i18n="ing.f.loki">Dashboard Loki push URL</span><input id="ing-loki" placeholder="http://loki.dashboard:3100" oninput="ingCmd()" class="input mono mt-1 max-w-md"></label>
           <div class="flex items-stretch gap-2 mt-2">
             <pre id="ing-promtail" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-sky-300"></pre>
-            <button onclick="ingCopyCmd('ing-promtail')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+            <button onclick="ingCopyCmd('ing-promtail')" class="btn btn-xs shrink-0">copy</button>
           </div>
         </div>
 
@@ -603,7 +603,7 @@ tailwind.config={theme:{extend:{colors:{
         <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s3.sub">An ingress target is the pair “namespace + Controller ConfigMap”. Same values as in the command above:</p>
         <div class="ml-7 flex items-stretch gap-2">
           <pre id="ing-values" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-slate-300"></pre>
-          <button onclick="ingCopyCmd('ing-values')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
+          <button onclick="ingCopyCmd('ing-values')" class="btn btn-xs shrink-0">copy</button>
         </div>
       </div>
 
@@ -639,7 +639,7 @@ tailwind.config={theme:{extend:{colors:{
             <option value="path">403 rules</option>
             <option value="fail">errors only</option>
           </select>
-          <button onclick="loadJournal()" class="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">refresh</button>
+          <button onclick="loadJournal()" class="btn btn-xs">refresh</button>
         </div>
       </div>
       <div id="jr-list" class="mt-3 space-y-1"><div class="text-slate-600 text-xs">loading…</div></div>
@@ -770,7 +770,7 @@ tailwind.config={theme:{extend:{colors:{
     <section id="ssec-global" class="hidden card p-4">
       <div class="flex items-center justify-between mb-1">
         <h2 class="text-sm font-medium text-slate-200">Global settings</h2>
-        <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Save</button>
+        <button onclick="saveSettings()" id="set-save" class="btn btn-primary btn-xs">Save</button>
       </div>
       <p class="text-[11px] mb-3" style="color:var(--faint)" data-i18n="set.global.sub">LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.</p>
       <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">CONFIG_LOCK=env — config comes from environment variables only; GUI editing is disabled.</div>
@@ -933,9 +933,9 @@ tailwind.config={theme:{extend:{colors:{
       <button onclick="brandClose()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
     </div>
     <label class="block text-[12px] text-slate-400">Title
-      <input id="brand-in-title" maxlength="60" placeholder="SOC" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
+      <input id="brand-in-title" maxlength="60" placeholder="SOC" class="input mt-1"></label>
     <label class="block text-[12px] text-slate-400">Subtitle
-      <input id="brand-in-sub" maxlength="120" placeholder="traffic & attack monitor" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
+      <input id="brand-in-sub" maxlength="120" placeholder="traffic & attack monitor" class="input mt-1"></label>
     <div class="flex items-center gap-3">
       <div id="brand-prev" class="w-11 h-11 rounded-xl grid place-items-center overflow-hidden shrink-0 bg-slate-900 border border-slate-700 text-slate-600 text-[10px]">logo</div>
       <label class="flex-1 text-[12px] text-slate-400">Icon (PNG/SVG, &lt;190KB)
@@ -945,8 +945,8 @@ tailwind.config={theme:{extend:{colors:{
     <div class="flex items-center justify-between pt-1">
       <button onclick="brandClearIcon()" class="text-[12px] text-slate-400 hover:text-slate-200">remove icon</button>
       <div class="flex gap-2">
-        <button onclick="brandClose()" class="text-[12px] px-3 py-1.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">Cancel</button>
-        <button onclick="brandSave()" class="text-[12px] px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-500">Save</button>
+        <button onclick="brandClose()" class="btn">Cancel</button>
+        <button onclick="brandSave()" class="btn btn-primary">Save</button>
       </div>
     </div>
   </div>
