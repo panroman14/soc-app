@@ -112,14 +112,14 @@ tailwind.config={theme:{extend:{colors:{
   </section>
   <section id="health" class="flex flex-wrap gap-2 mb-4"></section>
   <section id="stats" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-2"></section>
-  <section class="card p-3 mb-2"><div class="flex items-center gap-3"><span class="text-[11px] text-slate-500 shrink-0">статусы:</span><div id="status_pct" class="flex-1 flex h-3 rounded overflow-hidden bg-slate-800"></div><span id="status_pct_legend" class="text-[11px] text-slate-500 shrink-0"></span></div></section>
+  <section class="card p-3 mb-2"><div class="flex items-center gap-3"><span class="text-[11px] text-slate-500 shrink-0">statuses:</span><div id="status_pct" class="flex-1 flex h-3 rounded overflow-hidden bg-slate-800"></div><span id="status_pct_legend" class="text-[11px] text-slate-500 shrink-0"></span></div></section>
 
-  <h2 class="sec">Динамика</h2>
+  <h2 class="sec">Trends</h2>
   <section class="grid lg:grid-cols-2 gap-4">
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик / 5м</h3><div id="chartTraffic" class="ov-chart"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Сигнатуры атак</h3><div id="chartThreats" class="ov-chart"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Статусы ответов</h3><div id="chartStatus" class="ov-chart"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Латентность p95, c</h3><div id="chartLatency" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Traffic / 5m</h3><div id="chartTraffic" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Attack signatures</h3><div id="chartThreats" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Response statuses</h3><div id="chartStatus" class="ov-chart"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Latency p95, s</h3><div id="chartLatency" class="ov-chart"></div></div>
   </section>
 
   <h2 class="sec" data-llm data-i18n="ai.title">AI analyst</h2>
@@ -127,34 +127,34 @@ tailwind.config={theme:{extend:{colors:{
     <div class="grid lg:grid-cols-3 gap-4">
       <div id="insight-current" class="lg:col-span-2 card p-5"></div>
       <div class="card p-5">
-        <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-medium text-slate-300">Предложения по защите</h3>
-          <button id="suggest-btn" class="text-[11px] px-2 py-1 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25">сгенерировать</button></div>
-        <div id="suggest" class="text-sm text-slate-400">Нажми «сгенерировать» — LLM предложит deny/WAF-правила по текущей атаке.</div>
+        <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-medium text-slate-300">Defense suggestions</h3>
+          <button id="suggest-btn" class="text-[11px] px-2 py-1 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25">generate</button></div>
+        <div id="suggest" class="text-sm text-slate-400">Click “generate” — the LLM proposes deny/WAF rules for the current attack.</div>
       </div>
     </div>
-    <div class="card p-5"><h3 class="text-sm font-medium text-slate-300 mb-2">Дайджест за период</h3><div id="digest" class="text-sm text-slate-300 leading-relaxed">загрузка…</div></div>
+    <div class="card p-5"><h3 class="text-sm font-medium text-slate-300 mb-2">Digest for the period</h3><div id="digest" class="text-sm text-slate-300 leading-relaxed">loading…</div></div>
   </section>
 
-  <h2 class="sec">Кто и что <span class="text-slate-600 font-normal normal-case tracking-normal">— тяни за правый-нижний угол карточки, чтобы менять размер</span></h2>
+  <h2 class="sec">Who & what <span class="text-slate-600 font-normal normal-case tracking-normal">— drag the bottom-right corner of a card to resize</span></h2>
   <section id="whoswhat" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ атакуемых путей <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="top_paths" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ User-Agent <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="top_user_agents" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Типы атак <span class="text-slate-500 font-normal">/ CRS</span></h3><div id="attack_types" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">География</h3><div id="geo" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ доменов</h3><div id="top_domains" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Карта угроз <span class="text-slate-500 font-normal">/ новые подсети</span></h3><div id="subnets" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">CRS-правила <span class="text-slate-500 font-normal">/ клик → payload</span></h3><div id="crs_rules" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">HTTP-методы</h3><div id="methods" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Top attacked paths <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="top_paths" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Top User-Agents <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="top_user_agents" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Attack types <span class="text-slate-500 font-normal">/ CRS</span></h3><div id="attack_types" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Geography</h3><div id="geo" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Top domains</h3><div id="top_domains" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Threat map <span class="text-slate-500 font-normal">/ new subnets</span></h3><div id="subnets" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">CRS rules <span class="text-slate-500 font-normal">/ click → payload</span></h3><div id="crs_rules" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">HTTP methods</h3><div id="methods" class="space-y-1.5"></div></div>
     <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Referer <span class="text-slate-500 font-normal">/ 4xx</span></h3><div id="referers" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">TLS-протоколы</h3><div id="tls" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Топ talkers <span class="text-slate-500 font-normal">/ клик → профиль IP</span></h3><div id="talkers" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">WAF: кандидаты в ложные <span class="text-slate-500 font-normal">/ URI, триггерящие CRS</span></h3><div id="waf_fp" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">TLS protocols</h3><div id="tls" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Top talkers <span class="text-slate-500 font-normal">/ click → IP profile</span></h3><div id="talkers" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">WAF: false-positive candidates <span class="text-slate-500 font-normal">/ URIs triggering CRS</span></h3><div id="waf_fp" class="space-y-1.5"></div></div>
   </section>
 
-  <h2 class="sec">Производительность и нагрузка</h2>
+  <h2 class="sec">Performance & load</h2>
   <section class="grid md:grid-cols-2 gap-4">
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Медленные эндпоинты <span class="text-slate-500 font-normal">/ avg сек</span></h3><div id="slow_endpoints" class="space-y-1.5"></div></div>
-    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Трафик по доменам <span class="text-slate-500 font-normal">/ МБ</span></h3><div id="bytes_by_domain" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Slow endpoints <span class="text-slate-500 font-normal">/ avg s</span></h3><div id="slow_endpoints" class="space-y-1.5"></div></div>
+    <div class="card p-4"><h3 class="text-sm font-medium text-slate-300 mb-3">Traffic by domain <span class="text-slate-500 font-normal">/ MB</span></h3><div id="bytes_by_domain" class="space-y-1.5"></div></div>
   </section>
 
   <h2 class="sec">Requests overview <span class="font-normal normal-case tracking-normal" style="color:var(--faint)">— clicking a path / IP / UA above also opens requests</span></h2>
@@ -185,64 +185,64 @@ tailwind.config={theme:{extend:{colors:{
     <div id="ex_out" class="overflow-auto max-h-96 mt-3"><div class="text-xs" style="color:var(--faint)">Set a filter and hit Find to see raw requests.</div></div>
   </section>
 
-  <h2 class="sec">Денлист <span class="text-slate-500 font-normal">/ блокировки на ingress</span></h2>
+  <h2 class="sec">Denylist <span class="text-slate-500 font-normal">/ blocks on ingress</span></h2>
   <section class="card p-4 mb-8">
     <!-- ряд 1: добавить блокировку -->
     <div class="flex items-center gap-2 mb-2 flex-wrap">
-      <input id="bl_cidr" placeholder="IP или CIDR (напр. 203.0.113.0/24)" class="input flex-1 min-w-[180px] max-w-xs" />
-      <input id="bl_reason" placeholder="причина" class="input w-40" />
+      <input id="bl_cidr" placeholder="IP or CIDR (e.g. 203.0.113.0/24)" class="input flex-1 min-w-[180px] max-w-xs" />
+      <input id="bl_reason" placeholder="reason" class="input w-40" />
       <select id="bl_ttl" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-slate-300 shrink-0">
-        <option value="2592000" selected>30д</option><option value="0">навсегда</option><option value="3600">1ч</option><option value="86400">24ч</option><option value="604800">7д</option>
+        <option value="2592000" selected>30d</option><option value="0">forever</option><option value="3600">1h</option><option value="86400">24h</option><option value="604800">7d</option>
       </select>
-      <button onclick="blockManual()" class="text-sm px-3 py-1 rounded bg-red-600/80 text-white hover:bg-red-600 shrink-0">Заблокировать</button>
+      <button onclick="blockManual()" class="text-sm px-3 py-1 rounded bg-red-600/80 text-white hover:bg-red-600 shrink-0">Block</button>
     </div>
     <!-- ряд 2: операции над списком + фильтр -->
     <div class="flex items-center gap-2 mb-3 flex-wrap border-t border-slate-800/60 pt-2.5">
-      <button onclick="unbanAll()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0">↩ Разбанить всех</button>
-      <button onclick="resyncNow()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0" title="перечитать денлист в ingress (после kubectl apply)">↻ Ресинк</button>
+      <button onclick="unbanAll()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0">↩ Unban all</button>
+      <button onclick="resyncNow()" class="text-sm px-3 py-1 rounded bg-slate-700/60 text-slate-200 hover:bg-slate-700 shrink-0" title="re-read denylist into ingress (after kubectl apply)">↻ Resync</button>
       <div id="bl_mode" class="flex gap-1 shrink-0"></div>
-      <input id="bl_search" oninput="_blPage=0;_renderBlPage()" placeholder="поиск по IP/причине…" class="input flex-1 min-w-[160px] max-w-xs ml-auto" />
+      <input id="bl_search" oninput="_blPage=0;_renderBlPage()" placeholder="search by IP / reason…" class="input flex-1 min-w-[160px] max-w-xs ml-auto" />
       <span id="bl_msg" class="text-xs shrink-0"></span>
     </div>
-    <div id="blocklist" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    <div id="blocklist" class="text-sm"><div class="text-slate-600 text-xs">loading…</div></div>
   </section>
 
-  <h2 class="sec">Просятся в бан <span class="text-slate-500 font-normal">/ сканеры .env · wp · .git · .php …</span></h2>
+  <h2 class="sec">Ban candidates <span class="text-slate-500 font-normal">/ scanners .env · wp · .git · .php …</span></h2>
   <section class="card p-4 mb-8">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-      <div id="bc_summary" class="text-xs text-slate-400">загрузка…</div>
+      <div id="bc_summary" class="text-xs text-slate-400">loading…</div>
       <div class="flex items-center gap-2">
-        <select id="bc_win" onchange="renderBanCandidates()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно анализа">
-          <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
+        <select id="bc_win" onchange="renderBanCandidates()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="analysis window">
+          <option value="1h" selected>1h</option><option value="6h">6h</option><option value="8h">8h</option>
         </select>
-        <button onclick="banAllCandidates()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">Забанить всех</button>
+        <button onclick="banAllCandidates()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">Ban all</button>
       </div>
     </div>
-    <div id="ban_candidates" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    <div id="ban_candidates" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">loading…</div></div>
   </section>
 
-  <h2 class="sec">Подозрительная активность <span class="text-slate-500 font-normal">/ аномально много 4xx (перебор эндпоинтов)</span></h2>
+  <h2 class="sec">Suspicious activity <span class="text-slate-500 font-normal">/ abnormally many 4xx (endpoint probing)</span></h2>
   <section class="card p-4 mb-8">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-      <div id="sc_summary" class="text-xs text-slate-400">загрузка…</div>
+      <div id="sc_summary" class="text-xs text-slate-400">loading…</div>
       <div class="flex items-center gap-2">
-        <select id="sc_win" onchange="renderSuspects()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно анализа">
-          <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
+        <select id="sc_win" onchange="renderSuspects()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="analysis window">
+          <option value="1h" selected>1h</option><option value="6h">6h</option><option value="8h">8h</option>
         </select>
         <button id="sc_judge" data-llm onclick="judgeSuspects()" class="btn btn-primary btn-xs">Assess with AI</button>
         <button id="sc_recheck" data-llm onclick="judgeSuspects(true)" class="btn btn-xs" title="force AI re-check (ignore cache)">Re-assess</button>
-        <button onclick="banAllSuspects()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">Забанить всех</button>
+        <button onclick="banAllSuspects()" class="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 font-medium">Ban all</button>
       </div>
     </div>
-    <div id="suspects" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+    <div id="suspects" class="text-sm max-h-[480px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">loading…</div></div>
   </section>
 
   <h2 class="sec"><span data-i18n="crs.h">WAF / CRS triggers</span> <span class="text-slate-500 font-normal" data-i18n="crs.sub">/ OWASP ModSecurity — anomaly score exceeded</span></h2>
   <section class="card p-4 mb-8">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <div id="crs_summary" class="text-xs text-slate-400">…</div>
-      <select id="crs_win" onchange="renderCrs()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="окно">
-        <option value="1h" selected>1ч</option><option value="6h">6ч</option><option value="8h">8ч</option>
+      <select id="crs_win" onchange="renderCrs()" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300" title="window">
+        <option value="1h" selected>1h</option><option value="6h">6h</option><option value="8h">8h</option>
       </select>
     </div>
     <div id="crs_list" class="text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">…</div></div>
@@ -256,8 +256,8 @@ tailwind.config={theme:{extend:{colors:{
     <div id="ab-killswitch" class="card border-amber-500/30 bg-amber-500/5 p-4 mb-4">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <div class="text-sm font-semibold text-amber-200">Механизм автобана</div>
-          <div id="ab-killswitch-note" class="text-[12px] text-slate-400 mt-0.5">загрузка…</div>
+          <div class="text-sm font-semibold text-amber-200">Auto-ban engine</div>
+          <div id="ab-killswitch-note" class="text-[12px] text-slate-400 mt-0.5">loading…</div>
         </div>
         <button id="ab-arm-btn" onclick="toggleArm()" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 text-slate-300 hover:bg-slate-800">—</button>
       </div>
@@ -270,21 +270,21 @@ tailwind.config={theme:{extend:{colors:{
         <span id="smp-summary" class="text-[11px] text-slate-500"></span>
         <span id="smp-banned" class="ml-auto text-[12px] text-slate-400"></span>
       </div>
-      <div id="ban-targets" class="text-sm text-slate-400">загрузка…</div>
+      <div id="ban-targets" class="text-sm text-slate-400">loading…</div>
     </div>
 
     <div class="grid lg:grid-cols-2 gap-4 mb-4">
       <section class="card p-4">
         <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="abCardToggle('ab-form-body','ab-form-chev')">
-          <h3 class="text-sm font-medium text-slate-200"><span id="ab-form-chev" class="text-slate-600 mr-1">▸</span><span id="ab-form-title">Создать новое правило</span></h3>
+          <h3 class="text-sm font-medium text-slate-200"><span id="ab-form-chev" class="text-slate-600 mr-1">▸</span><span id="ab-form-title">Create new rule</span></h3>
           <div class="flex gap-1" onclick="event.stopPropagation()">
-            <button id="ab-tab-form" onclick="abMode('form')" class="text-[11px] px-2 py-1 rounded bg-indigo-500/25 text-indigo-200 border border-indigo-500/40">Форма</button>
+            <button id="ab-tab-form" onclick="abMode('form')" class="text-[11px] px-2 py-1 rounded bg-indigo-500/25 text-indigo-200 border border-indigo-500/40">Form</button>
             <button id="ab-tab-json" onclick="abMode('json')" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-400 hover:bg-slate-700">JSON</button>
           </div>
         </div>
         <div id="ab-form-body" class="hidden">
         <div id="ab-json-panel" class="hidden space-y-2">
-          <p class="text-[11px] text-slate-500">Вставь готовое правило (или несколько — массивом) в JSON и нажми «Загрузить в форму» либо «Сохранить из JSON».</p>
+          <p class="text-[11px] text-slate-500">Paste a ready rule (or several — as an array) as JSON, then click “Load into form” or “Save from JSON”.</p>
           <textarea id="ab-json" rows="12" spellcheck="false" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs text-slate-200 mono" placeholder='{
   "name": "WP-login brute",
   "match_type": "substring",
@@ -297,71 +297,71 @@ tailwind.config={theme:{extend:{colors:{
   "enabled": false
 }'></textarea>
           <div class="flex items-center gap-2 flex-wrap">
-            <button onclick="abJsonToForm()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700">↧ Загрузить в форму</button>
-            <button onclick="abSaveFromJson()" class="btn btn-primary">Сохранить из JSON</button>
-            <button onclick="abFormToJson()" class="px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700" title="выгрузить текущую форму как JSON">⤓ форма → JSON</button>
+            <button onclick="abJsonToForm()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700">↧ Load into form</button>
+            <button onclick="abSaveFromJson()" class="btn btn-primary">Save from JSON</button>
+            <button onclick="abFormToJson()" class="px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700" title="export current form as JSON">⤓ form → JSON</button>
             <span id="ab-json-msg" class="text-[12px] text-slate-500"></span>
           </div>
         </div>
         <div id="ab-form-panel" class="space-y-2.5">
           <div>
-            <label class="text-[11px] text-slate-500 block mb-1">Имя правила</label>
-            <input id="ab-name" placeholder="напр. WP-login brute" class="w-full input">
+            <label class="text-[11px] text-slate-500 block mb-1">Rule name</label>
+            <input id="ab-name" placeholder="e.g. WP-login brute" class="w-full input">
           </div>
           <div>
-            <label class="text-[11px] text-slate-500 block mb-1">Условие</label>
+            <label class="text-[11px] text-slate-500 block mb-1">Condition</label>
             <select id="ab-mtype" onchange="abMtypeChange()" class="w-full input mb-1.5">
-              <option value="substring">путь содержит</option>
-              <option value="regex">путь по regex</option>
-              <option value="family">семейство сигнатур</option>
-              <option value="rate">частота: любой путь</option>
+              <option value="substring">path contains</option>
+              <option value="regex">path by regex</option>
+              <option value="family">signature family</option>
+              <option value="rate">rate: any path</option>
             </select>
-            <p id="ab-rate-hint" class="hidden text-[11px] text-slate-500 leading-snug mb-1.5">Банит IP по числу запросов за окно — без привязки к пути (флуд / перебор / скрейпинг). Код ответа ниже можно оставить пустым или сузить, напр. 404.</p>
+            <p id="ab-rate-hint" class="hidden text-[11px] text-slate-500 leading-snug mb-1.5">Bans an IP by request count over the window — path-agnostic (flood / probing / scraping). The status code below can be left empty or narrowed, e.g. 404.</p>
             <select id="ab-family" class="hidden w-full input"></select>
             <div id="ab-paths" class="space-y-1.5"></div>
-            <button id="ab-add-or" type="button" onclick="abAddPath()" class="mt-1.5 text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ ИЛИ ещё путь</button>
+            <button id="ab-add-or" type="button" onclick="abAddPath()" class="mt-1.5 text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ OR another path</button>
             <label id="ab-combine-wrap" class="flex items-start gap-2 mt-2 cursor-pointer">
               <input id="ab-combine" type="checkbox" checked class="mt-0.5 accent-indigo-500">
-              <span class="text-[11px] text-slate-400 leading-snug">складывать запросы по всем путям<br><span class="text-slate-600">вкл: 1×/.git + 1×/.env = 2 → сработает · выкл: порог должен набрать один путь</span></span>
+              <span class="text-[11px] text-slate-400 leading-snug">sum requests across all paths<br><span class="text-slate-600">on: 1×/.git + 1×/.env = 2 → fires · off: one path must reach the threshold</span></span>
             </label>
           </div>
           <div class="grid grid-cols-3 gap-2">
             <div>
-              <label class="text-[11px] text-slate-500 block mb-1">Запросов ≥</label>
+              <label class="text-[11px] text-slate-500 block mb-1">Requests ≥</label>
               <input id="ab-threshold" type="number" min="1" value="5" class="w-full input">
             </div>
             <div>
-              <label class="text-[11px] text-slate-500 block mb-1">за окно</label>
+              <label class="text-[11px] text-slate-500 block mb-1">per window</label>
               <select id="ab-window" class="w-full input"></select>
             </div>
             <div>
-              <label class="text-[11px] text-slate-500 block mb-1">код (опц.)</label>
+              <label class="text-[11px] text-slate-500 block mb-1">code (opt.)</label>
               <input id="ab-status" placeholder="404 / 4.." class="w-full input mono">
             </div>
           </div>
           <div>
-            <label class="text-[11px] text-slate-500 block mb-1">страны (опц.)</label>
-            <input id="ab-country" placeholder="CN, RU — пусто = любая" class="w-full input mono">
+            <label class="text-[11px] text-slate-500 block mb-1">countries (opt.)</label>
+            <input id="ab-country" placeholder="CN, RU — empty = any" class="w-full input mono">
           </div>
           <div>
-            <label class="text-[11px] text-slate-500 block mb-1">TTL бана</label>
+            <label class="text-[11px] text-slate-500 block mb-1">Ban TTL</label>
             <select id="ab-ttl" class="w-full input">
-              <option value="2592000" selected>30 дней</option>
-              <option value="0">навсегда</option>
-              <option value="3600">1 час</option>
-              <option value="21600">6 часов</option>
-              <option value="86400">24 часа</option>
-              <option value="604800">7 дней</option>
+              <option value="2592000" selected>30 days</option>
+              <option value="0">forever</option>
+              <option value="3600">1 hour</option>
+              <option value="21600">6 hours</option>
+              <option value="86400">24 hours</option>
+              <option value="604800">7 days</option>
             </select>
           </div>
           <div>
-            <label class="text-[11px] text-slate-500 block mb-1">Стартовая привязка (можно менять потом у правила)</label>
+            <label class="text-[11px] text-slate-500 block mb-1">Initial attachment (changeable later per rule)</label>
             <select id="ab-group" class="w-full input"></select>
           </div>
           <div class="flex items-center gap-2 pt-1">
-            <button onclick="abSaveRule()" class="btn btn-primary">Сохранить правило</button>
-            <button onclick="abPreview()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700" title="кого бы забанило (dry-run, без бана)">Превью</button>
-            <button id="ab-cancel" onclick="abResetForm()" class="hidden px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700">Отмена</button>
+            <button onclick="abSaveRule()" class="btn btn-primary">Save rule</button>
+            <button onclick="abPreview()" class="px-3 py-1.5 rounded bg-slate-700/60 text-slate-200 text-sm hover:bg-slate-700" title="who would be banned (dry-run, no ban)">Preview</button>
+            <button id="ab-cancel" onclick="abResetForm()" class="hidden px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-sm hover:bg-slate-700">Cancel</button>
             <span id="ab-form-msg" class="text-[12px] text-slate-500"></span>
           </div>
         </div>
@@ -370,32 +370,32 @@ tailwind.config={theme:{extend:{colors:{
 
       <section class="card p-4">
         <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="abCardToggle('ab-preview','ab-preview-chev')">
-          <h3 class="text-sm font-medium text-slate-200"><span id="ab-preview-chev" class="text-slate-600 mr-1">▸</span>Превью (dry-run)</h3>
-          <span class="text-[11px] text-slate-600">кого бы забанило · реального бана нет</span>
+          <h3 class="text-sm font-medium text-slate-200"><span id="ab-preview-chev" class="text-slate-600 mr-1">▸</span>Preview (dry-run)</h3>
+          <span class="text-[11px] text-slate-600">who would be banned · no real ban</span>
         </div>
-        <div id="ab-preview" class="hidden text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">Заполни условие и нажми «Превью».</div></div>
+        <div id="ab-preview" class="hidden text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">Fill in the condition and click “Preview”.</div></div>
       </section>
     </div>
 
-    <h2 class="sec">Правила автобана</h2>
-    <section id="ab-rules-sec" class="card p-4 mb-4"><div id="ab-rules" class="text-sm"><div class="text-slate-600 text-xs">загрузка…</div></div></section>
+    <h2 class="sec">Auto-ban rules</h2>
+    <section id="ab-rules-sec" class="card p-4 mb-4"><div id="ab-rules" class="text-sm"><div class="text-slate-600 text-xs">loading…</div></div></section>
 
-    <h2 class="sec">Проверить IP <span class="text-slate-600 font-normal normal-case tracking-normal">— забанен ли и за что</span></h2>
+    <h2 class="sec">Check IP <span class="text-slate-600 font-normal normal-case tracking-normal">— whether it is banned and why</span></h2>
     <section class="card p-4 mb-4">
       <div class="flex items-center gap-2 mb-2 flex-wrap">
-        <input id="ab-why-ip" placeholder="IP (напр. 203.0.113.45)" onkeydown="if(event.key==='Enter')abWhy()" class="input mono w-64">
-        <button onclick="abWhy()" class="btn btn-primary">Проверить</button>
+        <input id="ab-why-ip" placeholder="IP (e.g. 203.0.113.45)" onkeydown="if(event.key==='Enter')abWhy()" class="input mono w-64">
+        <button onclick="abWhy()" class="btn btn-primary">Check</button>
       </div>
       <div id="ab-why" class="text-sm"></div>
     </section>
 
-    <h2 class="sec">Логи автобана <span class="text-slate-600 font-normal normal-case tracking-normal">— кого и по какому правилу забанил</span></h2>
+    <h2 class="sec">Auto-ban log <span class="text-slate-600 font-normal normal-case tracking-normal">— who was banned and by which rule</span></h2>
     <section class="card p-4 mb-8">
       <div class="flex items-center justify-between mb-2">
-        <span id="ab-log-sum" class="text-[11px] text-slate-500">загрузка…</span>
-        <button onclick="loadAbLog()" class="btn btn-xs">↻ обновить</button>
+        <span id="ab-log-sum" class="text-[11px] text-slate-500">loading…</span>
+        <button onclick="loadAbLog()" class="btn btn-xs">↻ refresh</button>
       </div>
-      <div id="ab-log" class="text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="ab-log" class="text-sm max-h-[420px] overflow-y-auto pr-1"><div class="text-slate-600 text-xs">loading…</div></div>
     </section>
   </div><!-- /view-autoban -->
 
@@ -403,8 +403,8 @@ tailwind.config={theme:{extend:{colors:{
     <section class="card viewhead p-4 mb-4">
       <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 class="text-base font-semibold text-slate-200">Правила 403 — блокировка по пути</h2>
-          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Пути, которые сразу отдают <span class="text-rose-300">403</span>. Это <b>не бан IP</b> — режется сам путь, на всех привязанных таргетах.</p>
+          <h2 class="text-base font-semibold text-slate-200">403 rules — block by path</h2>
+          <p class="text-[12px] text-slate-500 mt-1 max-w-2xl">Paths that immediately return <span class="text-rose-300">403</span>. This is <b>not an IP ban</b> — the path itself is cut, on all attached targets.</p>
         </div>
         <div id="p403-types" class="flex items-center gap-1.5 flex-wrap shrink-0"></div>
       </div>
@@ -412,9 +412,9 @@ tailwind.config={theme:{extend:{colors:{
 
     <section class="card p-4 mb-4">
       <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-        <h3 class="text-sm font-medium text-slate-300 shrink-0">Активные правила <span id="p403-count" class="text-slate-600"></span></h3>
+        <h3 class="text-sm font-medium text-slate-300 shrink-0">Active rules <span id="p403-count" class="text-slate-600"></span></h3>
         <div class="flex items-center gap-2 ml-auto">
-          <input id="p403-search" oninput="_p403RenderList()" placeholder="поиск по имени / паттерну…" class="input text-xs w-60"/>
+          <input id="p403-search" oninput="_p403RenderList()" placeholder="search by name / pattern…" class="input text-xs w-60"/>
           <button onclick="loadP403()" class="btn btn-xs">↻</button>
         </div>
       </div>
@@ -485,24 +485,24 @@ tailwind.config={theme:{extend:{colors:{
     <section id="tsec-nginx" class="card p-4">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <h2 class="text-sm font-medium text-slate-200">🟢 Подключённые ноды (nginx)</h2>
-          <p class="text-[11px] text-slate-500 mt-0.5">nginx-VM с агентом soc-nginx-agent — откуда собираем трафик и куда применяем баны.</p>
+          <h2 class="text-sm font-medium text-slate-200">Connected nodes (nginx)</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">nginx VMs running soc-nginx-agent — where traffic is collected and bans are applied.</p>
         </div>
-        <button onclick="showAddNode()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">+ Добавить ноду</button>
+        <button onclick="showAddNode()" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">+ Add node</button>
       </div>
       <div id="nodes-add" class="hidden mb-3 card p-3">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-xs font-medium text-slate-300">Установка агента на nginx-VM</h3>
+          <h3 class="text-xs font-medium text-slate-300">Install agent on nginx VM</h3>
           <button onclick="document.getElementById('nodes-add').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
         </div>
-        <p class="text-[11px] text-slate-500 mb-2">Выполни на виртуалке (Linux, root). Нода появится в списке после первого heartbeat:</p>
+        <p class="text-[11px] text-slate-500 mb-2">Run on the VM (Linux, root). The node appears in the list after its first heartbeat:</p>
         <div class="flex items-stretch gap-2">
-          <pre id="nodes-install-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300">загрузка…</pre>
+          <pre id="nodes-install-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300">loading…</pre>
           <button onclick="copyInstallCmd()" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
         </div>
         <p id="nodes-install-hint" class="text-[11px] text-amber-400/80 mt-2 hidden"></p>
       </div>
-      <div id="nodes-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="nodes-list" class="space-y-2"><div class="text-slate-600 text-xs">loading…</div></div>
     </section>
 
     <!-- ── Cloudflare-таргеты (именованный реестр) ── -->
@@ -512,7 +512,7 @@ tailwind.config={theme:{extend:{colors:{
           <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="cft.sub">A named Cloudflare account/zone you attach to ban groups & 403 rules like any target. Token is write-only (stored server-side, shown only as «set»).</p></div>
         <button onclick="cfNew()" class="btn btn-primary btn-xs shrink-0"><span>＋</span><span data-i18n="cft.new">New CF target</span></button>
       </div>
-      <div id="cf-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="cf-list" class="mt-3 space-y-2"><div class="text-slate-600 text-xs">loading…</div></div>
     </section>
 
     <!-- ── Таргет-группы ── -->
@@ -521,7 +521,7 @@ tailwind.config={theme:{extend:{colors:{
         <div class="text-sm font-medium text-slate-200">🗂 <span data-i18n="tg.groups">Target groups</span></div>
         <div class="text-[12px] text-slate-500 mt-0.5 max-w-2xl" data-i18n="tg.sub">A group bundles several targets (nginx nodes + Cloudflare). 403 &amp; auto-ban rules attach to a group and apply to all its targets at once.</div>
       </div>
-      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">загрузка…</div>
+      <div id="grp-list" class="mt-2 space-y-2 text-sm text-slate-400">loading…</div>
       <!-- создание новой группы — кнопка Add раскрывает поле ввода -->
       <div class="flex items-center gap-2 mt-3">
         <button id="grp-add-btn" onclick="grpAddToggle()" class="btn btn-ghost btn-xs shrink-0">＋ <span data-i18n="tg.add">Add</span></button>
@@ -548,49 +548,49 @@ tailwind.config={theme:{extend:{colors:{
 
       <div id="ing-setup" class="hidden mb-4 card p-4" style="background:#0e1424">
         <div class="flex items-center justify-between mb-1">
-          <h3 class="text-sm font-semibold text-slate-200">⎈ <span data-i18n="ing.setup.h">Подключить кластер</span></h3>
+          <h3 class="text-sm font-semibold text-slate-200">⎈ <span data-i18n="ing.setup.h">Connect cluster</span></h3>
           <button onclick="ingSetupToggle()" class="text-slate-500 hover:text-slate-300 text-sm">✕</button>
         </div>
-        <p class="text-[11px] text-slate-500 mb-4" data-i18n="ing.setup.sub">Три шага: поднять blocklist-api в кластере, наладить логи в Loki, и убедиться, что таргет в values указывает на твой ingress-nginx.</p>
+        <p class="text-[11px] text-slate-500 mb-4" data-i18n="ing.setup.sub">Three steps: deploy blocklist-api in the cluster, ship logs to Loki, and make sure the target in values points at your ingress-nginx.</p>
 
         <!-- ШАГ 1 — установка чарта -->
         <div class="mb-2 flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 text-[11px] grid place-items-center shrink-0">1</span>
-          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s1">Установить blocklist-api (Helm)</span></div>
-        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s1.sub">Чарт несёт RBAC на патч ConfigMap'а ingress-nginx — веб-форма так не может, а helm может. Запускать с правами cluster-admin.</p>
+          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s1">Install blocklist-api (Helm)</span></div>
+        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s1.sub">The chart carries RBAC to patch the ingress-nginx ConfigMap — the web form can't, helm can. Run as cluster-admin.</p>
         <div class="ml-7 grid sm:grid-cols-2 gap-2.5 text-[11px]" style="color:var(--muted)">
-          <label class="block"><span data-i18n="ing.f.ns">Namespace установки</span><input id="ing-ns" value="soc" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.host">Хостнейм block-api</span><input id="ing-host" value="block-api.example.com" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.cns">Namespace контроллера</span><input id="ing-cns" value="ingress-nginx" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.ccm">ConfigMap контроллера</span><input id="ing-ccm" value="ingress-nginx-controller" oninput="ingCmd()" class="input mono mt-1"></label>
-          <label class="block"><span data-i18n="ing.f.ip">IP дашборда (whitelist)</span><input id="ing-ip" placeholder="203.0.113.10" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ns">Install namespace</span><input id="ing-ns" value="soc" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.host">block-api hostname</span><input id="ing-host" value="block-api.example.com" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.cns">Controller namespace</span><input id="ing-cns" value="ingress-nginx" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ccm">Controller ConfigMap</span><input id="ing-ccm" value="ingress-nginx-controller" oninput="ingCmd()" class="input mono mt-1"></label>
+          <label class="block"><span data-i18n="ing.f.ip">Dashboard IP (whitelist)</span><input id="ing-ip" placeholder="203.0.113.10" oninput="ingCmd()" class="input mono mt-1"></label>
           <label class="block"><span data-i18n="ing.f.token">Token</span>
-            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="text-[11px] px-2 rounded bg-slate-700 text-slate-200 shrink-0" data-i18n="ing.gen">сгенерить</button></span></label>
+            <span class="flex gap-1 mt-1"><input id="ing-token" class="input mono flex-1" oninput="ingCmd()"><button onclick="ingGenToken()" class="text-[11px] px-2 rounded bg-slate-700 text-slate-200 shrink-0" data-i18n="ing.gen">generate</button></span></label>
         </div>
         <div class="ml-7 flex items-stretch gap-2 mt-3">
           <pre id="ing-cmd" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-emerald-300"></pre>
           <button onclick="ingCopyCmd('ing-cmd')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
         </div>
         <div class="ml-7 mt-3 p-2.5 rounded-lg" style="background:#0f1420;border:1px solid #1e293b">
-          <div class="text-[11px] font-medium text-slate-300 mb-2" data-i18n="ing.connect">После установки — проверь, что дашборд достучится до этого API:</div>
+          <div class="text-[11px] font-medium text-slate-300 mb-2" data-i18n="ing.connect">After install — verify the dashboard can reach this API:</div>
           <div class="flex flex-wrap items-center gap-2">
-            <button onclick="bcTest()" class="text-[11px] px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 shrink-0">🔌 <span data-i18n="ing.test">Проверить соединение</span></button>
+            <button onclick="bcTest()" class="text-[11px] px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 shrink-0">🔌 <span data-i18n="ing.test">Check connection</span></button>
             <span id="bc-result" class="text-[11px]"></span>
             <button id="bc-save-btn" onclick="bcSave()" class="hidden text-[11px] px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium shrink-0">💾 <span data-i18n="save">Save</span></button>
           </div>
           <div id="bc-msg" class="text-[11px] mt-1.5"></div>
-          <p class="text-[10px] mt-1.5" style="color:var(--faint)" data-i18n="ing.connect.hint">Хост и токен берутся из полей выше. Save добавляет ingress как сущность в список выше — его ingress-cm таргеты станут доступны для 403/автобана.</p>
+          <p class="text-[10px] mt-1.5" style="color:var(--faint)" data-i18n="ing.connect.hint">Host and token come from the fields above. Save adds the ingress as an entity in the list above — its ingress-cm targets become available for 403/auto-ban.</p>
         </div>
 
         <!-- ШАГ 2 — логи / Loki -->
         <div class="mt-5 mb-2 flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 text-[11px] grid place-items-center shrink-0">2</span>
-          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s2">Логи в Loki</span></div>
-        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s2.sub">Дашборд читает трафик/атаки из Loki. Нужен один из вариантов:</p>
+          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s2">Logs to Loki</span></div>
+        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s2.sub">The dashboard reads traffic/attacks from Loki. One of these is required:</p>
         <div class="ml-7 space-y-1.5 text-[11px] text-slate-400 mb-3">
-          <div>· <b class="text-slate-300" data-i18n="ing.s2.a">Loki + Promtail уже в кластере</b> <span data-i18n="ing.s2.a2">— тогда просто дай дашборду доступ к этому Loki (укажи его URL в настройках/при деплое дашборда).</span></div>
-          <div>· <b class="text-slate-300" data-i18n="ing.s2.b">Loki только на дашборде</b> <span data-i18n="ing.s2.b2">— тогда поставь Promtail в кластер, чтобы он слал логи ingress-nginx в Loki дашборда. URL ниже:</span></div>
+          <div>· <b class="text-slate-300" data-i18n="ing.s2.a">Loki + Promtail already in the cluster</b> <span data-i18n="ing.s2.a2">— just give the dashboard access to that Loki (set its URL in settings / at deploy time).</span></div>
+          <div>· <b class="text-slate-300" data-i18n="ing.s2.b">Loki only on the dashboard</b> <span data-i18n="ing.s2.b2">— then install Promtail in the cluster to ship ingress-nginx logs to the dashboard Loki. URL below:</span></div>
         </div>
         <div class="ml-7">
-          <label class="block text-[11px]" style="color:var(--muted)"><span data-i18n="ing.f.loki">Loki push URL дашборда</span><input id="ing-loki" placeholder="http://loki.dashboard:3100" oninput="ingCmd()" class="input mono mt-1 max-w-md"></label>
+          <label class="block text-[11px]" style="color:var(--muted)"><span data-i18n="ing.f.loki">Dashboard Loki push URL</span><input id="ing-loki" placeholder="http://loki.dashboard:3100" oninput="ingCmd()" class="input mono mt-1 max-w-md"></label>
           <div class="flex items-stretch gap-2 mt-2">
             <pre id="ing-promtail" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-sky-300"></pre>
             <button onclick="ingCopyCmd('ing-promtail')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
@@ -599,15 +599,15 @@ tailwind.config={theme:{extend:{colors:{
 
         <!-- ШАГ 3 — values: где таргет -->
         <div class="mt-5 mb-2 flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 text-[11px] grid place-items-center shrink-0">3</span>
-          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s3">values.yaml — где указывается таргет</span></div>
-        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s3.sub">Таргет ingress — это и есть пара «namespace + ConfigMap контроллера». Те же значения, что в команде выше:</p>
+          <span class="text-[12px] font-medium text-slate-200" data-i18n="ing.s3">values.yaml — where the target is set</span></div>
+        <p class="text-[11px] text-slate-500 mb-2 ml-7" data-i18n="ing.s3.sub">An ingress target is the pair “namespace + Controller ConfigMap”. Same values as in the command above:</p>
         <div class="ml-7 flex items-stretch gap-2">
           <pre id="ing-values" class="flex-1 text-[11px] mono bg-black/50 border border-slate-800 rounded p-2 overflow-x-auto whitespace-pre-wrap text-slate-300"></pre>
           <button onclick="ingCopyCmd('ing-values')" class="text-xs px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">copy</button>
         </div>
       </div>
 
-      <div id="ingress-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="ingress-list" class="space-y-2"><div class="text-slate-600 text-xs">loading…</div></div>
     </section>
 
     <!-- ── System: хост дашборда ── -->
@@ -616,7 +616,7 @@ tailwind.config={theme:{extend:{colors:{
         <h2 class="text-sm font-medium text-slate-200">🖥️ <span data-i18n="sys.h">System</span></h2>
         <p class="text-[11px] text-slate-500 mt-0.5" data-i18n="sys.sub">Host running the SOC dashboard (soc-app) — its own load, memory and uptime.</p>
       </div>
-      <div id="system-list" class="space-y-2"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="system-list" class="space-y-2"><div class="text-slate-600 text-xs">loading…</div></div>
     </section>
 
     </div>
@@ -627,22 +627,22 @@ tailwind.config={theme:{extend:{colors:{
     <section class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <div>
-          <h2 class="text-sm font-medium text-slate-200">Журнал действий</h2>
-          <p class="text-[11px] text-slate-500 mt-0.5">Что приложение пыталось сделать (бан / разбан / истёк TTL / правила 403) и чем закончилось применение на таргетах.</p>
+          <h2 class="text-sm font-medium text-slate-200">Action journal</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">What the app attempted (ban / unban / expired TTL / 403 rules) and how it applied on the targets.</p>
         </div>
         <div class="flex items-center gap-1.5">
           <select id="jr-filter" onchange="renderJournal()" class="text-xs bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-300">
-            <option value="">все действия</option>
-            <option value="block">баны</option>
-            <option value="unblock">разбаны</option>
-            <option value="expire">истёкшие (TTL)</option>
-            <option value="path">правила 403</option>
-            <option value="fail">только с ошибкой</option>
+            <option value="">all actions</option>
+            <option value="block">bans</option>
+            <option value="unblock">unbans</option>
+            <option value="expire">expired (TTL)</option>
+            <option value="path">403 rules</option>
+            <option value="fail">errors only</option>
           </select>
-          <button onclick="loadJournal()" class="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">обновить</button>
+          <button onclick="loadJournal()" class="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">refresh</button>
         </div>
       </div>
-      <div id="jr-list" class="mt-3 space-y-1"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="jr-list" class="mt-3 space-y-1"><div class="text-slate-600 text-xs">loading…</div></div>
     </section>
   </div><!-- /view-journal -->
 
@@ -769,17 +769,17 @@ tailwind.config={theme:{extend:{colors:{
     <!-- ── Глобальные ── -->
     <section id="ssec-global" class="hidden card p-4">
       <div class="flex items-center justify-between mb-1">
-        <h2 class="text-sm font-medium text-slate-200">⚙️ Глобальные настройки</h2>
-        <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Сохранить</button>
+        <h2 class="text-sm font-medium text-slate-200">Global settings</h2>
+        <button onclick="saveSettings()" id="set-save" class="text-xs px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Save</button>
       </div>
       <p class="text-[11px] mb-3" style="color:var(--faint)" data-i18n="set.global.sub">LLM endpoint, default Cloudflare / ingress (fallback when an environment has none of its own), and the default group. ENV values are defaults; overridden here.</p>
-      <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">CONFIG_LOCK=env — конфиг только из переменных окружения, редактирование через GUI отключено.</div>
+      <div id="set-locked" class="hidden mb-3 text-[11px] text-amber-400/90 bg-amber-950/30 border border-amber-900/50 rounded p-2">CONFIG_LOCK=env — config comes from environment variables only; GUI editing is disabled.</div>
       <div class="card p-3 mb-4 flex items-center justify-between">
         <div><div class="text-xs font-medium text-slate-300" data-i18n="llm.label">LLM analysis</div>
           <div class="text-[11px]" style="color:var(--faint)" data-i18n="llm.hint">When off, all AI mentions disappear from the dashboard.</div></div>
         <div class="flex items-center gap-2"><span id="set-llm-state" class="text-xs" style="color:var(--muted)">—</span><button id="set-llm-toggle" onclick="toggleLLM()" class="sw" title="LLM on/off"><i></i></button></div>
       </div>
-      <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">загрузка…</div></div>
+      <div id="set-groups" class="space-y-4"><div class="text-slate-600 text-xs">loading…</div></div>
       <div id="set-msg" class="text-[11px] mt-3"></div>
     </section>
 
@@ -919,7 +919,7 @@ tailwind.config={theme:{extend:{colors:{
 <div id="modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="card max-w-5xl w-full max-h-[90vh] overflow-auto p-5">
     <div class="flex items-center justify-between mb-3">
-      <h3 id="modal-title" class="text-sm font-semibold text-slate-200">Топ IP</h3>
+      <h3 id="modal-title" class="text-sm font-semibold text-slate-200">Top IPs</h3>
       <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
     </div>
     <div id="modal-body" class="space-y-1.5"></div>
@@ -929,24 +929,24 @@ tailwind.config={theme:{extend:{colors:{
 <div id="brand-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)brandClose()">
   <div class="card w-full max-w-sm p-5 space-y-3">
     <div class="flex items-center justify-between">
-      <h3 class="text-sm font-semibold text-slate-200">Название и иконка</h3>
+      <h3 class="text-sm font-semibold text-slate-200">Name & icon</h3>
       <button onclick="brandClose()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
     </div>
-    <label class="block text-[12px] text-slate-400">Заголовок
+    <label class="block text-[12px] text-slate-400">Title
       <input id="brand-in-title" maxlength="60" placeholder="SOC" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
-    <label class="block text-[12px] text-slate-400">Подпись
-      <input id="brand-in-sub" maxlength="120" placeholder="монитор трафика и атак" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
+    <label class="block text-[12px] text-slate-400">Subtitle
+      <input id="brand-in-sub" maxlength="120" placeholder="traffic & attack monitor" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-100"></label>
     <div class="flex items-center gap-3">
-      <div id="brand-prev" class="w-11 h-11 rounded-xl grid place-items-center overflow-hidden shrink-0 bg-slate-900 border border-slate-700 text-slate-600 text-[10px]">лого</div>
-      <label class="flex-1 text-[12px] text-slate-400">Иконка (PNG/SVG, &lt;190KB)
+      <div id="brand-prev" class="w-11 h-11 rounded-xl grid place-items-center overflow-hidden shrink-0 bg-slate-900 border border-slate-700 text-slate-600 text-[10px]">logo</div>
+      <label class="flex-1 text-[12px] text-slate-400">Icon (PNG/SVG, &lt;190KB)
         <input id="brand-in-file" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" onchange="brandFile(this)" class="mt-1 block w-full text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200"></label>
     </div>
     <div id="brand-err" class="text-[11px] text-rose-400 hidden"></div>
     <div class="flex items-center justify-between pt-1">
-      <button onclick="brandClearIcon()" class="text-[12px] text-slate-400 hover:text-slate-200">убрать иконку</button>
+      <button onclick="brandClearIcon()" class="text-[12px] text-slate-400 hover:text-slate-200">remove icon</button>
       <div class="flex gap-2">
-        <button onclick="brandClose()" class="text-[12px] px-3 py-1.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">Отмена</button>
-        <button onclick="brandSave()" class="text-[12px] px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-500">Сохранить</button>
+        <button onclick="brandClose()" class="text-[12px] px-3 py-1.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600">Cancel</button>
+        <button onclick="brandSave()" class="text-[12px] px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-500">Save</button>
       </div>
     </div>
   </div>
@@ -957,7 +957,7 @@ tailwind.config={theme:{extend:{colors:{
 <script src="app.js"></script>
 <div id="cmdk" class="cmdk-ov" style="display:none" role="dialog" aria-modal="true" aria-label="Command palette" onmousedown="if(event.target===this)cmdkClose()">
   <div class="cmdk-box">
-    <div class="cmdk-in"><span class="cmdk-ic">⌕</span><input id="cmdk-q" role="combobox" aria-controls="cmdk-list" aria-expanded="true" autocomplete="off" spellcheck="false" placeholder="Команда или IP…" oninput="cmdkFilter()" onkeydown="cmdkKey(event)"><span class="cmdk-hint">esc</span></div>
+    <div class="cmdk-in"><span class="cmdk-ic">⌕</span><input id="cmdk-q" role="combobox" aria-controls="cmdk-list" aria-expanded="true" autocomplete="off" spellcheck="false" placeholder="Command or IP…" oninput="cmdkFilter()" onkeydown="cmdkKey(event)"><span class="cmdk-hint">esc</span></div>
     <div id="cmdk-list" class="cmdk-list" role="listbox"></div>
   </div>
 </div>
