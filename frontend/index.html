@@ -676,11 +676,11 @@ tailwind.config={theme:{extend:{colors:{
   <div id="view-settings" class="hidden">
     <div class="setwrap">
     <div class="setnav">
-      <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span>🔔</span><span data-i18n="set.notify">Notifications</span></button>
-      <button id="ssub-autoban" onclick="setSub('autoban')" class="setnav-btn"><span>🛡️</span><span data-i18n="set.autoban">Auto-ban</span></button>
-      <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span>⚙️</span><span data-i18n="set.global">Global</span></button>
-      <button id="ssub-account" onclick="setSub('account')" class="setnav-btn"><span>👤</span><span data-i18n="set.account">Account</span></button>
-      <button id="ssub-users" onclick="setSub('users')" class="setnav-btn hidden"><span>👥</span><span data-i18n="set.users">Users</span></button>
+      <button id="ssub-notify" onclick="setSub('notify')" class="setnav-btn"><span class="sn-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><span data-i18n="set.notify">Notifications</span></button>
+      <button id="ssub-autoban" onclick="setSub('autoban')" class="setnav-btn"><span class="sn-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9.5 9 5 5"/><path d="m14.5 9-5 5"/></svg></span><span data-i18n="set.autoban">Auto-ban</span></button>
+      <button id="ssub-global" onclick="setSub('global')" class="setnav-btn"><span class="sn-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span data-i18n="set.global">Global</span></button>
+      <button id="ssub-account" onclick="setSub('account')" class="setnav-btn"><span class="sn-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span data-i18n="set.account">Account</span></button>
+      <button id="ssub-users" onclick="setSub('users')" class="setnav-btn hidden"><span class="sn-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-4.6 5.5-4.6s5.5 1.6 5.5 4.6"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1"/><path d="M17.5 15.6c2.3.4 4 1.9 4 4.4"/></svg></span><span data-i18n="set.users">Users</span></button>
     </div>
     <div>
 
@@ -728,14 +728,14 @@ tailwind.config={theme:{extend:{colors:{
       <section id="ab-prot-sec" class="card p-4">
         <div class="flex items-center gap-2 cursor-pointer select-none" onclick="abProtToggle()">
           <span id="ab-prot-chev" style="color:var(--faint)">▸</span>
-          <span class="text-sm font-medium text-slate-200">Защищённые пути</span>
-          <span class="text-[11px] text-slate-500">— автобан их НИКОГДА не банит, и в 403 их добавить НЕЛЬЗЯ (общий предохранитель)</span>
+          <span class="text-sm font-medium text-slate-200">Protected paths</span>
+          <span class="text-[11px] text-slate-500">— auto-ban NEVER bans these, and they CANNOT be added to 403 (global safeguard)</span>
         </div>
         <div id="ab-protected-body" class="hidden mt-3">
           <div class="flex items-center gap-1.5 flex-wrap mb-2">
-            <input id="ab-ignore-inp" placeholder="/новый/путь" onkeydown="if(event.key==='Enter')abIgnoreAdd()" class="input text-xs mono w-44">
-            <button onclick="abIgnoreAdd()" class="text-[11px] px-2 py-1 rounded bg-slate-800 text-indigo-300 hover:bg-slate-700">+ добавить</button>
-            <button onclick="abIgnoreSave()" class="text-[11px] px-2 py-1 rounded bg-indigo-600/80 text-white hover:bg-indigo-600">Сохранить</button>
+            <input id="ab-ignore-inp" placeholder="/new/path" onkeydown="if(event.key==='Enter')abIgnoreAdd()" class="input text-xs mono w-44">
+            <button onclick="abIgnoreAdd()" class="btn btn-xs">+ add</button>
+            <button onclick="abIgnoreSave()" class="btn btn-primary btn-xs">Save</button>
             <span id="ab-ignore-msg" class="text-[11px] text-slate-500"></span>
           </div>
           <div id="ab-ignore" class="flex flex-wrap gap-1.5"></div>
@@ -744,7 +744,7 @@ tailwind.config={theme:{extend:{colors:{
 
       <section class="card p-4">
         <div class="env-row mb-1">
-          <div><span class="text-sm font-medium text-slate-200">📡 <span data-i18n="tf.h">Threat feeds</span></span>
+          <div><span class="text-sm font-medium text-slate-200"><span data-i18n="tf.h">Threat feeds</span></span>
             <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="tf.sub">Import external block lists (Spamhaus, Tor, custom IP/CIDR) and ban them into a group. Self-syncing: entries that leave a feed expire on their own.</p></div>
           <button type="button" class="sw" id="tf-enabled" onclick="tfToggle(this)" aria-label="toggle feeds"><i></i></button>
         </div>
@@ -785,7 +785,7 @@ tailwind.config={theme:{extend:{colors:{
 
     <!-- ── Account (self) ── -->
     <section id="ssec-account" class="hidden card p-4 space-y-4">
-      <h2 class="text-sm font-medium text-slate-200">👤 <span data-i18n="acc.h">Your account</span> <span id="acc-who" class="text-[11px]" style="color:var(--faint)"></span></h2>
+      <h2 class="text-sm font-medium text-slate-200"><span data-i18n="acc.h">Your account</span> <span id="acc-who" class="text-[11px]" style="color:var(--faint)"></span></h2>
       <div class="card p-3">
         <div class="text-xs font-medium text-slate-300 mb-2" data-i18n="acc.pw">Change password</div>
         <div class="flex flex-wrap items-end gap-2 text-[11px]">
@@ -797,7 +797,7 @@ tailwind.config={theme:{extend:{colors:{
       </div>
       <div class="card p-3">
         <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-medium text-slate-300">🔐 <span data-i18n="acc.2fa">Two-factor (TOTP)</span> <span id="acc-2fa-state" class="text-[11px]" style="color:var(--faint)"></span></div>
+          <div class="text-xs font-medium text-slate-300"><span data-i18n="acc.2fa">Two-factor (TOTP)</span> <span id="acc-2fa-state" class="text-[11px]" style="color:var(--faint)"></span></div>
           <div class="flex gap-1.5">
             <button id="acc-2fa-setup" onclick="totpSetup()" class="btn btn-ghost btn-xs" data-i18n="acc.2fa.enable">Enable</button>
             <button id="acc-2fa-off" onclick="totpDisable()" class="btn btn-ghost btn-xs hidden" data-i18n="acc.2fa.disable">Disable</button>
@@ -805,7 +805,7 @@ tailwind.config={theme:{extend:{colors:{
         </div>
         <div id="acc-2fa-body" class="hidden text-[11px]">
           <p style="color:var(--faint)" data-i18n="acc.2fa.scan">Add this secret to your authenticator app, then confirm a code:</p>
-          <div class="mono mt-2 p-2 rounded bg-slate-950/60 break-all" id="acc-2fa-secret"></div>
+          <div class="mono mt-2 p-2 rounded break-all" style="background:rgba(11,12,14,.55);border:1px solid var(--glass-border)" id="acc-2fa-secret"></div>
           <div class="flex items-end gap-2 mt-2">
             <label class="block"><span data-i18n="acc.2fa.code">6-digit code</span><input id="acc-2fa-code" inputmode="numeric" class="input mono mt-1 w-28" placeholder="000000"></label>
             <button onclick="totpEnable()" class="btn btn-primary btn-xs" data-i18n="acc.2fa.confirm">Confirm</button>
@@ -818,7 +818,7 @@ tailwind.config={theme:{extend:{colors:{
     <!-- ── Users (admin) ── -->
     <section id="ssec-users" class="hidden card p-4 space-y-3">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-medium text-slate-200">👥 <span data-i18n="usr.h">Users</span></h2>
+        <h2 class="text-sm font-medium text-slate-200"><span data-i18n="usr.h">Users</span></h2>
         <button onclick="usrAddToggle()" class="btn btn-primary btn-xs"><span>＋</span> <span data-i18n="usr.add">Add user</span></button>
       </div>
       <div id="usr-add" class="hidden card p-3">

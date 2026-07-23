@@ -3103,7 +3103,7 @@ async function saveNotify(){
 }
 
 // ── Глобальные настройки (ENV + GUI) ──────────────────────────────────────────
-const _setGroupMeta={llm:"🤖 LLM",cloudflare:"☁️ Cloudflare (default / fallback)",ingress:"☸️ ingress-nginx (default)",bans:"⛔ Bans: targets / groups"};
+const _setGroupMeta={llm:"LLM",cloudflare:"Cloudflare (default / fallback)",ingress:"ingress-nginx (default)",bans:"Bans: targets / groups"};
 let _setLocked=false;
 const _setGrpOpen=JSON.parse(localStorage.getItem("soc_setgrp_open")||"{}");  // collapse state, persisted across reloads
 function setGrpToggle(btn,bodyId){ const on=!btn.classList.contains("on"); btn.classList.toggle("on",on);
@@ -3123,7 +3123,7 @@ async function loadGlobal(){
     const groups=Object.keys(byGroup).sort((a,b)=>(order.indexOf(a)+1||9)-(order.indexOf(b)+1||9));
     wrap.innerHTML=groups.map(g=>{
       const rows=byGroup[g].map(k=>settingRow(k,s[k])).join("");
-      const extra=g==="cloudflare"?`<button onclick="checkCF()" class="text-[11px] px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 mt-1">Проверить подключение</button><div id="set-cf-check" class="text-[11px] mt-1"></div>`:"";
+      const extra=g==="cloudflare"?`<button onclick="checkCF()" class="btn btn-xs mt-1">Check connection</button><div id="set-cf-check" class="text-[11px] mt-1"></div>`:"";
       // collapsible groups (CF / ingress / bans) get a switch in the header; open by default. LLM is governed by the global LLM toggle.
       const collapsible=g!=="llm";
       const bid="setgrp-"+g, open=_setGrpOpen[g]!==false;
@@ -3132,28 +3132,26 @@ async function loadGlobal(){
         <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-medium text-slate-300">${_setGroupMeta[g]||g}</h3>${sw}</div>
         <div id="${bid}" class="space-y-2${open?'':' hidden'}">${rows}${extra}</div></div>`;
     }).join("");
-  }catch(e){ wrap.innerHTML=`<div class="text-red-400 text-xs">ошибка: ${esc(e.message)}</div>`; }
+  }catch(e){ wrap.innerHTML=`<div class="text-xs" style="color:var(--crit)">error: ${esc(e.message)}</div>`; }
 }
 function settingRow(key,it){
-  const src=it.source==="override"?`<span class="text-[10px] px-1 rounded bg-indigo-900/50 text-indigo-300">override</span>`:`<span class="text-[10px] px-1 rounded bg-slate-800 text-slate-500">env</span>`;
+  const src=it.source==="override"?`<span class="set-tag set-tag-ovr">override</span>`:`<span class="set-tag">env</span>`;
   const dis=_setLocked?"disabled":"";
   let input;
   if(it.type==="secret"){
     const roDis=(it.writable===false)?"disabled":dis;
-    const note=(it.writable===false)?`<div class="text-[10px] text-amber-400/80 mt-0.5">только через ENV (STORE=configmap — ConfigMap хранит открытым текстом)</div>`:"";
-    input=`<input type="password" data-skey="${esc(key)}" data-stype="secret" placeholder="${it.set?'•••• задан (введите, чтобы заменить)':'не задан'}" ${roDis}
-      class="w-full text-xs mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">${note}`;
+    const note=(it.writable===false)?`<div class="text-[10px] mt-0.5" style="color:var(--warn)">ENV only (STORE=configmap — ConfigMap stores plaintext)</div>`:"";
+    input=`<input type="password" data-skey="${esc(key)}" data-stype="secret" placeholder="${it.set?'•••• set (type to replace)':'not set'}" ${roDis}
+      class="input mono">${note}`;
   }else if(it.type==="json"){
-    input=`<textarea data-skey="${esc(key)}" data-stype="json" rows="2" ${dis}
-      class="w-full text-[11px] mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">${esc(JSON.stringify(it.value))}</textarea>`;
+    input=`<textarea data-skey="${esc(key)}" data-stype="json" rows="2" ${dis} class="input mono">${esc(JSON.stringify(it.value))}</textarea>`;
   }else if(it.choices){
-    input=`<select data-skey="${esc(key)}" data-stype="str" ${dis} class="w-full text-xs bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`+
+    input=`<select data-skey="${esc(key)}" data-stype="str" ${dis} class="input">`+
       it.choices.map(c=>`<option ${c===it.value?'selected':''}>${esc(c)}</option>`).join("")+`</select>`;
   }else{
-    input=`<input type="text" data-skey="${esc(key)}" data-stype="str" value="${esc(it.value==null?'':it.value)}" ${dis}
-      class="w-full text-xs mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`;
+    input=`<input type="text" data-skey="${esc(key)}" data-stype="str" value="${esc(it.value==null?'':it.value)}" ${dis} class="input mono">`;
   }
-  return `<div><div class="flex items-center gap-2 mb-0.5"><span class="text-[11px] text-slate-400">${esc(it.label||key)}</span>${src}</div>${input}</div>`;
+  return `<div><div class="flex items-center gap-2 mb-0.5"><span class="text-[11px]" style="color:var(--muted)">${esc(it.label||key)}</span>${src}</div>${input}</div>`;
 }
 async function saveSettings(){
   if(_setLocked)return;
@@ -3163,24 +3161,24 @@ async function saveSettings(){
     if(t==="secret"){ if(v!=="")updates[k]=v; }   // blank = keep current
     else updates[k]=v;
   });
-  const msg=document.getElementById("set-msg"); msg.textContent="сохраняю…"; msg.className="text-[11px] mt-3 text-slate-400";
+  const msg=document.getElementById("set-msg"); msg.textContent="saving…"; msg.className="text-[11px] mt-3"; msg.style.color="var(--muted)";
   try{
     const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates})});
     const d=await r.json();
-    if(d.ok){ msg.textContent="✓ сохранено: "+(d.applied||[]).join(", "); msg.className="text-[11px] mt-3 text-emerald-400"; loadGlobal(); }
-    else{ const part=(d.applied&&d.applied.length)?(" (сохранено: "+d.applied.join(", ")+")"):""; msg.textContent="✗ "+(d.error||"ошибка")+part; msg.className="text-[11px] mt-3 text-red-400"; loadGlobal(); }
-  }catch(e){ msg.textContent="✗ "+e.message; msg.className="text-[11px] mt-3 text-red-400"; }
+    if(d.ok){ msg.textContent="✓ saved: "+(d.applied||[]).join(", "); msg.style.color="var(--ok)"; loadGlobal(); }
+    else{ const part=(d.applied&&d.applied.length)?(" (saved: "+d.applied.join(", ")+")"):""; msg.textContent="✗ "+(d.error||"error")+part; msg.style.color="var(--crit)"; loadGlobal(); }
+  }catch(e){ msg.textContent="✗ "+e.message; msg.style.color="var(--crit)"; }
 }
 async function checkCF(){
-  const box=document.getElementById("set-cf-check"); box.textContent="проверяю…"; box.className="text-[11px] mt-1 text-slate-400";
+  const box=document.getElementById("set-cf-check"); box.textContent="checking…"; box.className="text-[11px] mt-1"; box.style.color="var(--muted)";
   try{
     const d=await (await fetch("/api/ban_targets/check")).json();
     const cf=(d.checks||[]).filter(c=>c.type==="cloudflare");
-    if(!cf.length){ box.textContent="нет Cloudflare-таргетов в targets."; return; }
+    if(!cf.length){ box.textContent="No Cloudflare targets in targets."; return; }
     box.innerHTML=cf.map(c=>{
-      const ok=c.ok; return `<div class="${ok?'text-emerald-400':'text-amber-400'}">${ok?'✓':'⚠'} ${esc(c.id||'cf')}: token ${c.token_valid?'ok':'нет'}, list ${c.list_id?'ok':'—'}, rule ${c.rule_id?'ok':'—'}${c.items!=null?(', items '+c.items):''}${c.error?(' — '+esc(c.error)):''}</div>`;
+      const ok=c.ok; return `<div style="color:${ok?'var(--ok)':'var(--warn)'}">${ok?'✓':'⚠'} ${esc(c.id||'cf')}: token ${c.token_valid?'ok':'no'}, list ${c.list_id?'ok':'—'}, rule ${c.rule_id?'ok':'—'}${c.items!=null?(', items '+c.items):''}${c.error?(' — '+esc(c.error)):''}</div>`;
     }).join("");
-  }catch(e){ box.textContent="ошибка: "+e.message; box.className="text-[11px] mt-1 text-red-400"; }
+  }catch(e){ box.textContent="error: "+e.message; box.style.color="var(--crit)"; }
 }
 
 // ── Ноды (подключённые nginx-VM с агентом) ────────────────────────────────────

@@ -128,6 +128,9 @@
   .nf-ev:hover{border-color:var(--glass-border-hi);color:var(--text)}
   .nf-ev input{position:absolute;opacity:0;width:0;height:0}
   .nf-ev:has(input:checked){background:var(--accent-weak);border-color:#5794f24d;color:var(--accent2)}
+  /* Settings — source tags (env / override) */
+  .set-tag{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--glass-border);background:var(--glass);color:var(--faint)}
+  .set-tag-ovr{color:var(--accent2);border-color:#5794f24d;background:var(--accent-weak)}
   #status-badge{padding:0 11px;border-radius:var(--radius-btn)}
   .seg{display:inline-flex;border:1px solid var(--glass-border);border-radius:var(--radius-btn);overflow:hidden;height:28px;
     background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
@@ -215,6 +218,8 @@
   .setnav-btn{display:flex;gap:9px;align-items:center;padding:9px 12px;border-radius:9px;border:1px solid transparent;background:none;color:var(--muted);text-align:left;font-weight:500;font-size:13px;cursor:pointer;width:100%}
   .setnav-btn:hover{background:#ffffff08;color:var(--text)}
   .setnav-btn.on{background:var(--accent-weak);border-color:#5794f233;color:var(--accent2)}
+  .setnav-btn .sn-ic{display:inline-flex;align-items:center;justify-content:center;width:16px;flex:0 0 auto;color:var(--faint)}
+  .setnav-btn:hover .sn-ic,.setnav-btn.on .sn-ic{color:currentColor}
   @media(max-width:760px){.setwrap{grid-template-columns:1fr}.setnav{flex-direction:row;overflow:auto}}
   /* in-app modal dialogs (replace native alert/confirm/prompt) */
   #modal-root.hidden{display:none}
