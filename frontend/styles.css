@@ -116,6 +116,17 @@
   .tb-menu-danger{color:var(--crit)}
   .tb-menu-danger svg{color:var(--crit)}
   .tb-menu-danger:hover{background:#f8717118}
+  /* Notifications (Settings) — glass rows for channels + rules */
+  .nf-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--radius-md);
+    background:var(--glass);border:1px solid var(--glass-border);font-size:11.5px}
+  .nf-badge{padding:2px 11px;border-radius:999px;font-weight:600;color:#fff;font-size:11px;flex:0 0 auto}
+  .nf-act{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+  .nf-ev-wrap{display:flex;flex-wrap:wrap;gap:6px}
+  .nf-ev{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;border:1px solid var(--glass-border);
+    background:var(--glass);color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:11px;user-select:none;transition:.12s var(--ease)}
+  .nf-ev:hover{border-color:var(--glass-border-hi);color:var(--text)}
+  .nf-ev input{position:absolute;opacity:0;width:0;height:0}
+  .nf-ev:has(input:checked){background:var(--accent-weak);border-color:#5794f24d;color:var(--accent2)}
   #status-badge{padding:0 11px;border-radius:var(--radius-btn)}
   .seg{display:inline-flex;border:1px solid var(--glass-border);border-radius:var(--radius-btn);overflow:hidden;height:28px;
     background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}

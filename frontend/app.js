@@ -3037,27 +3037,30 @@ async function cfCheck(id){
 let _nf={channels:[],rules:[],events:[],severities:[]};
 async function loadNotify(){
   try{ _nf=await (await fetch("/api/notify_config")).json(); }catch(e){ _nf={channels:[],rules:[]}; }
-  if(_nf.enabled===false){ document.getElementById("nf-channels").innerHTML=_nfEmpty("🔌",_trText("blocklist-api не настроен.")); document.getElementById("nf-rules").innerHTML=""; return; }
+  if(_nf.enabled===false){ document.getElementById("nf-channels").innerHTML=_nfEmpty("blocklist-api not configured."); document.getElementById("nf-rules").innerHTML=""; return; }
   renderNotify();
 }
-function _nfEmpty(icon,txt){ return `<div class="rounded-lg border border-dashed border-slate-800 px-3 py-5 text-center text-[11px] text-slate-500"><div class="text-lg mb-1 opacity-70">${icon}</div>${esc(txt)}</div>`; }
+function _nfEmpty(txt){ return `<div style="border:1px dashed var(--glass-border);border-radius:var(--radius-md);padding:20px 14px;text-align:center;font-size:11.5px;color:var(--faint)">${esc(txt)}</div>`; }
 function renderNotify(){
-  document.getElementById("nf-channels").innerHTML=(_nf.channels||[]).map(nfChannelRow).join("")||_nfEmpty("📭",_trText("Пока нет каналов — добавь Slack или Telegram выше."));
-  document.getElementById("nf-rules").innerHTML=(_nf.rules||[]).map(nfRuleRow).join("")||_nfEmpty("🧭",_trText("Пока нет правил — добавь правило, чтобы события попадали в канал."));
+  document.getElementById("nf-channels").innerHTML=(_nf.channels||[]).map(nfChannelRow).join("")||_nfEmpty("No channels yet — add Slack or Telegram above.");
+  document.getElementById("nf-rules").innerHTML=(_nf.rules||[]).map(nfRuleRow).join("")||_nfEmpty("No rules yet — add a rule to route events to a channel.");
 }
 function nfChannelRow(c,i){
   const tg=c.type==="telegram";
   const accent=tg?"#229ED9":"#611f69";   // Telegram blue / Slack aubergine
-  return `<div class="card p-2.5 flex flex-wrap items-center gap-2 text-[11px]" data-ch="${i}" style="border-left:3px solid ${accent}">
-    <span class="px-2 py-0.5 rounded font-medium text-white shrink-0" style="background:${accent}">${tg?'Telegram':'Slack'}</span>
-    <input data-cf="id" value="${esc(c.id||'')}" placeholder="id" class="w-24 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-    <input data-cf="label" value="${esc(c.label||'')}" placeholder="${_trText('метка')}" class="w-28 bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-    ${tg?`<input data-cf="bot_token" type="password" placeholder="${c.configured?'•••• задан':'bot token'}" class="flex-1 min-w-[140px] max-w-sm mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200"><input data-cf="chat_id" value="${esc(c.chat_id||'')}" placeholder="chat_id" class="w-28 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`:`<input data-cf="webhook" type="password" placeholder="${c.configured?'•••• задан':'Slack webhook URL'}" class="flex-1 min-w-[180px] max-w-md mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">`}
+  const secret=tg
+    ? `<input data-cf="bot_token" type="password" placeholder="${c.configured?'•••• set':'bot token'}" class="input mono" style="flex:1;min-width:140px"><input data-cf="chat_id" value="${esc(c.chat_id||'')}" placeholder="chat_id" class="input mono" style="max-width:120px">`
+    : `<input data-cf="webhook" type="password" placeholder="${c.configured?'•••• set':'Slack webhook URL'}" class="input mono" style="flex:1;min-width:180px">`;
+  const verdict=c.last?`<span style="color:${c.last.ok?'var(--ok)':'var(--crit)'}" title="${esc((c.last&&c.last.error)||'')}">${c.last.ok?'✓':'✗'}</span>`:"";
+  return `<div class="nf-row" data-ch="${i}" style="border-left:3px solid ${accent}">
+    <span class="nf-badge" style="background:${accent}">${tg?'Telegram':'Slack'}</span>
+    <input data-cf="id" value="${esc(c.id||'')}" placeholder="id" class="input mono" style="max-width:120px">
+    <input data-cf="label" value="${esc(c.label||'')}" placeholder="label" class="input" style="max-width:150px">
+    ${secret}
     <input type="hidden" data-cf="type" value="${tg?'telegram':'slack'}">
-    <span class="flex items-center gap-1 shrink-0 ml-auto">
-      ${c.last?`<span class="${c.last.ok?'text-emerald-400':'text-red-400'}" title="${esc((c.last&&c.last.error)||'')}">${c.last.ok?'✓':'✗'}</span>`:""}
-      <button onclick="nfTest('${escJs(c.id||'')}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${_trText('тест')}</button>
-      <button onclick="nfDelChannel(${i})" class="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
+    <span class="nf-act">${verdict}
+      <button onclick="nfTest('${escJs(c.id||'')}')" class="btn btn-xs">test</button>
+      <button onclick="nfDelChannel(${i})" class="ibtn danger" title="remove">✕</button>
     </span>
   </div>`;
 }
@@ -3065,16 +3068,16 @@ function nfRuleRow(r,i){
   const evs=_nf.events||["ban","ban_failed","unban","node_offline","autoban","anomaly_critical","path_rule"];
   const sevs=_nf.severities||["info","notice","warning","critical"];
   const chOpts=(_nf.channels||[]).map(c=>`<option value="${esc(c.id)}" ${r.channel===c.id?'selected':''}>${esc(c.label||c.id)}</option>`).join("");
-  const evChecks=evs.map(e=>`<label class="inline-flex items-center gap-1 mr-2"><input type="checkbox" data-ev="${e}" ${(r.events||[]).includes(e)?'checked':''}> ${e}</label>`).join("");
-  return `<div class="card p-2 text-[11px]" data-rule="${i}">
-    <div class="flex flex-wrap items-center gap-2 mb-1">
-      <label class="inline-flex items-center gap-1"><input type="checkbox" data-rf="enabled" ${r.enabled!==false?'checked':''}> ${_trText('вкл')}</label>
-      <span class="text-slate-500">env:</span><input data-rf="env" value="${esc(r.env||'')}" placeholder="${_trText('(любой)')}" class="w-20 mono bg-black/40 border border-slate-800 rounded px-2 py-1 text-slate-200">
-      <span class="text-slate-500">${_trText('важность ≥')}</span><select data-rf="min_severity" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${sevs.map(s=>`<option ${r.min_severity===s?'selected':''}>${s}</option>`).join("")}</select>
-      <span class="text-slate-500">→</span><select data-rf="channel" class="bg-black/40 border border-slate-800 rounded px-1 py-1 text-slate-200">${chOpts}</select>
-      <button onclick="nfDelRule(${i})" class="ml-auto px-2 py-1 rounded text-red-400 hover:bg-red-500/10">✕</button>
+  const evChecks=evs.map(e=>`<label class="nf-ev"><input type="checkbox" data-ev="${e}" ${(r.events||[]).includes(e)?'checked':''}>${e}</label>`).join("");
+  return `<div class="nf-row" style="flex-direction:column;align-items:stretch;gap:10px" data-rule="${i}">
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="nf-ev"><input type="checkbox" data-rf="enabled" ${r.enabled!==false?'checked':''}>on</label>
+      <span style="color:var(--faint)">env:</span><input data-rf="env" value="${esc(r.env||'')}" placeholder="(any)" class="input mono" style="max-width:110px">
+      <span style="color:var(--faint)">severity ≥</span><select data-rf="min_severity" class="input" style="width:auto">${sevs.map(s=>`<option ${r.min_severity===s?'selected':''}>${s}</option>`).join("")}</select>
+      <span style="color:var(--faint)">→</span><select data-rf="channel" class="input" style="width:auto">${chOpts}</select>
+      <button onclick="nfDelRule(${i})" class="ibtn danger" style="margin-left:auto" title="remove">✕</button>
     </div>
-    <div class="text-slate-400">${evChecks}</div>
+    <div class="nf-ev-wrap">${evChecks}</div>
   </div>`;
 }
 function _nfSync(){
@@ -3086,17 +3089,17 @@ function nfDelChannel(i){ _nfSync(); _nf.channels.splice(i,1); renderNotify(); }
 function nfAddRule(){ _nfSync(); _nf.rules.push({enabled:true,events:["ban_failed"],env:"",min_severity:"warning",channel:(_nf.channels[0]||{}).id||""}); renderNotify(); }
 function nfDelRule(i){ _nfSync(); _nf.rules.splice(i,1); renderNotify(); }
 async function nfTest(id){
-  if(!id){ uiAlert("сначала задай id канала и сохрани"); return; }
+  if(!id){ uiAlert("Set a channel id and save first."); return; }
   const d=await (await fetch("/api/notify/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:id})})).json();
-  uiAlert(d.ok?"✓ отправлено":"✗ "+(d.error||"ошибка"));
+  uiAlert(d.ok?"✓ sent":"✗ "+(d.error||"error"));
 }
 async function saveNotify(){
   _nfSync();
   const channels=_nf.channels.map(c=>{const o={...c};["webhook","bot_token"].forEach(k=>{if(!o[k])delete o[k];});return o;});
-  const msg=document.getElementById("nf-msg"); msg.textContent="сохраняю…"; msg.className="text-[11px] mt-3 text-slate-400";
+  const msg=document.getElementById("nf-msg"); msg.textContent="saving…"; msg.className="text-[11px] mt-3"; msg.style.color="var(--muted)";
   const d=await (await fetch("/api/notify_config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channels,rules:_nf.rules})})).json();
-  if(d.ok){ msg.textContent="✓ сохранено"; msg.className="text-[11px] mt-3 text-emerald-400"; loadNotify(); }
-  else{ msg.textContent="✗ "+(d.error||"ошибка"); msg.className="text-[11px] mt-3 text-red-400"; }
+  if(d.ok){ msg.textContent="✓ saved"; msg.style.color="var(--ok)"; loadNotify(); }
+  else{ msg.textContent="✗ "+(d.error||"error"); msg.style.color="var(--crit)"; }
 }
 
 // ── Глобальные настройки (ENV + GUI) ──────────────────────────────────────────

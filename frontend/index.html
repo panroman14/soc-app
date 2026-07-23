@@ -687,13 +687,13 @@ tailwind.config={theme:{extend:{colors:{
     <!-- ── Уведомления ── -->
     <section id="ssec-notify" class="hidden card p-4">
       <div class="flex items-center justify-between mb-1">
-        <div><h2 class="text-sm font-medium text-slate-200">🔔 <span data-i18n="nf.h">Notifications — Slack / Telegram</span></h2>
+        <div><h2 class="text-sm font-medium text-slate-200"><span data-i18n="nf.h">Notifications — Slack / Telegram</span></h2>
           <p class="text-[11px] mt-0.5" style="color:var(--faint)" data-i18n="nf.sub">First define channels (where to send), then rules (what &amp; when — event × env × severity → channel).</p></div>
         <button onclick="saveNotify()" class="btn btn-primary btn-xs shrink-0" data-i18n="save">Save</button>
       </div>
 
       <div class="mt-4 mb-2 flex items-center justify-between">
-        <h3 class="text-xs font-medium text-slate-300 flex items-center gap-1.5"><span>📡</span><span data-i18n="nf.channels">Channels</span></h3>
+        <h3 class="text-xs font-medium text-slate-300 flex items-center gap-1.5"><span data-i18n="nf.channels">Channels</span></h3>
         <div class="flex gap-1.5">
           <button onclick="nfAddChannel('slack')" class="btn btn-ghost btn-xs">＋ Slack</button>
           <button onclick="nfAddChannel('telegram')" class="btn btn-ghost btn-xs">＋ Telegram</button></div></div>
