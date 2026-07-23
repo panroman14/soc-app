@@ -1,0 +1,265 @@
+<title>Liquid glass cards — 3 options</title>
+<style>
+  :root{
+    --bg:#0c0e13; --text:#e6e8ef; --muted:#9aa3b2; --faint:#6b7280;
+    --ok:#73bf69; --warn:#ff9830; --crit:#f2495c; --accent:#5794f2; --purple:#b877f2;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:13px;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:34px 30px 80px;
+    /* ambient color mesh so the glass has something to refract */
+    background-image:
+      radial-gradient(720px 480px at 12% -8%, #5794f238, transparent 60%),
+      radial-gradient(680px 520px at 92% 4%, #b877f230, transparent 60%),
+      radial-gradient(760px 620px at 68% 108%, #73bf6922, transparent 60%),
+      radial-gradient(620px 540px at 22% 120%, #f2495c1f, transparent 60%);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:52px}
+  header h1{font-size:19px;font-weight:600;letter-spacing:-.01em}
+  header p{color:var(--muted);margin-top:6px;font-size:13px;max-width:70ch}
+  .opt-head{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+  .opt-tag{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--accent);border:1px solid #5794f255;border-radius:999px;padding:3px 10px;background:#5794f214}
+  .opt-name{font-size:15px;font-weight:600}
+  .opt-note{color:var(--faint);font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .panel-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:900px){.panel-row{grid-template-columns:1fr}}
+
+  /* ── shared card internals ─────────────────────────── */
+  .st-label{color:var(--muted);font-size:12px;font-weight:500;display:flex;align-items:center;gap:7px}
+  .st-dot{width:7px;height:7px;border-radius:50%}
+  .st-val{font-size:30px;font-weight:600;letter-spacing:-.02em;margin-top:10px;line-height:1;font-variant-numeric:tabular-nums}
+  .st-val small{font-size:14px;font-weight:500;color:var(--muted);margin-left:3px}
+  .st-sub{margin-top:9px;font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:5px}
+  .up{color:var(--ok)} .down{color:var(--crit)}
+  .spark{margin-top:14px;width:100%;height:34px;display:block}
+  .p-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+  .p-title{font-size:13px;font-weight:500;color:var(--text)}
+  .p-menu{color:var(--faint);font-family:var(--mono)}
+  .legend{display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:var(--muted)}
+  .legend b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .lg-item{display:flex;align-items:center;gap:6px}
+  .lg-swatch{width:9px;height:3px;border-radius:2px}
+
+  /* ═══ OPTION A · Clean glass ══════════════════════════
+     modest rounding, light frost, one bright top edge */
+  .A .card{
+    background:rgba(24,27,33,.55);
+    -webkit-backdrop-filter:blur(16px) saturate(150%);
+    backdrop-filter:blur(16px) saturate(150%);
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:14px;
+    padding:16px 17px;
+    box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 8px 24px -12px rgba(0,0,0,.6);
+    position:relative;
+  }
+  .A .card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;border-radius:14px 14px 0 0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent)}
+
+  /* ═══ OPTION B · Deep liquid glass ════════════════════
+     large radius, heavy blur, specular sheen + inner glow */
+  .B .card{
+    background:linear-gradient(160deg,rgba(40,44,54,.55),rgba(18,20,26,.42));
+    -webkit-backdrop-filter:blur(26px) saturate(180%);
+    backdrop-filter:blur(26px) saturate(180%);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:22px;
+    padding:18px 19px;
+    box-shadow:
+      0 1px 1px rgba(255,255,255,.14) inset,
+      0 -1px 1px rgba(0,0,0,.35) inset,
+      0 16px 40px -16px rgba(0,0,0,.7);
+    position:relative;overflow:hidden;
+  }
+  /* soft moving specular highlight blob */
+  .B .card::after{content:"";position:absolute;top:-40%;left:-20%;width:70%;height:120%;
+    background:radial-gradient(closest-side,rgba(255,255,255,.14),transparent 70%);
+    transform:rotate(18deg);pointer-events:none}
+
+  /* ═══ OPTION C · Tinted frost ═════════════════════════
+     medium radius, each card frosted in its own metric hue */
+  .C .card{
+    background:rgba(20,23,29,.5);
+    -webkit-backdrop-filter:blur(20px) saturate(160%);
+    backdrop-filter:blur(20px) saturate(160%);
+    border:1px solid rgba(255,255,255,.08);
+    border-top:1px solid var(--tint,rgba(255,255,255,.14));
+    border-radius:18px;
+    padding:16px 17px;
+    box-shadow:0 8px 30px -14px rgba(0,0,0,.65), 0 0 0 0 var(--tintglow,transparent);
+    position:relative;overflow:hidden;
+  }
+  .C .card::before{content:"";position:absolute;inset:0;border-radius:18px;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% -10%, var(--tintwash,transparent), transparent 60%)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Liquid glass cards — pick one</h1>
+    <p>Same dashboard row three ways. Graph colors, numbers and typography stay Grafana; only the card surface changes — rounding, frost, depth. Background mesh is only here so the glass has something to refract.</p>
+  </header>
+
+  <!-- ══════════ OPTION A ══════════ -->
+  <section class="A">
+    <div class="opt-head">
+      <span class="opt-tag">Option A</span>
+      <span class="opt-name">Clean glass</span>
+      <span class="opt-note">14px radius · light frost · single bright top edge — closest to current Grafana, just softened</span>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--accent)"></span>Requests</div>
+        <div class="st-val">128.4<small>k</small></div>
+        <div class="st-sub"><span class="up">▲ 4.2%</span> vs prev 6h</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#5794f2" stop-opacity=".38"/><stop offset="1" stop-color="#5794f2" stop-opacity="0"/></linearGradient></defs><path d="M0 26 L20 22 L40 24 L60 16 L80 19 L100 12 L120 15 L140 8 L160 11 L180 6 L200 9 L200 34 L0 34Z" fill="url(#ga)"/><path d="M0 26 L20 22 L40 24 L60 16 L80 19 L100 12 L120 15 L140 8 L160 11 L180 6 L200 9" fill="none" stroke="#5794f2" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--ok)"></span>Availability</div>
+        <div class="st-val" style="color:var(--ok)">99.98<small>%</small></div>
+        <div class="st-sub">30-day uptime</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 8 L40 9 L80 7 L120 10 L160 8 L200 8" fill="none" stroke="#73bf69" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--warn)"></span>Blocked</div>
+        <div class="st-val" style="color:var(--warn)">1,204</div>
+        <div class="st-sub"><span class="up">▲ 18%</span> auto-bans active</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><defs><linearGradient id="gw" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff9830" stop-opacity=".34"/><stop offset="1" stop-color="#ff9830" stop-opacity="0"/></linearGradient></defs><path d="M0 28 L25 24 L50 26 L75 18 L100 22 L125 12 L150 16 L175 9 L200 6 L200 34 L0 34Z" fill="url(#gw)"/><path d="M0 28 L25 24 L50 26 L75 18 L100 22 L125 12 L150 16 L175 9 L200 6" fill="none" stroke="#ff9830" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--crit)"></span>Anomalies</div>
+        <div class="st-val" style="color:var(--crit)">7</div>
+        <div class="st-sub"><span class="down">▲ 3</span> last hour</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 30 L25 30 L50 28 L75 29 L100 20 L125 24 L150 10 L175 16 L200 5" fill="none" stroke="#f2495c" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+    <div class="panel-row">
+      <div class="card">
+        <div class="p-head"><span class="p-title">Requests / sec</span><span class="p-menu">⋯</span></div>
+        <svg class="spark" style="height:120px" viewBox="0 0 480 120" preserveAspectRatio="none"><defs><linearGradient id="pa" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#5794f2" stop-opacity=".28"/><stop offset="1" stop-color="#5794f2" stop-opacity="0"/></linearGradient></defs><g stroke="#ffffff10"><line x1="0" y1="30" x2="480" y2="30"/><line x1="0" y1="60" x2="480" y2="60"/><line x1="0" y1="90" x2="480" y2="90"/></g><path d="M0 90 L40 82 L80 88 L120 66 L160 74 L200 50 L240 62 L280 40 L320 54 L360 30 L400 44 L440 24 L480 34 L480 120 L0 120Z" fill="url(#pa)"/><path d="M0 90 L40 82 L80 88 L120 66 L160 74 L200 50 L240 62 L280 40 L320 54 L360 30 L400 44 L440 24 L480 34" fill="none" stroke="#5794f2" stroke-width="1.6"/></svg>
+        <div class="legend"><span class="lg-item"><span class="lg-swatch" style="background:#5794f2"></span>req/s · Last <b>3.4k</b> · Max <b>4.1k</b> · Mean <b>2.9k</b></span></div>
+      </div>
+      <div class="card">
+        <div class="p-head"><span class="p-title">Status mix</span><span class="p-menu">⋯</span></div>
+        <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>2xx</span><b class="mono">94.1%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:94%;height:100%;border-radius:3px;background:#73bf69"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>3xx</span><b class="mono">3.2%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:14%;height:100%;border-radius:3px;background:#5794f2"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>4xx</span><b class="mono">2.1%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:9%;height:100%;border-radius:3px;background:#ff9830"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>5xx</span><b class="mono">0.6%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:4%;height:100%;border-radius:3px;background:#f2495c"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ OPTION B ══════════ -->
+  <section class="B">
+    <div class="opt-head">
+      <span class="opt-tag" style="color:var(--purple);border-color:#b877f255;background:#b877f214">Option B</span>
+      <span class="opt-name">Deep liquid glass</span>
+      <span class="opt-note">22px radius · heavy blur · specular sheen + inner glow — most "Apple", boldest departure</span>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--accent)"></span>Requests</div>
+        <div class="st-val">128.4<small>k</small></div>
+        <div class="st-sub"><span class="up">▲ 4.2%</span> vs prev 6h</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 26 L20 22 L40 24 L60 16 L80 19 L100 12 L120 15 L140 8 L160 11 L180 6 L200 9 L200 34 L0 34Z" fill="url(#ga)"/><path d="M0 26 L20 22 L40 24 L60 16 L80 19 L100 12 L120 15 L140 8 L160 11 L180 6 L200 9" fill="none" stroke="#5794f2" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--ok)"></span>Availability</div>
+        <div class="st-val" style="color:var(--ok)">99.98<small>%</small></div>
+        <div class="st-sub">30-day uptime</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 8 L40 9 L80 7 L120 10 L160 8 L200 8" fill="none" stroke="#73bf69" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--warn)"></span>Blocked</div>
+        <div class="st-val" style="color:var(--warn)">1,204</div>
+        <div class="st-sub"><span class="up">▲ 18%</span> auto-bans active</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 28 L25 24 L50 26 L75 18 L100 22 L125 12 L150 16 L175 9 L200 6 L200 34 L0 34Z" fill="url(#gw)"/><path d="M0 28 L25 24 L50 26 L75 18 L100 22 L125 12 L150 16 L175 9 L200 6" fill="none" stroke="#ff9830" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card">
+        <div class="st-label"><span class="st-dot" style="background:var(--crit)"></span>Anomalies</div>
+        <div class="st-val" style="color:var(--crit)">7</div>
+        <div class="st-sub"><span class="down">▲ 3</span> last hour</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 30 L25 30 L50 28 L75 29 L100 20 L125 24 L150 10 L175 16 L200 5" fill="none" stroke="#f2495c" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+    <div class="panel-row">
+      <div class="card">
+        <div class="p-head"><span class="p-title">Requests / sec</span><span class="p-menu">⋯</span></div>
+        <svg class="spark" style="height:120px" viewBox="0 0 480 120" preserveAspectRatio="none"><g stroke="#ffffff10"><line x1="0" y1="30" x2="480" y2="30"/><line x1="0" y1="60" x2="480" y2="60"/><line x1="0" y1="90" x2="480" y2="90"/></g><path d="M0 90 L40 82 L80 88 L120 66 L160 74 L200 50 L240 62 L280 40 L320 54 L360 30 L400 44 L440 24 L480 34 L480 120 L0 120Z" fill="url(#pa)"/><path d="M0 90 L40 82 L80 88 L120 66 L160 74 L200 50 L240 62 L280 40 L320 54 L360 30 L400 44 L440 24 L480 34" fill="none" stroke="#5794f2" stroke-width="1.6"/></svg>
+        <div class="legend"><span class="lg-item"><span class="lg-swatch" style="background:#5794f2"></span>req/s · Last <b>3.4k</b> · Max <b>4.1k</b> · Mean <b>2.9k</b></span></div>
+      </div>
+      <div class="card">
+        <div class="p-head"><span class="p-title">Status mix</span><span class="p-menu">⋯</span></div>
+        <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>2xx</span><b class="mono">94.1%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:94%;height:100%;border-radius:3px;background:#73bf69"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>3xx</span><b class="mono">3.2%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:14%;height:100%;border-radius:3px;background:#5794f2"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>4xx</span><b class="mono">2.1%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:9%;height:100%;border-radius:3px;background:#ff9830"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>5xx</span><b class="mono">0.6%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:4%;height:100%;border-radius:3px;background:#f2495c"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ OPTION C ══════════ -->
+  <section class="C">
+    <div class="opt-head">
+      <span class="opt-tag" style="color:var(--ok);border-color:#73bf6955;background:#73bf6914">Option C</span>
+      <span class="opt-name">Tinted frost</span>
+      <span class="opt-note">18px radius · each card frosted in its own metric hue — status reads at a glance from the glass itself</span>
+    </div>
+    <div class="grid">
+      <div class="card" style="--tint:#5794f2aa;--tintwash:#5794f218">
+        <div class="st-label"><span class="st-dot" style="background:var(--accent)"></span>Requests</div>
+        <div class="st-val">128.4<small>k</small></div>
+        <div class="st-sub"><span class="up">▲ 4.2%</span> vs prev 6h</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 26 L20 22 L40 24 L60 16 L80 19 L100 12 L120 15 L140 8 L160 11 L180 6 L200 9 L200 34 L0 34Z" fill="url(#ga)"/><path d="M0 26 L20 22 L40 24 L60 16 L80 19 L100 12 L120 15 L140 8 L160 11 L180 6 L200 9" fill="none" stroke="#5794f2" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card" style="--tint:#73bf69aa;--tintwash:#73bf6918">
+        <div class="st-label"><span class="st-dot" style="background:var(--ok)"></span>Availability</div>
+        <div class="st-val" style="color:var(--ok)">99.98<small>%</small></div>
+        <div class="st-sub">30-day uptime</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 8 L40 9 L80 7 L120 10 L160 8 L200 8" fill="none" stroke="#73bf69" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card" style="--tint:#ff9830aa;--tintwash:#ff983018">
+        <div class="st-label"><span class="st-dot" style="background:var(--warn)"></span>Blocked</div>
+        <div class="st-val" style="color:var(--warn)">1,204</div>
+        <div class="st-sub"><span class="up">▲ 18%</span> auto-bans active</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 28 L25 24 L50 26 L75 18 L100 22 L125 12 L150 16 L175 9 L200 6 L200 34 L0 34Z" fill="url(#gw)"/><path d="M0 28 L25 24 L50 26 L75 18 L100 22 L125 12 L150 16 L175 9 L200 6" fill="none" stroke="#ff9830" stroke-width="1.5"/></svg>
+      </div>
+      <div class="card" style="--tint:#f2495caa;--tintwash:#f2495c1c">
+        <div class="st-label"><span class="st-dot" style="background:var(--crit)"></span>Anomalies</div>
+        <div class="st-val" style="color:var(--crit)">7</div>
+        <div class="st-sub"><span class="down">▲ 3</span> last hour</div>
+        <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 30 L25 30 L50 28 L75 29 L100 20 L125 24 L150 10 L175 16 L200 5" fill="none" stroke="#f2495c" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+    <div class="panel-row">
+      <div class="card" style="--tint:#5794f2aa;--tintwash:#5794f214">
+        <div class="p-head"><span class="p-title">Requests / sec</span><span class="p-menu">⋯</span></div>
+        <svg class="spark" style="height:120px" viewBox="0 0 480 120" preserveAspectRatio="none"><g stroke="#ffffff10"><line x1="0" y1="30" x2="480" y2="30"/><line x1="0" y1="60" x2="480" y2="60"/><line x1="0" y1="90" x2="480" y2="90"/></g><path d="M0 90 L40 82 L80 88 L120 66 L160 74 L200 50 L240 62 L280 40 L320 54 L360 30 L400 44 L440 24 L480 34 L480 120 L0 120Z" fill="url(#pa)"/><path d="M0 90 L40 82 L80 88 L120 66 L160 74 L200 50 L240 62 L280 40 L320 54 L360 30 L400 44 L440 24 L480 34" fill="none" stroke="#5794f2" stroke-width="1.6"/></svg>
+        <div class="legend"><span class="lg-item"><span class="lg-swatch" style="background:#5794f2"></span>req/s · Last <b>3.4k</b> · Max <b>4.1k</b> · Mean <b>2.9k</b></span></div>
+      </div>
+      <div class="card" style="--tint:#73bf69aa;--tintwash:#73bf6914">
+        <div class="p-head"><span class="p-title">Status mix</span><span class="p-menu">⋯</span></div>
+        <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>2xx</span><b class="mono">94.1%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:94%;height:100%;border-radius:3px;background:#73bf69"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>3xx</span><b class="mono">3.2%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:14%;height:100%;border-radius:3px;background:#5794f2"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>4xx</span><b class="mono">2.1%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:9%;height:100%;border-radius:3px;background:#ff9830"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>5xx</span><b class="mono">0.6%</b></div><div style="height:6px;border-radius:3px;background:#ffffff12"><div style="width:4%;height:100%;border-radius:3px;background:#f2495c"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

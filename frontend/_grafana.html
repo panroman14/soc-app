@@ -1,0 +1,246 @@
+<title>SOC — Grafana style</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page:#111217; --nav:#0b0c0e; --panel:#181b1f; --panel2:#1f2329; --header:#141619;
+    --bd:#2c3235; --bd2:#343741; --grid:#20252b;
+    --tx:#ccccdc; --tx2:#9fa7b3; --tx3:#7b8087;
+    --green:#73bf69; --yellow:#fade2a; --orange:#ff9830; --blue:#5794f2; --red:#f2495c; --purple:#b877d9;
+    --gf: Inter,"Helvetica Neue",Arial,ui-sans-serif,system-ui,sans-serif;
+    --mono: ui-monospace,"Roboto Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--tx);font-family:var(--gf);font-size:13px;line-height:1.4;
+    -webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* top nav */
+  .nav{display:flex;align-items:center;gap:10px;background:var(--nav);border-bottom:1px solid var(--bd);
+    padding:8px 14px;position:sticky;top:0;z-index:10}
+  .logo{width:20px;height:20px;border-radius:4px;background:linear-gradient(135deg,#ff9830,#f2495c);flex:0 0 auto}
+  .crumb{color:var(--tx2);font-size:13px}
+  .crumb b{color:var(--tx);font-weight:500}
+  .nav .sp{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--bd2);
+    border-radius:3px;padding:5px 9px;color:var(--tx);font-size:12.5px}
+  .pill i{color:var(--tx3);font-style:normal}
+  .pill.blue{border-color:#2f4b7c}
+
+  /* template vars */
+  .vars{display:flex;align-items:center;gap:16px;padding:9px 14px;background:var(--page);border-bottom:1px solid var(--bd)}
+  .var{display:flex;align-items:center;gap:0}
+  .var .lb{background:var(--panel2);border:1px solid var(--bd2);border-right:0;border-radius:3px 0 0 3px;
+    padding:4px 8px;color:var(--tx2);font-size:12px}
+  .var .val{background:var(--panel);border:1px solid var(--bd2);border-radius:0 3px 3px 0;padding:4px 9px;
+    color:var(--tx);font-size:12px;display:flex;align-items:center;gap:8px}
+  .var .val .cx{color:var(--tx3)}
+
+  .wrap{padding:8px}
+  .row{display:grid;gap:8px;margin-bottom:8px}
+  .r-stats{grid-template-columns:repeat(6,1fr)}
+  .r-2{grid-template-columns:1fr 1fr}
+  .r-bt{grid-template-columns:1fr 1.15fr}
+
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:2px;overflow:hidden}
+  .ph{display:flex;align-items:center;gap:6px;padding:7px 10px 6px;color:var(--tx2);font-size:12.5px;font-weight:500}
+  .ph .dots{margin-left:auto;color:var(--tx3);letter-spacing:1px;opacity:0;transition:.1s}
+  .panel:hover .ph .dots{opacity:1}
+  .pb{padding:0 6px 6px}
+
+  /* stat panel */
+  .stat{position:relative;height:92px;padding:9px 11px;overflow:hidden}
+  .stat .k{color:var(--tx2);font-size:12px;position:relative;z-index:2}
+  .stat .v{font-size:30px;font-weight:600;letter-spacing:-.01em;margin-top:8px;position:relative;z-index:2;line-height:1}
+  .stat .v small{font-size:15px;font-weight:500;color:var(--tx2)}
+  .stat .sd{font-size:11px;position:relative;z-index:2;margin-top:5px;color:var(--tx3)}
+  .stat svg{position:absolute;left:0;right:0;bottom:0;width:100%;height:46px}
+
+  .chart{width:100%;height:150px;display:block}
+  .chart.sm{height:132px}
+
+  /* legend table */
+  .leg{margin-top:2px;font-size:11.5px}
+  .leg .lr{display:grid;grid-template-columns:1fr auto auto auto;gap:12px;padding:2px 6px;color:var(--tx2)}
+  .leg .lr.h{color:var(--tx3);border-bottom:1px solid var(--grid);padding-bottom:3px;margin-bottom:2px}
+  .leg .nm{display:flex;align-items:center;gap:7px;color:var(--tx)}
+  .leg .nm .sw{width:10px;height:3px;border-radius:2px;display:inline-block}
+  .leg .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--tx2)}
+
+  /* bar gauge */
+  .bg-row{display:flex;align-items:center;gap:10px;padding:6px 8px}
+  .bg-row .lb{width:150px;font-size:12px;color:var(--tx);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bg-track{flex:1;height:20px;background:var(--panel2);border-radius:2px;overflow:hidden;position:relative}
+  .bg-fill{height:100%;border-radius:2px}
+  .bg-row .vv{width:52px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--tx)}
+
+  /* table panel */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{text-align:left;background:var(--header);color:var(--tx2);font-weight:500;padding:7px 10px;
+    border-bottom:1px solid var(--bd);font-size:11.5px}
+  thead th.r,tbody td.r{text-align:right}
+  tbody td{padding:6px 10px;border-bottom:1px solid var(--grid);font-family:var(--mono);color:var(--tx2)}
+  tbody tr:nth-child(odd) td{background:#1c2025}
+  td .ip{color:var(--tx)}
+  .cell{display:inline-block;padding:1px 8px;border-radius:2px;font-size:11px;font-weight:500}
+  .cell.red{background:#f2495c22;color:#ff8b94} .cell.orange{background:#ff983022;color:#ffbf73}
+  .cell.green{background:#73bf6922;color:#96d98d}
+  .hot{color:#ff8b94}
+</style>
+
+<div class="nav">
+  <span class="logo"></span>
+  <span class="crumb">Dashboards / <b>SOC — Traffic &amp; Attacks</b></span>
+  <span class="sp"></span>
+  <span class="pill"><i>datasource</i> Loki</span>
+  <span class="pill blue">Last 6 hours</span>
+  <span class="pill"><i>⟳</i> 10s</span>
+</div>
+
+<div class="vars">
+  <div class="var"><span class="lb">host</span><span class="val">All <span class="cx">▾</span></span></div>
+  <div class="var"><span class="lb">status</span><span class="val">All <span class="cx">▾</span></span></div>
+  <div class="var"><span class="lb">interval</span><span class="val">5m <span class="cx">▾</span></span></div>
+  <div class="var"><span class="lb">posture</span><span class="val" style="color:var(--orange)">ELEVATED</span></div>
+</div>
+
+<div class="wrap">
+
+  <div class="row r-stats">
+    <div class="panel"><div class="stat"><div class="k">Requests / 5m</div><div class="v" style="color:var(--green)">1.42<small>k</small></div><div class="sd">▼ 4%</div><svg data-sp="req" data-col="green"></svg></div></div>
+    <div class="panel"><div class="stat"><div class="k">New blocks</div><div class="v" style="color:var(--orange)">13</div><div class="sd">▲ 63%</div><svg data-sp="blk" data-col="orange"></svg></div></div>
+    <div class="panel"><div class="stat"><div class="k">CRS payload</div><div class="v" style="color:var(--red)">10</div><div class="sd">▼ 50%</div><svg data-sp="crs" data-col="red"></svg></div></div>
+    <div class="panel"><div class="stat"><div class="k">Attacker IPs</div><div class="v" style="color:var(--orange)">47</div><div class="sd">▲ 9</div><svg data-sp="atk" data-col="orange"></svg></div></div>
+    <div class="panel"><div class="stat"><div class="k">Latency p95</div><div class="v" style="color:var(--yellow)">0.25<small>s</small></div><div class="sd">▲ 32%</div><svg data-sp="p95" data-col="yellow"></svg></div></div>
+    <div class="panel"><div class="stat"><div class="k">Availability</div><div class="v" style="color:var(--green)">99.4<small>%</small></div><div class="sd">SLO 99.0%</div><svg data-sp="av" data-col="green"></svg></div></div>
+  </div>
+
+  <div class="row r-2">
+    <div class="panel">
+      <div class="ph">Traffic — req/5m<span class="dots">⋯</span></div>
+      <div class="pb"><svg class="chart" data-ts="traffic"></svg>
+        <div class="leg">
+          <div class="lr h"><span>series</span><span class="num">Last</span><span class="num">Max</span><span class="num">Mean</span></div>
+          <div class="lr"><span class="nm"><span class="sw" style="background:var(--green)"></span>total</span><span class="num">1.42k</span><span class="num">1.98k</span><span class="num">1.31k</span></div>
+          <div class="lr"><span class="nm"><span class="sw" style="background:var(--blue)"></span>real</span><span class="num">1.02k</span><span class="num">1.44k</span><span class="num">0.95k</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph">Attack signatures<span class="dots">⋯</span></div>
+      <div class="pb"><svg class="chart" data-ts="attack"></svg>
+        <div class="leg">
+          <div class="lr h"><span>series</span><span class="num">Last</span><span class="num">Max</span><span class="num">Mean</span></div>
+          <div class="lr"><span class="nm"><span class="sw" style="background:var(--red)"></span>crs</span><span class="num">10</span><span class="num">128</span><span class="num">22</span></div>
+          <div class="lr"><span class="nm"><span class="sw" style="background:var(--yellow)"></span>404</span><span class="num">96</span><span class="num">402</span><span class="num">141</span></div>
+          <div class="lr"><span class="nm"><span class="sw" style="background:var(--orange)"></span>new blocks</span><span class="num">13</span><span class="num">54</span><span class="num">18</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row r-2">
+    <div class="panel">
+      <div class="ph">Response status codes<span class="dots">⋯</span></div>
+      <div class="pb"><svg class="chart sm" data-ts="status"></svg>
+        <div class="leg"><div class="lr"><span class="nm"><span class="sw" style="background:var(--green)"></span>2xx</span><span class="nm" style="justify-content:flex-end"><span class="sw" style="background:var(--blue)"></span>3xx</span><span class="nm" style="justify-content:flex-end"><span class="sw" style="background:var(--yellow)"></span>4xx</span><span class="nm" style="justify-content:flex-end"><span class="sw" style="background:var(--red)"></span>5xx</span></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph">Latency p95 — seconds<span class="dots">⋯</span></div>
+      <div class="pb"><svg class="chart sm" data-ts="latency"></svg>
+        <div class="leg"><div class="lr"><span class="nm"><span class="sw" style="background:var(--orange)"></span>p95</span><span class="num">0.25s</span><span class="num">0.81s</span><span class="num">0.19s</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row r-bt">
+    <div class="panel">
+      <div class="ph">Top talkers — requests (bar gauge)<span class="dots">⋯</span></div>
+      <div class="pb" style="padding-top:4px">
+        <div class="bg-row"><span class="lb">AS14061 DigitalOcean</span><div class="bg-track"><div class="bg-fill" style="width:100%;background:var(--red)"></div></div><span class="vv">8,412</span></div>
+        <div class="bg-row"><span class="lb">AS9009 M247</span><div class="bg-track"><div class="bg-fill" style="width:59%;background:var(--orange)"></div></div><span class="vv">5,003</span></div>
+        <div class="bg-row"><span class="lb">AS4134 ChinaNet</span><div class="bg-track"><div class="bg-fill" style="width:44%;background:var(--orange)"></div></div><span class="vv">3,740</span></div>
+        <div class="bg-row"><span class="lb">AS16509 Amazon</span><div class="bg-track"><div class="bg-fill" style="width:35%;background:var(--yellow)"></div></div><span class="vv">2,905</span></div>
+        <div class="bg-row"><span class="lb">AS24940 Hetzner</span><div class="bg-track"><div class="bg-fill" style="width:25%;background:var(--green)"></div></div><span class="vv">2,110</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph">Denylist — active bans<span class="dots">⋯</span></div>
+      <div class="pb" style="padding:0">
+        <table>
+          <thead><tr><th>Source</th><th>ASN / Org</th><th>Geo</th><th class="r">4xx</th><th class="r">CRS</th><th>State</th></tr></thead>
+          <tbody>
+            <tr><td><span class="ip">203.0.113.44</span></td><td>DigitalOcean</td><td>US</td><td class="r hot">6,190</td><td class="r hot">204</td><td><span class="cell red">BAN</span></td></tr>
+            <tr><td><span class="ip">198.51.100.7</span></td><td>M247</td><td>NL</td><td class="r hot">4,880</td><td class="r">31</td><td><span class="cell red">BAN</span></td></tr>
+            <tr><td><span class="ip">192.0.2.155</span></td><td>ChinaNet</td><td>CN</td><td class="r hot">2,410</td><td class="r hot">96</td><td><span class="cell orange">WATCH</span></td></tr>
+            <tr><td><span class="ip">198.51.100.203</span></td><td>Hetzner</td><td>FI</td><td class="r hot">1,802</td><td class="r">12</td><td><span class="cell orange">WATCH</span></td></tr>
+            <tr><td><span class="ip">203.0.113.9</span></td><td>Amazon</td><td>DE</td><td class="r">120</td><td class="r">0</td><td><span class="cell green">OK</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  function mk(n,base,amp,phase,spikeAt,spikeAmp){
+    var a=[];for(var i=0;i<n;i++){var v=base+Math.sin(i/phase)*amp+Math.sin(i/2.7)*amp*0.3+(Math.sin(i*1.3)*amp*0.12);
+      if(spikeAt&&i>spikeAt&&i<spikeAt+7)v+=(spikeAmp||amp*2.4);a.push(Math.max(0,v));}return a;}
+  var S={
+    req:mk(30,60,16,6), blk:mk(30,26,16,4,18), crs:mk(30,36,14,6), atk:mk(30,40,10,7),
+    p95:mk(30,40,10,5,20), av:mk(30,88,4,8),
+    trafT:mk(48,1300,420,7), trafR:mk(48,950,300,7),
+    atkC:mk(48,18,10,5,30,110), atk4:mk(48,150,80,4), atkB:mk(48,18,12,6,30,40),
+    s2:mk(48,900,260,7), s3:mk(48,120,40,5), s4:mk(48,220,120,4,30,240), s5:mk(48,12,8,6,30,60),
+    lat:mk(48,0.2,0.05,6,30,0.55)
+  };
+  function measure(svg,h){var w=svg.parentNode.clientWidth||300;svg.setAttribute("width",w);svg.setAttribute("height",h);
+    svg.setAttribute("viewBox","0 0 "+w+" "+h);return w;}
+  function P(data,w,h,mn,mx,padT,padB){var n=data.length,rng=(mx-mn)||1,d="";
+    for(var i=0;i<n;i++){var x=(i/(n-1))*w,y=padT+(h-padT-padB)-((data[i]-mn)/rng)*(h-padT-padB);d+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)+" ";}
+    return {line:d.trim(),area:d+"L"+w+" "+(h-padB)+" L0 "+(h-padB)+" Z"};}
+  function hex2(c){return c.trim();}
+
+  function sparkStat(svg,key,colVar){
+    var h=46,w=measure(svg,h);var col=getComputedStyle(document.documentElement).getPropertyValue('--'+colVar).trim();
+    var d=S[key],mn=Math.min.apply(0,d),mx=Math.max.apply(0,d);var p=P(d,w,h,mn,mx,4,0);
+    var id="g"+key;
+    svg.innerHTML='<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0" stop-color="'+col+'" stop-opacity="0.35"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs>'+
+      '<path d="'+p.area+'" fill="url(#'+id+')"/><path d="'+p.line+'" fill="none" stroke="'+col+'" stroke-width="1.5"/>';
+  }
+  ['req|green','blk|orange','crs|red','atk|orange','p95|yellow','av|green'].forEach(function(s){
+    var a=s.split('|');sparkStat(document.querySelector('[data-sp="'+a[0]+'"]'),a[0],a[1]);});
+
+  function ts(svg,series,h){
+    var W=measure(svg,h);var padT=8,padB=16,padL=30;
+    var all=[];series.forEach(function(s){all=all.concat(S[s.k]);});
+    var mn=0,mx=Math.max.apply(0,all)*1.05||1;
+    var W2=W; // draw area uses full width; y labels overlay left
+    var defs='<defs>',body='';
+    // grid
+    var gl='';for(var g=0;g<=3;g++){var y=padT+((h-padT-padB)/3)*g;gl+='<line x1="0" y1="'+y.toFixed(1)+'" x2="'+W2+'" y2="'+y.toFixed(1)+'" stroke="var(--grid)" stroke-width="1"/>';}
+    for(var vx=1;vx<6;vx++){var x=(W2/6)*vx;gl+='<line x1="'+x.toFixed(1)+'" y1="'+padT+'" x2="'+x.toFixed(1)+'" y2="'+(h-padB)+'" stroke="var(--grid)" stroke-width="1"/>';}
+    series.forEach(function(s,i){
+      var p=P(S[s.k],W2,h,mn,mx,padT,padB);var id="ts"+s.k+i;
+      defs+='<linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+s.c+'" stop-opacity="'+(s.fa||0.22)+'"/><stop offset="1" stop-color="'+s.c+'" stop-opacity="0"/></linearGradient>';
+      if(s.fill!==false)body+='<path d="'+p.area+'" fill="url(#'+id+')"/>';
+      body+='<path d="'+p.line+'" fill="none" stroke="'+s.c+'" stroke-width="'+(s.sw||1.6)+'"/>';
+    });
+    defs+='</defs>';
+    // y axis labels
+    var yl='';for(var t=0;t<=3;t++){var val=mx*(1-t/3);var y=padT+((h-padT-padB)/3)*t;
+      yl+='<text x="2" y="'+(y+3).toFixed(1)+'" fill="var(--tx3)" font-size="9.5" font-family="var(--mono)">'+(val>=1000?(val/1000).toFixed(1)+'k':Math.round(val))+'</text>';}
+    var xlabs=['-6h','-4h','-2h','now'];var xl='';xlabs.forEach(function(t,i){var x=(W2/3)*i;
+      xl+='<text x="'+Math.min(W2-14,Math.max(2,x)).toFixed(1)+'" y="'+(h-4)+'" fill="var(--tx3)" font-size="9.5" font-family="var(--mono)">'+t+'</text>';});
+    svg.innerHTML=defs+gl+body+yl+xl;
+  }
+  var gv=function(v){return getComputedStyle(document.documentElement).getPropertyValue('--'+v).trim();};
+  ts(document.querySelector('[data-ts="traffic"]'),[{k:'trafT',c:gv('green')},{k:'trafR',c:gv('blue')}],150);
+  ts(document.querySelector('[data-ts="attack"]'),[{k:'atk4',c:gv('yellow'),fa:0.14},{k:'atkC',c:gv('red')},{k:'atkB',c:gv('orange'),fill:false}],150);
+  ts(document.querySelector('[data-ts="status"]'),[{k:'s2',c:gv('green'),fa:0.18},{k:'s4',c:gv('yellow'),fa:0.14},{k:'s3',c:gv('blue'),fill:false},{k:'s5',c:gv('red'),fill:false}],132);
+  ts(document.querySelector('[data-ts="latency"]'),[{k:'lat',c:gv('orange'),fa:0.2,sw:1.8}],132);
+})();
+</script>
